@@ -1,0 +1,88 @@
+name: case17
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: case17-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-case17}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD не задан - создай .env из .env.example}
+      POSTGRES_DB: ${POSTGRES_DB:-case17}
+      EMBED_DIM: ${EMBED_DIM:-512}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    mem_limit: 512m
+    shm_size: 128m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-case17} -d ${POSTGRES_DB:-case17}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks: [case17net]
+
+  api:
+    build:
+      context: ./api
+      args:
+        EMBED_MODEL: ${EMBED_MODEL:-resnet18}
+    image: case17-api:local
+    container_name: case17-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_DSN: postgresql://${POSTGRES_USER:-case17}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-case17}
+      EMBED_MODEL: ${EMBED_MODEL:-resnet18}
+      EMBED_DIM: ${EMBED_DIM:-512}
+      INPUT_SIZE: ${INPUT_SIZE:-224}
+      SEARCH_TOP_N: ${SEARCH_TOP_N:-10}
+      SEARCH_THRESHOLD: ${SEARCH_THRESHOLD:-0.75}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-20}
+      DATA_DIR: /data
+      ARTIFACTS_DIR: /artifacts
+      OMP_NUM_THREADS: "2"
+      HF_HUB_OFFLINE: "1"
+      HF_HOME: /opt/hfcache
+    volumes:
+      - /opt/case17/data:/data:ro
+      - ./artifacts:/artifacts
+    ports:
+      - "8000:8000"
+    mem_limit: 1536m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).status==200 else 1)"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+    networks: [case17net]
+
+  web:
+    build: ./web
+    image: case17-web:local
+    container_name: case17-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+    mem_limit: 64m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks: [case17net]
+
+volumes:
+  db_data:
+
+networks:
+  case17net:
+    driver: bridge

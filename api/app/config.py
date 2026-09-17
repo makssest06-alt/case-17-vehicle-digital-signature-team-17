@@ -1,0 +1,41 @@
+"""Настройки сервиса. Всё читается из переменных окружения."""
+import os
+from dataclasses import dataclass
+
+
+def _i(name: str, default: int) -> int:
+    return int(os.getenv(name, str(default)))
+
+
+def _f(name: str, default: float) -> float:
+    return float(os.getenv(name, str(default)))
+
+
+@dataclass(frozen=True)
+class Settings:
+    db_dsn: str = os.getenv("DB_DSN", "postgresql://case17:case17@db:5432/case17")
+
+    # модель
+    embed_model: str = os.getenv("EMBED_MODEL", "resnet18")
+    embed_dim: int = _i("EMBED_DIM", 512)
+    input_size: int = _i("INPUT_SIZE", 224)
+    batch_size: int = _i("BATCH_SIZE", 16)
+
+    # поиск и отказ
+    search_top_n: int = _i("SEARCH_TOP_N", 10)
+    search_threshold: float = _f("SEARCH_THRESHOLD", 0.75)
+    search_margin: float = _f("SEARCH_MARGIN", 0.0)
+
+    # загрузка файлов
+    max_upload_mb: int = _i("MAX_UPLOAD_MB", 20)
+    bbox_pad: float = _f("BBOX_PAD", 0.10)
+
+    data_dir: str = os.getenv("DATA_DIR", "/data")
+    artifacts_dir: str = os.getenv("ARTIFACTS_DIR", "/artifacts")
+
+    @property
+    def max_upload_bytes(self) -> int:
+        return self.max_upload_mb * 1024 * 1024
+
+
+settings = Settings()

@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# Секреты — НИКОГДА в репозиторий
+.env
+*.pem
+*.key
+id_*
+
+# Данные и веса (лежат вне репозитория)
+data/
+crops/
+*.tar
+models/
+*.pth
+*.pt
+*.onnx
+*.safetensors
+
+# Артефакты сдачи — ЭТИ ТРИ ФАЙЛА КОММИТИМ (требование README датасета)
+artifacts/*
+!artifacts/.gitkeep
+!artifacts/submission.csv
+!artifacts/candidates.csv
+!artifacts/embeddings.npy
+
+# research
+research/.venv/
+research/__pycache__/
+research/*.npy
