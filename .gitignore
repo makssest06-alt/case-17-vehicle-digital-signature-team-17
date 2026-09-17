@@ -33,3 +33,7 @@ artifacts/*
 research/.venv/
 research/__pycache__/
 research/*.npy
+
+# research: коммитим только скрипты, val_ids.txt и results.md
+research/results/
+research/val_split.csv
