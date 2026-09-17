@@ -1,0 +1,18 @@
+# Large files and datasets
+dataset.zip
+dataset_extracted/
+data/raw/
+data/processed/
+models/*.pth
+models/*.onnx
+*.npy
+*.csv
+
+# Python / IDE
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.idea/
+.vscode/
+.env
