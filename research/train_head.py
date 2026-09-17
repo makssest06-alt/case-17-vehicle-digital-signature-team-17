@@ -19,6 +19,7 @@ import torch
 import torch.nn.functional as F
 from torch.optim import AdamW
 
+import backbones
 from head_model import MarginHead, ReidHead, batch_hard_triplet
 
 HERE = Path(__file__).parent
@@ -26,10 +27,10 @@ FEAT = Path("/opt/case17/data/features")
 MODELS = Path("/opt/case17/models")
 
 
-def load_train_features():
+def load_train_features(backbone: str = "clip_vitb16"):
     idx = list(csv.DictReader((FEAT / "train_index.csv").open()))
-    orig = np.load(FEAT / "train_orig.npy")
-    flip = np.load(FEAT / "train_flip.npy")
+    orig = np.load(FEAT / f"train_{backbone}_orig.npy")
+    flip = np.load(FEAT / f"train_{backbone}_flip.npy")
     val_ids = {l.strip() for l in (HERE / "val_ids.txt").read_text().split() if l.strip()}
     tr_rows = [(i, r) for i, r in enumerate(idx) if r["vehicle_id"] not in val_ids]
     va_rows = [(i, r) for i, r in enumerate(idx) if r["vehicle_id"] in val_ids]
@@ -105,6 +106,7 @@ def evaluate_val(head, orig, flip, va_rows, device="cpu"):
 
 def main() -> int:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--backbone", default="clip_vitb16")
     ap.add_argument("--out-dim", type=int, default=512)
     ap.add_argument("--hidden", type=int, default=1024)
     ap.add_argument("--loss", default="arcface", choices=["arcface", "cosface"])
@@ -124,12 +126,13 @@ def main() -> int:
     torch.manual_seed(a.seed); np.random.seed(a.seed); random.seed(a.seed)
     torch.set_num_threads(2)
 
-    orig, flip, tr_rows, va_rows = load_train_features()
+    spec = backbones.get(a.backbone)
+    orig, flip, tr_rows, va_rows = load_train_features(a.backbone)
     vids = sorted({r["vehicle_id"] for _, r in tr_rows})
     vid2lab = {v: i for i, v in enumerate(vids)}
     print(f"[{a.tag}] train: {len(tr_rows)} кадров / {len(vids)} машин | val: {len(va_rows)} кадров", flush=True)
 
-    head = ReidHead(768, a.hidden, a.out_dim, a.dropout)
+    head = ReidHead(spec.dim, a.hidden, a.out_dim, a.dropout)
     margin = MarginHead(a.out_dim, len(vids), a.loss, margin=a.margin)
     opt = AdamW(list(head.parameters()) + list(margin.parameters()), lr=a.lr, weight_decay=a.wd)
 
@@ -169,14 +172,15 @@ def main() -> int:
 
     train_s = time.perf_counter() - t0
     res = evaluate_val(head, orig, flip, va_rows)
-    res.update(tag=a.tag, loss=a.loss, out_dim=a.out_dim, hidden=a.hidden, epochs=a.epochs,
+    res.update(tag=a.tag, backbone=a.backbone, loss=a.loss, out_dim=a.out_dim, hidden=a.hidden, epochs=a.epochs,
                P=a.P, K=a.K, margin=a.margin, train_s=round(train_s, 1),
                head_params_mb=round(sum(p.numel() * 4 for p in head.parameters()) / 1024**2, 2))
     print(f"  val: mAP {res['mAP']}  Rank-1 {res['rank1']}  Rank-5 {res['rank5']}  "
           f"(обучение {train_s:.0f} с)", flush=True)
 
     MODELS.mkdir(parents=True, exist_ok=True)
-    torch.save({"head": head.state_dict(), "args": vars(a)}, MODELS / f"head_{a.tag}.pt")
+    ck_args = dict(vars(a)); ck_args["in_dim"] = spec.dim
+    torch.save({"head": head.state_dict(), "args": ck_args}, MODELS / f"head_{a.tag}.pt")
     out = HERE / "results"; out.mkdir(exist_ok=True)
     (out / f"head_{a.tag}.json").write_text(json.dumps(res, ensure_ascii=False, indent=2))
     return 0

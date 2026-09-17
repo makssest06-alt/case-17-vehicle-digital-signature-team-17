@@ -109,22 +109,25 @@ def plot(pairs, path):
 
 def main() -> int:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--backbone", default="clip_vitb16")
     ap.add_argument("--heads", default="", help="теги обученных голов через запятую")
     ap.add_argument("--out", default="refusal.png")
     a = ap.parse_args()
 
-    orig, flip = np.load(FEAT / "train_orig.npy"), np.load(FEAT / "train_flip.npy")
+    orig = np.load(FEAT / f"train_{a.backbone}_orig.npy")
+    flip = np.load(FEAT / f"train_{a.backbone}_flip.npy")
     results, pairs = {}, []
 
     q, g, qry, gal = build_val(orig, flip, head=None)
     st, pos, neg = run(q, g, qry, gal)
-    results["clip_raw"] = st; pairs.append(("CLIP без головы", pos, neg, st))
-    print("CLIP без головы:", st, flush=True)
+    results[f"{a.backbone}_raw"] = st
+    pairs.append((f"{a.backbone} без головы", pos, neg, st))
+    print(f"{a.backbone} без головы:", st, flush=True)
 
     for tag in [t for t in a.heads.split(",") if t]:
         ck = torch.load(MODELS / f"head_{tag}.pt", map_location="cpu", weights_only=False)
         ar = ck["args"]
-        head = ReidHead(768, ar["hidden"], ar["out_dim"], ar["dropout"])
+        head = ReidHead(ar.get("in_dim", 768), ar["hidden"], ar["out_dim"], ar["dropout"])
         head.load_state_dict(ck["head"]); head.eval()
         q, g, qry, gal = build_val(orig, flip, head=head)
         st, pos, neg = run(q, g, qry, gal)
