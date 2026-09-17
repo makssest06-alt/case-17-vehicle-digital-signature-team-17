@@ -13,7 +13,6 @@ from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
-import timm
 import torch
 from PIL import Image
 
@@ -29,6 +28,8 @@ def load_split():
 
 
 def build(model_name: str, input_size: int):
+    import timm  # локальный импорт: модуль переиспользуется из окружения fast-reid, где timm не нужен
+
     kw = dict(pretrained=True, num_classes=0)
     try:
         model = timm.create_model(model_name, img_size=input_size, **kw)
