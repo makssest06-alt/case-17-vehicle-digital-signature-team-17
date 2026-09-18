@@ -43,6 +43,15 @@ REGISTRY = {
     #     model_name="vit_base_patch16_siglip_224.v2_webli",
     #     license_note="Apache 2.0 (Google SigLIP 2); данные WebLI внутренние",
     # ),
+    # Крупный вариант того же семейства: 428M параметров, 1631 МБ весов.
+    # Zero-shot даёт mAP 60.80 против 46.81 у base, но на CPU это 0.35 кадра/с
+    # против 2.85. Берётся только если у стенда есть видеокарта — см. развилку
+    # в docs/SUBMISSION_README.md и scripts/select_profile.sh.
+    "siglip_so400m": BackboneSpec(
+        key="siglip_so400m", kind="timm", dim=1152, input_size=224,
+        model_name="vit_so400m_patch14_siglip_224.webli",
+        license_note="Apache 2.0 (Google SigLIP); данные WebLI внутренние",
+    ),
     "resnet50_in1k": BackboneSpec(
         key="resnet50_in1k", kind="timm", dim=2048, input_size=224,
         model_name="resnet50.a1_in1k",

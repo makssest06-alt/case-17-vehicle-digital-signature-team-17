@@ -48,12 +48,79 @@ def embed_folder(model, folder: Path, ids: list, batch: int, label: str) -> np.n
     return out
 
 
+def re_ranking(q, g, k1=20, k2=6, lambda_value=0.3):
+    """k-reciprocal пересортировка, Zhong et al. 2017.
+
+    Если A нашёл B среди своих k ближайших И B нашёл A среди своих — это
+    взаимные соседи, такому совпадению можно верить сильнее одностороннего.
+    Дальше считается расстояние Жаккара между множествами взаимных соседей
+    и смешивается с исходным косинусным. Меток не требует, ничего не учит.
+
+    Приём транздуктивный: выигрыш берётся из того, что все запросы видны
+    одновременно и кадры одной машины подкрепляют друг друга. Поэтому здесь,
+    при сборке артефактов, он работает, а в обработчике одиночного запроса —
+    нет; замер в research/rerank_online.py.
+    """
+    nq = len(q)
+    total = nq + len(g)
+    feat = np.vstack([q, g]).astype(np.float32)
+
+    d = 2.0 - 2.0 * (feat @ feat.T)
+    np.maximum(d, 0, out=d)
+    d = np.transpose(d / (np.max(d, axis=0) + 1e-12))
+    rank = np.argsort(d).astype(np.int32)
+
+    V = np.zeros_like(d, dtype=np.float32)
+    half = int(round(k1 / 2.0)) + 1
+    for i in range(total):
+        fwd = rank[i, : k1 + 1]
+        back = rank[fwd, : k1 + 1]
+        recip = fwd[np.where(back == i)[0]]
+        expanded = recip
+        for c in recip:
+            c_fwd = rank[c, :half]
+            c_back = rank[c_fwd, :half]
+            c_recip = c_fwd[np.where(c_back == c)[0]]
+            if len(np.intersect1d(c_recip, recip)) > 2.0 / 3 * len(c_recip):
+                expanded = np.append(expanded, c_recip)
+        expanded = np.unique(expanded)
+        w = np.exp(-d[i, expanded])
+        V[i, expanded] = w / w.sum()
+
+    if k2 != 1:
+        V = np.stack([V[rank[i, :k2]].mean(axis=0) for i in range(total)])
+
+    inv = [np.where(V[:, i] != 0)[0] for i in range(total)]
+    jac = np.zeros((nq, total), dtype=np.float32)
+    for i in range(nq):
+        tmp = np.zeros(total, dtype=np.float32)
+        nz = np.where(V[i] != 0)[0]
+        for ind in nz:
+            rows = inv[ind]
+            tmp[rows] += np.minimum(V[i, ind], V[rows, ind])
+        jac[i] = 1 - tmp / (2.0 - tmp)
+
+    final = jac * (1 - lambda_value) + d[:nq] * lambda_value
+    return -final[:, nq:]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default=os.path.join(settings.data_dir, "crops"))
     ap.add_argument("--out", default=settings.artifacts_dir)
     ap.add_argument("--threshold", type=float, default=settings.search_threshold)
     ap.add_argument("--batch", type=int, default=settings.batch_size)
+    ap.add_argument("--rerank", action="store_true",
+                    help="k-reciprocal пересортировка выдачи: +3.16 mAP на валидации. "
+                         "Меняет только ПОРЯДОК кандидатов; confidence остаётся "
+                         "исходным косинусом, чтобы порог отказа не пришлось "
+                         "перекалибровывать. Работает только в пакетном режиме — "
+                         "выигрыш берётся из того, что весь набор запросов виден "
+                         "сразу, поэтому в живом поиске по одному кадру НЕ применяется "
+                         "(там он, наоборот, вредит: замер в research/rerank_online.py)")
+    ap.add_argument("--rerank-k1", type=int, default=20)
+    ap.add_argument("--rerank-k2", type=int, default=6)
+    ap.add_argument("--rerank-lambda", type=float, default=0.3)
     ap.add_argument("--reuse-embeddings", action="store_true",
                     help="взять готовый embeddings.npy вместо пересчёта — нужен, когда "
                          "меняется только порог: счёт векторов занимает ~20 минут, "
@@ -102,7 +169,15 @@ def main() -> int:
 
     # векторы уже L2-нормированы, значит скалярное произведение = косинус
     sim = q_emb @ g_emb.T
-    order = np.argsort(-sim, axis=1)
+
+    if args.rerank:
+        t_rr = time.perf_counter()
+        rr = re_ranking(q_emb, g_emb, args.rerank_k1, args.rerank_k2, args.rerank_lambda)
+        order = np.argsort(-rr, axis=1)
+        print(f"re-ranking: k1={args.rerank_k1} k2={args.rerank_k2} "
+              f"lambda={args.rerank_lambda}, {time.perf_counter() - t_rr:.1f} с")
+    else:
+        order = np.argsort(-sim, axis=1)
 
     sub_path = out / "submission.csv"
     with sub_path.open("w", newline="") as f:
