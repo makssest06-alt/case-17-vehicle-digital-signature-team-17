@@ -209,6 +209,7 @@ BASE = dict(
     hard_batches           = False,  # батч из визуально похожих машин
     geometry_aug           = False,  # перспектива и кроп частей
 
+    grad_checkpointing = "auto",  # auto | True | False — экономит память на крупных бэкбонах
     workers       = 4,
     amp           = True,
     seed          = 42,
@@ -236,6 +237,26 @@ PRESETS = {
 assert PRESET in PRESETS, f"неизвестный пресет {PRESET}, доступны: {list(PRESETS)}"
 CFG = {**BASE, **PRESETS[PRESET]}
 CFG["preset"] = PRESET
+
+# --- автоподстройка под крупные бэкбоны и объём видеопамяти ---
+# so400m это ~428M параметров: веса + градиенты + два момента AdamW уже около
+# 7 ГБ, и на T4 с 16 ГБ батч 64 обычно не влезает. Поэтому для крупных моделей
+# включаем gradient checkpointing (пересчёт активаций вместо их хранения:
+# примерно на треть медленнее, но памяти нужно кратно меньше) и уменьшаем P.
+# Уменьшаем именно P, а не K: batch-hard triplet требует минимум 4 кадра
+# на машину, иначе ему не из чего выбирать трудные пары.
+_BIG = any(t in CFG["backbone"] for t in ("so400m", "large", "giantopt", "huge"))
+_vram = torch.cuda.get_device_properties(0).total_memory / 1024**3 if torch.cuda.is_available() else 0
+
+if CFG["grad_checkpointing"] == "auto":
+    CFG["grad_checkpointing"] = bool(_BIG)
+
+if _BIG and _vram and _vram < 24 and CFG["P"] > 8:
+    print(f"крупный бэкбон ({CFG['backbone']}) и {_vram:.0f} ГБ видеопамяти -> "
+          f"P уменьшен с {CFG['P']} до 8 (батч {8 * CFG['K']})")
+    CFG["P"] = 8
+
+print(f"видеопамять: {_vram:.1f} ГБ | gradient checkpointing: {CFG['grad_checkpointing']}")
 
 print(f"пресет: {PRESET}")
 for k in ("cross_camera_positives", "hard_batches", "geometry_aug", "centroid_weight"):
@@ -591,6 +612,12 @@ class FullModel(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.encoder = timm.create_model(cfg["backbone"], pretrained=True, num_classes=0)
+        if cfg["grad_checkpointing"]:
+            try:
+                self.encoder.set_grad_checkpointing(True)
+                print("gradient checkpointing включён")
+            except Exception as e:
+                print("gradient checkpointing не поддерживается этим бэкбоном:", e)
         self.head = ReidHead(self.encoder.num_features, cfg["hidden"], cfg["out_dim"], cfg["dropout"])
     def forward(self, x):
         return self.head(self.encoder(x))
@@ -751,6 +778,18 @@ for ep in range(start_epoch, CFG["epochs"]):
         opt.zero_grad(set_to_none=True)
         scaler.scale(loss).backward(); scaler.step(opt); scaler.update()
         tot_c += l_cls.item(); tot_t += l_tri.item(); nb += 1; step += 1
+
+        # после прогрева говорим, сколько всё это займёт — чтобы не гадать
+        if step == 20:
+            sec_step = (time.time() - t_start) / 20
+            eta_epoch = sec_step * steps_per_epoch / 60
+            eta_all = eta_epoch * CFG["epochs"]
+            print(f"  темп: {sec_step:.2f} с/шаг -> эпоха ~{eta_epoch:.1f} мин, "
+                  f"все {CFG['epochs']} эпох ~{eta_all/60:.1f} ч "
+                  f"(+ оценки на val каждые {CFG['eval_every']} эпох)", flush=True)
+            if torch.cuda.is_available():
+                print(f"  видеопамять занято: "
+                      f"{torch.cuda.max_memory_allocated()/1024**3:.1f} ГБ", flush=True)
 
     msg = (f"эпоха {ep+1}/{CFG['epochs']}  cls {tot_c/nb:.3f}  tri {tot_t/nb:.3f}  "
            f"{(time.time()-t_start)/60:.1f} мин")

@@ -58,13 +58,20 @@ class ReidCheckpointModel(EmbeddingModel):
         dropout = float(cfg.get("dropout", 0.3))
         self.input_size = int(cfg.get("input_size", self.input_size))
 
-        backbone = timm.create_model(self.backbone_name, pretrained=False, num_classes=0)
-        head = _ReidHead(backbone.num_features, hidden, out_dim, dropout)
-
         state = ck.get("model", ck)
         enc = {k[len("encoder."):]: v for k, v in state.items() if k.startswith("encoder.")}
         hd = {k[len("head."):]: v for k, v in state.items() if k.startswith("head.")}
-        if not enc:  # чекпоинт только головы (train_head.py)
+
+        # Чекпоинт бывает двух видов, и это важно различать:
+        #  * полное дообучение — внутри есть веса бэкбона (ключи encoder.*);
+        #  * только голова (train_head.py) — бэкбон был заморожен и в файл не попал,
+        #    значит его надо взять предобученным из образа, иначе он останется
+        #    случайно инициализированным и модель выдаст мусор.
+        head_only = not enc
+        backbone = timm.create_model(self.backbone_name, pretrained=head_only, num_classes=0)
+        head = _ReidHead(backbone.num_features, hidden, out_dim, dropout)
+
+        if head_only:
             hd = ck.get("head", hd)
         else:
             backbone.load_state_dict(enc, strict=True)

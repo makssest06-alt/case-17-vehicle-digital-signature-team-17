@@ -1,6 +1,7 @@
 FROM python:3.11-slim
 
 ARG EMBED_MODEL=resnet18
+ENV EMBED_MODEL=${EMBED_MODEL}
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -14,7 +15,14 @@ RUN pip install --no-cache-dir -r requirements.txt \
  && python -c "import torch; assert not torch.version.cuda, 'в образ попала CUDA-сборка torch'; print('torch', torch.__version__)"
 
 # Веса скачиваем на этапе сборки и запекаем в образ: в рантайме интернета нет
-RUN python -c "import timm; m = timm.create_model('${EMBED_MODEL}', pretrained=True, num_classes=0); print('весов запечено, признаков:', m.num_features)"
+# EMBED_MODEL может быть вида reid:<бэкбон> или timm:<бэкбон> — для запекания
+# весов нужен сам бэкбон, поэтому префикс отбрасываем.
+RUN python -c "\
+import timm, os; \
+name = os.environ.get('EMBED_MODEL', '${EMBED_MODEL}'); \
+name = name.split(':', 1)[1] if ':' in name else name; \
+m = timm.create_model(name, pretrained=True, num_classes=0); \
+print('весов запечено:', name, m.num_features)" 
 
 COPY app ./app
 COPY scripts ./scripts
