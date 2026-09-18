@@ -47,14 +47,22 @@ def load_split(backbone: str):
     return orig, flip, qry, gal
 
 
-def embed(orig, flip, rows, head):
+def embed(orig, flip, rows, head, use_flip=True):
+    """Вектор кадра. use_flip=False — один проход вместо двух.
+
+    Эталонная реализация усредняет оригинал и отражение (test-time
+    augmentation). Это ровно вдвое дороже, поэтому важно знать, сколько
+    качества стоит отказ от второго прохода.
+    """
     ii = [i for i, _ in rows]
-    a, b = orig[ii], flip[ii]
+    a = orig[ii]
+    b = flip[ii] if use_flip else None
     if head is not None:
         with torch.inference_mode():
             a = head(torch.from_numpy(a))[1].numpy()
-            b = head(torch.from_numpy(b))[1].numpy()
-    v = (a + b) / 2
+            if b is not None:
+                b = head(torch.from_numpy(b))[1].numpy()
+    v = a if b is None else (a + b) / 2
     return v / np.linalg.norm(v, axis=1, keepdims=True)
 
 
@@ -68,10 +76,11 @@ def load_head(tag: str, in_dim: int):
     return h
 
 
-def evaluate(backbone: str, head_tag: str, seed: int = 42) -> dict:
+def evaluate(backbone: str, head_tag: str, seed: int = 42, use_flip: bool = True) -> dict:
     orig, flip, qry, gal = load_split(backbone)
     head = load_head(head_tag, orig.shape[1])
-    q, g = embed(orig, flip, qry, head), embed(orig, flip, gal, head)
+    q = embed(orig, flip, qry, head, use_flip)
+    g = embed(orig, flip, gal, head, use_flip)
     g_vid = np.array([r["vehicle_id"] for _, r in gal])
     g_cam = np.array([r["camera_id"] for _, r in gal])
     sim = q @ g.T
@@ -124,7 +133,8 @@ def evaluate(backbone: str, head_tag: str, seed: int = 42) -> dict:
                     "recall": round(rc, 3), "TNR": round(tnr, 3)}
 
     return {
-        "variant": f"{backbone}:{head_tag}" if head_tag else f"{backbone} (zero-shot)",
+        "variant": (f"{backbone}:{head_tag}" if head_tag else f"{backbone} (zero-shot)")
+                   + ("" if use_flip else " [без flip]"),
         "backbone": backbone, "head": head_tag or None, "dim": int(q.shape[1]),
         "mAP": round(float(np.mean(aps)) * 100, 2),
         "rank1": round(r1 / used * 100, 2),
@@ -142,6 +152,9 @@ def evaluate(backbone: str, head_tag: str, seed: int = 42) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--variants", nargs="*", default=None)
+    ap.add_argument("--no-flip", action="store_true",
+                    help="один проход вместо усреднения оригинала и отражения — "
+                         "так работает быстрый ONNX-путь")
     ap.add_argument("--out", default="results/comparison.json")
     ap.add_argument("--md", default="results/comparison.md")
     a = ap.parse_args()
@@ -162,7 +175,7 @@ def main() -> int:
     rows = []
     for bb, tag in pairs:
         try:
-            rows.append(evaluate(bb, tag))
+            rows.append(evaluate(bb, tag, use_flip=not a.no_flip))
             print(f"  посчитан: {rows[-1]['variant']}")
         except FileNotFoundError as e:
             print(f"  пропущен {bb}:{tag} — {e}")

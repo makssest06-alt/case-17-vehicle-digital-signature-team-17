@@ -18,7 +18,11 @@
 set -uo pipefail
 
 BRANCH="${1:-$(git -C "$(dirname "$0")/.." rev-parse --abbrev-ref HEAD)}"
-REPO_URL="${REPO_URL:-file://$(cd "$(dirname "$0")/.." && git rev-parse --git-common-dir | xargs dirname)/.git}"
+# Клонируем из общего git-каталога. --path-format=absolute обязателен:
+# без него в основном рабочем дереве git возвращает относительный ".git",
+# а в связанном (git worktree) — путь до worktrees/<имя>, и клон уезжает не туда.
+GIT_COMMON="$(cd "$(dirname "$0")/.." && git rev-parse --path-format=absolute --git-common-dir)"
+REPO_URL="${REPO_URL:-file://$GIT_COMMON}"
 WORK="$(mktemp -d /tmp/repro-XXXXXX)"
 EMPTY_DATA="$(mktemp -d /tmp/repro-data-XXXXXX)"
 PROJECT="repro$$"
@@ -71,7 +75,8 @@ for f in docker-compose.yml .env.example api/Dockerfile api/requirements.txt \
          api/app/main.py api/app/config.py api/app/db.py api/app/imaging.py \
          api/app/models/__init__.py api/app/models/base.py api/app/models/registry.py \
          api/app/models/timm_backbone.py api/scripts/make_submission.py \
-         web/Dockerfile web/nginx.conf web/html/index.html db/init/01_schema.sh; do
+         web/Dockerfile web/nginx.conf web/html/index.html db/init/01_schema.sh \
+         weights/reid_current.pt; do
   [ -f "$f" ] || { bad "нет файла: $f"; MISSING=1; }
 done
 [ "$MISSING" -eq 0 ] && ok "все обязательные файлы на месте"
@@ -93,10 +98,18 @@ say "3. Готовлю .env (как это сделал бы член жюри)"
 cp .env.example .env
 sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 16)|" .env
 sed -i "s|^DATA_HOST_DIR=.*|DATA_HOST_DIR=$EMPTY_DATA|"   .env
-sed -i "s|^MODELS_HOST_DIR=.*|MODELS_HOST_DIR=$EMPTY_DATA|" .env
 grep -q '^DATA_HOST_DIR=' .env || echo "DATA_HOST_DIR=$EMPTY_DATA" >> .env
-grep -q '^MODELS_HOST_DIR=' .env || echo "MODELS_HOST_DIR=$EMPTY_DATA" >> .env
 ok "данные подменены пустой папкой $EMPTY_DATA — старт не должен от них зависеть"
+
+# Веса НЕ подменяем: обученная голова обязана приехать вместе с клоном,
+# иначе у постороннего человека поднимется не наша модель.
+MODELS_REL=$(grep -E '^MODELS_HOST_DIR=' .env | cut -d= -f2-)
+WEIGHTS_REL=$(grep -E '^REID_WEIGHTS=' .env | cut -d= -f2- | sed 's|^/models/||')
+if [ -f "${MODELS_REL:-./weights}/$WEIGHTS_REL" ]; then
+  ok "веса модели в клоне: ${MODELS_REL}/$WEIGHTS_REL ($(du -h "${MODELS_REL}/$WEIGHTS_REL" | cut -f1))"
+else
+  bad "в клоне нет весов ${MODELS_REL:-./weights}/$WEIGHTS_REL — поднимется не та модель"
+fi
 
 docker compose -p "$PROJECT" config -q 2>/dev/null && ok "docker-compose.yml валиден" || bad "docker-compose.yml невалиден"
 
@@ -110,8 +123,15 @@ fi
 say "5. Проверяю работу БЕЗ СЕТИ — веса должны быть внутри образа"
 IMAGE=$(docker compose -p "$PROJECT" config --images 2>/dev/null | grep -i api | head -1)
 IMAGE="${IMAGE:-case17-api:local}"
+# Веса головы монтируем ровно так же, как это делает docker-compose:
+# из папки клона, только на чтение. Проверяем отсутствие СЕТИ, а не
+# отсутствие файлов — сеть в рантайме недоступна, а свои файлы у решения
+# быть обязаны.
+MODELS_MOUNT="$(cd "$(grep -E '^MODELS_HOST_DIR=' .env | cut -d= -f2-)" && pwd)"
 if docker run --rm --network none \
+     -v "$MODELS_MOUNT":/models:ro \
      -e EMBED_MODEL="$(grep -E '^EMBED_MODEL=' .env | cut -d= -f2 || echo resnet18)" \
+     -e REID_WEIGHTS="$(grep -E '^REID_WEIGHTS=' .env | cut -d= -f2-)" \
      "$IMAGE" python -c "
 from app.models.registry import build_model
 from app.config import settings

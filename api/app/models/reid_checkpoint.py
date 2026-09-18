@@ -91,8 +91,10 @@ class ReidCheckpointModel(EmbeddingModel):
             raise RuntimeError("модель не загружена, сначала load()")
         if not images:
             return np.zeros((0, self.dim), dtype="float32")
+        from ..config import settings
+
         x = torch.stack([self._tf(im.convert("RGB")) for im in images])
         a = self._head(self._model(x))[1]
-        b = self._head(self._model(torch.flip(x, dims=[3])))[1]
-        feats = F.normalize((a + b) / 2, p=2, dim=1)
+        b = self._head(self._model(torch.flip(x, dims=[3])))[1] if settings.tta_flip else None
+        feats = F.normalize(a if b is None else (a + b) / 2, p=2, dim=1)
         return feats.cpu().numpy().astype("float32")

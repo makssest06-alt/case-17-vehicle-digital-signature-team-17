@@ -11,6 +11,10 @@ def _f(name: str, default: float) -> float:
     return float(os.getenv(name, str(default)))
 
 
+def _b(name: str, default: bool) -> bool:
+    return os.getenv(name, "1" if default else "0").strip().lower() in ("1", "true", "yes", "on")
+
+
 @dataclass(frozen=True)
 class Settings:
     db_dsn: str = os.getenv("DB_DSN", "postgresql://case17:case17@db:5432/case17")
@@ -19,6 +23,9 @@ class Settings:
     embed_model: str = os.getenv("EMBED_MODEL", "resnet18")
     embed_dim: int = _i("EMBED_DIM", 512)
     input_size: int = _i("INPUT_SIZE", 224)
+    # Усреднение оригинала и отражения (test-time augmentation): вдвое дороже,
+    # даёт +2.17 mAP — замер в research/results.md.
+    tta_flip: bool = _b("EMBED_TTA_FLIP", True)
     batch_size: int = _i("BATCH_SIZE", 16)
 
     # поиск и отказ
