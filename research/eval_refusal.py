@@ -78,21 +78,31 @@ def run(q, g, qry, gal, seed=42):
     order = np.argsort(allv); ranks = np.empty(len(allv)); ranks[order] = np.arange(1, len(allv) + 1)
     auc = float((ranks[lab == 1].sum() - len(pos) * (len(pos) + 1) / 2) / (len(pos) * len(neg)))
 
-    best = None
+    # Две рабочие точки. Порог по F1 при сбалансированных классах вырождается
+    # в "принимать всё" (полнота 1.0, TNR 0), поэтому отдельно считаем
+    # сбалансированную точку по Юдену (TPR + TNR - 1) — она и нужна на проде.
+    by_f1, by_j, best_j = None, None, -9.0
     for t in np.arange(allv.min(), allv.max(), 0.002):
         tp = int((pos >= t).sum()); fp = int((neg >= t).sum())
         fn = int((pos < t).sum()); tn = int((neg < t).sum())
         if tp == 0:
             continue
-        p, r = tp / (tp + fp), tp / (tp + fn)
-        f1 = 2 * p * r / (p + r)
+        pr, rc = tp / (tp + fp), tp / (tp + fn)
+        f1 = 2 * pr * rc / (pr + rc)
         tnr = tn / (tn + fp)
-        if best is None or f1 > best["f1"]:
-            best = {"threshold": round(float(t), 3), "f1": round(f1, 3), "precision": round(p, 3),
-                    "recall": round(r, 3), "TNR": round(tnr, 3)}
+        point = {"threshold": round(float(t), 3), "f1": round(f1, 3),
+                 "precision": round(pr, 3), "recall": round(rc, 3), "TNR": round(tnr, 3)}
+        if by_f1 is None or f1 > by_f1["f1"]:
+            by_f1 = point
+        j = rc + tnr - 1
+        if j > best_j:
+            best_j, by_j = j, point
+    balanced = {"bal_" + k: v for k, v in by_j.items()}
+    balanced["bal_youden_j"] = round(best_j, 3)
     return {"auc": round(auc, 3), "n_known": len(pos), "n_unknown": len(neg),
             "known_median": round(float(np.median(pos)), 3),
-            "unknown_median": round(float(np.median(neg)), 3), **best}, pos, neg
+            "unknown_median": round(float(np.median(neg)), 3),
+            **by_f1, **balanced}, pos, neg
 
 
 def plot(pairs, path):
@@ -102,7 +112,10 @@ def plot(pairs, path):
         ax.hist(neg, bins=bins, alpha=.6, label=f"нет пары (n={len(neg)})", color="#c44")
         ax.hist(pos, bins=bins, alpha=.6, label=f"пара есть (n={len(pos)})", color="#37a")
         ax.axvline(st["threshold"], color="#222", ls="--", lw=1.2, label=f"порог {st['threshold']}")
-        ax.set_title(f"{title}\nAUC {st['auc']}  F1 {st['f1']}  TNR {st['TNR']}", fontsize=10)
+        ax.axvline(st["bal_threshold"], color="#0a0", ls=":", lw=1.4,
+                   label=f"сбаланс. {st['bal_threshold']}")
+        ax.set_title(f"{title}\nAUC {st['auc']} | по F1: F1 {st['f1']} TNR {st['TNR']}"
+                     f"\nсбаланс.: F1 {st['bal_f1']} TNR {st['bal_TNR']}", fontsize=9)
         ax.set_xlabel("сходство top-1"); ax.set_ylabel("запросов"); ax.legend(fontsize=8)
     fig.tight_layout(); fig.savefig(path, dpi=130); plt.close(fig)
 

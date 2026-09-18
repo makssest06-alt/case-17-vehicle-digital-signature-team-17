@@ -31,11 +31,18 @@ REGISTRY = {
         model_name="vit_small_patch14_dinov2.lvd142m",
         license_note="Apache 2.0 (Meta DINOv2); данные LVD-142M внутренние",
     ),
-    "siglip2_base": BackboneSpec(
-        key="siglip2_base", kind="timm", dim=768, input_size=224,
-        model_name="vit_base_patch16_siglip_224.v2_webli",
-        license_note="Apache 2.0 (Google SigLIP 2); данные WebLI внутренние",
+    "siglip_base": BackboneSpec(
+        key="siglip_base", kind="timm", dim=768, input_size=224,
+        model_name="vit_base_patch16_siglip_224.webli",
+        license_note="Apache 2.0 (Google SigLIP); данные WebLI внутренние",
     ),
+    # SigLIP 2 появился в timm 1.0.15; у нас 1.0.12, поэтому пока недоступен.
+    # Обновить timm и раскомментировать, если понадобится:
+    # "siglip2_base": BackboneSpec(
+    #     key="siglip2_base", kind="timm", dim=768, input_size=224,
+    #     model_name="vit_base_patch16_siglip_224.v2_webli",
+    #     license_note="Apache 2.0 (Google SigLIP 2); данные WebLI внутренние",
+    # ),
     "resnet50_in1k": BackboneSpec(
         key="resnet50_in1k", kind="timm", dim=2048, input_size=224,
         model_name="resnet50.a1_in1k",
