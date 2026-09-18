@@ -324,6 +324,9 @@ def main() -> int:
 
     MODELS.mkdir(parents=True, exist_ok=True)
     ck_args = dict(vars(a)); ck_args["in_dim"] = spec.dim
+    # Имя timm-модели кладём рядом с ключом реестра: по ключу образ не собрать,
+    # а установщик весов не обязан знать про наш реестр.
+    ck_args["backbone_model_name"] = spec.model_name
     torch.save({"head": head.state_dict(), "args": ck_args}, MODELS / f"head_{a.tag}.pt")
     out = HERE / "results"; out.mkdir(exist_ok=True)
     (out / f"head_{a.tag}.json").write_text(json.dumps(res, ensure_ascii=False, indent=2))

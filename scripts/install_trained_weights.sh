@@ -65,6 +65,29 @@ echo "$INFO"
 read -r BACKBONE OUTDIM <<<"$(echo "$INFO" | python3 -c \
   "import sys,json; d=json.load(sys.stdin); print(d['backbone'], d['out_dim'])")"
 [ "$BACKBONE" != "?" ] || { echo "в чекпоинте нет имени бэкбона — не могу собрать образ" >&2; exit 1; }
+
+# Чекпоинты, обученные на CPU через research/train_head.py, хранят КЛЮЧ РЕЕСТРА
+# (например siglip_base), а ноутбук для Kaggle — сразу имя timm-модели
+# (vit_base_patch16_siglip_224.webli). Образ собирается по имени timm, поэтому
+# ключ надо перевести. Если имя уже содержит точку — это timm, оставляем как есть.
+RESOLVED=$(python3 - "$BACKBONE" <<'PY'
+import sys
+sys.path.insert(0, "/opt/case17/app/research")
+name = sys.argv[1]
+if "." in name or "/" in name:
+    print(name)
+else:
+    try:
+        import backbones
+        print(backbones.get(name).model_name or name)
+    except Exception:
+        print(name)
+PY
+)
+if [ "$RESOLVED" != "$BACKBONE" ]; then
+  echo "  ключ реестра '$BACKBONE' -> модель timm '$RESOLVED'"
+  BACKBONE="$RESOLVED"
+fi
 ok "бэкбон $BACKBONE, вектор ${OUTDIM}D"
 
 if [ "$DRY" = "1" ]; then
