@@ -119,6 +119,78 @@ def ready() -> ReadyResponse:
     )
 
 
+@app.get("/v1/config", tags=["служебные"])
+def service_config() -> dict:
+    """Рабочие точки порога и что они означают.
+
+    Интерфейс берёт пороги отсюда, а не хранит у себя: они привязаны к
+    конкретной модели, и при смене весов не должно оставаться зашитых чисел.
+    """
+    return {
+        "model": MODEL.name,
+        "dim": MODEL.dim,
+        "explain_available": hasattr(MODEL, "patch_saliency"),
+        "modes": {
+            "balanced": {
+                "threshold": settings.search_threshold,
+                "title": "сбалансированный",
+                "note": "Обе ошибки равноценны. Точка максимума индекса Юдена: "
+                        "F1 0.934, полнота 0.939, TNR 0.927.",
+            },
+            "strict": {
+                "threshold": settings.search_threshold_strict,
+                "title": "строгий",
+                "note": "Ложное совпадение дороже пропуска: TNR 0.982, "
+                        "точность 0.979, полнота 0.856. Из двадцати чужих "
+                        "запросов ошибочно принимается не больше одного.",
+            },
+        },
+    }
+
+
+@app.post("/v1/explain", tags=["поиск"])
+async def explain(
+    image: UploadFile = File(...),
+    x: int = Form(...), y: int = Form(...), w: int = Form(...), h: int = Form(...),
+    gallery_id: Optional[int] = Form(None),
+) -> dict:
+    """Показать, какие участки кадра дали сходство.
+
+    Без gallery_id карта показывает, что формирует сам признак. С gallery_id —
+    что именно совпало с конкретным кандидатом из галереи.
+
+    Величина на карте — тот же косинус, по которому принимается решение,
+    посчитанный по участкам кадра. Поэтому это не догадка о том, «куда
+    смотрит модель», а разложение самой оценки сходства.
+    """
+    if not hasattr(MODEL, "patch_saliency"):
+        raise HTTPException(
+            501,
+            f"Модель {MODEL.name} не умеет объяснять: карта строится по токенам "
+            f"трансформера, а этот бэкбон их не отдаёт.",
+        )
+    t0 = time.perf_counter()
+    crop = _prepare(await _read_upload(image), x, y, w, h)
+
+    target = None
+    if gallery_id is not None:
+        target = db.fetch_vector(gallery_id)
+        if target is None:
+            raise HTTPException(404, f"В галерее нет записи {gallery_id}.")
+
+    weights, side = MODEL.patch_saliency(crop, target)
+    lo, hi = float(weights.min()), float(weights.max())
+    return {
+        "grid": side,
+        "weights": [round(float(v), 4) for v in weights],
+        "min": round(lo, 4),
+        "max": round(hi, 4),
+        "gallery_id": gallery_id,
+        "model": MODEL.name,
+        "took_ms": round((time.perf_counter() - t0) * 1000, 1),
+    }
+
+
 @app.post("/v1/embed", response_model=EmbedResponse, tags=["признак"])
 async def embed(
     image: UploadFile = File(..., description="JPEG, PNG, WEBP или BMP"),

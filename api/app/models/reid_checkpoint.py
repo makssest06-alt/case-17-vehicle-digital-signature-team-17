@@ -85,6 +85,37 @@ class ReidCheckpointModel(EmbeddingModel):
         self._model, self._head = backbone, head
         self.dim = out_dim
 
+    def patch_saliency(self, image: Image.Image, target: np.ndarray = None):
+        """Вклад участков кадра в итоговый вектор — для кнопки «показать почему».
+
+        Берём токены последнего слоя бэкбона (по одному на участок 16x16),
+        прогоняем каждый через ту же голову, что и общий вектор, и считаем
+        косинус с целью. Цель — либо сам итоговый вектор кадра (тогда карта
+        показывает, что формирует признак), либо вектор найденного кандидата
+        (тогда карта показывает, что именно совпало).
+
+        Это не Grad-CAM: градиенты не считаются вовсе, один прямой проход.
+        Зато метод опирается ровно на ту величину, по которой принимается
+        решение, — на косинусное сходство, а не на её приближение.
+        """
+        if self._model is None:
+            raise RuntimeError("модель не загружена, сначала load()")
+        x = self._tf(image.convert("RGB")).unsqueeze(0)
+        with torch.inference_mode():
+            tokens = self._model.forward_features(x)
+            n = tokens.shape[1]
+            side = int(round(n ** 0.5))
+            if side * side != n:               # впереди служебные токены (CLS и т.п.)
+                side = int(round((n - 1) ** 0.5))
+                tokens = tokens[:, n - side * side :, :]
+            pooled = self._model.forward_head(self._model.forward_features(x))
+            v_pool = F.normalize(self._head(pooled)[1], p=2, dim=1)
+            v_tok = F.normalize(self._head(tokens[0])[1], p=2, dim=1)
+            tgt = v_pool if target is None else F.normalize(
+                torch.from_numpy(np.asarray(target, dtype="float32")).unsqueeze(0), p=2, dim=1)
+            sim = (v_tok @ tgt.T).squeeze(1)
+        return sim.cpu().numpy().astype("float32"), side
+
     @torch.inference_mode()
     def embed_batch(self, images: List[Image.Image]) -> np.ndarray:
         if self._model is None:

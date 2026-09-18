@@ -135,9 +135,16 @@ a{color:var(--accent)}
       </div>
       <div class="row">
         <div class="f"><label for="topn">кандидатов</label><input type="number" id="topn" min="1" max="100" value="10"></div>
-        <div class="f"><label for="thr">порог</label><input type="number" id="thr" min="0" max="1" step="0.01" value="0.75"></div>
         <div class="f"><label for="vid">vehicle_id (для добавления)</label><input type="text" id="vid" placeholder="необязательно"></div>
       </div>
+      <div class="modes" role="radiogroup" aria-label="Режим строгости">
+        <button type="button" class="mode on" data-mode="balanced">сбалансированный</button>
+        <button type="button" class="mode" data-mode="strict">строгий</button>
+        <button type="button" class="mode" data-mode="expert">экспертный</button>
+        <input type="number" id="thr" min="0" max="1" step="0.005" value="0.525" hidden
+               aria-label="порог вручную">
+      </div>
+      <div class="modenote" id="modenote">—</div>
       <div class="bar">
         <button class="primary" id="go">Найти совпадения</button>
         <button class="ghost" id="add">Добавить в галерею</button>
@@ -150,8 +157,20 @@ a{color:var(--accent)}
     <h2>2 · Кандидаты</h2>
     <div id="out"><div class="state">Загрузи кадр, выдели рамку и нажми «Найти совпадения».</div></div>
     <div class="bar" id="exp" style="display:none">
+      <button class="ghost" id="why">Показать почему</button>
       <button class="ghost" id="csv">Выгрузить CSV</button>
       <button class="ghost" id="json">Выгрузить JSON</button>
+    </div>
+    <div id="whybox" class="whybox" hidden>
+      <div class="whyhead">
+        <strong>Что дало сходство</strong>
+        <span id="whynote">карта строится по участкам кадра</span>
+      </div>
+      <div class="whygrid">
+        <figure><canvas id="whycv" width="336" height="336"></canvas>
+          <figcaption id="whycap">запрос</figcaption></figure>
+        <div class="whytext" id="whytext"></div>
+      </div>
     </div>
   </section>
 </main>
@@ -161,6 +180,30 @@ a{color:var(--accent)}
   сервис отвечает отказом, если уверенного совпадения нет — это осознанное поведение, а не ошибка.
 </footer>
 
+<style>
+.modes{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.mode{padding:8px 14px;border-radius:999px;border:1px solid #d7d9e0;background:#fff;
+      cursor:pointer;font:inherit;font-size:14px;color:#444}
+.mode:hover{border-color:#9aa0ad}
+.mode.on{background:#1b2430;border-color:#1b2430;color:#fff}
+.modenote{margin-top:8px;font-size:13px;color:#667;line-height:1.5}
+.whybox{margin-top:14px;padding:14px;border:1px solid #e3e5ea;border-radius:12px;background:#fafbfc}
+.whyhead{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:10px}
+.whyhead span{font-size:13px;color:#667}
+.whygrid{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
+.whygrid figure{margin:0}
+.whygrid canvas{border-radius:10px;border:1px solid #e3e5ea;background:#fff;max-width:100%}
+.whygrid figcaption{font-size:12px;color:#667;margin-top:6px;text-align:center}
+.whytext{flex:1;min-width:220px;font-size:13px;color:#445;line-height:1.6}
+.whytext b{color:#1b2430}
+@media (prefers-color-scheme: dark){
+  .mode{background:#1c2029;border-color:#333a46;color:#c8ccd4}
+  .mode.on{background:#e8ebf0;border-color:#e8ebf0;color:#11151c}
+  .whybox{background:#171b22;border-color:#2a303b}
+  .whygrid canvas{background:#11151c;border-color:#2a303b}
+  .whytext{color:#c8ccd4}.whytext b{color:#fff}
+}
+</style>
 <script>
 const $=s=>document.querySelector(s);
 const img=new Image(); let bbox=null, last=null, drag=null;
@@ -227,6 +270,31 @@ function busy(b){['go','add'].forEach(i=>$('#'+i).disabled=b); $('#go').textCont
 function err(m){$('#out').innerHTML='<div class="state err">'+esc(m)+'</div>'; $('#exp').style.display='none';}
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
+// --- режимы строгости ---------------------------------------------------
+// Пороги приходят с сервера: они привязаны к конкретной модели, и при смене
+// весов в интерфейсе не должно оставаться зашитых чисел.
+let CFG=null, MODE='balanced';
+fetch('/api/v1/config').then(r=>r.json()).then(d=>{CFG=d; applyMode('balanced');})
+  .catch(()=>{$('#modenote').textContent='настройки режимов недоступны, порог вручную';});
+
+function applyMode(m){
+  MODE=m;
+  document.querySelectorAll('.mode').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));
+  const thr=$('#thr');
+  if(m==='expert'){
+    thr.hidden=false;
+    $('#modenote').innerHTML='Порог задаётся вручную. Полезно, чтобы показать, '+
+      'как смещение порога меняет баланс между пропусками и ложными совпадениями.';
+    return;
+  }
+  thr.hidden=true;
+  if(!CFG) return;
+  const c=CFG.modes[m];
+  thr.value=c.threshold;
+  $('#modenote').innerHTML='<b>Порог '+c.threshold+'.</b> '+esc(c.note);
+}
+document.querySelectorAll('.mode').forEach(b=>b.onclick=()=>applyMode(b.dataset.mode));
+
 $('#go').onclick=async()=>{
   let fd; try{fd=form();}catch(e){return err(e.message);}
   fd.append('top_n',$('#topn').value); fd.append('threshold',$('#thr').value);
@@ -286,6 +354,64 @@ $('#csv').onclick=()=>{
   dl('candidates.csv',rows.map(r=>r.join(',')).join('\n'),'text/csv');
 };
 $('#json').onclick=()=>{ if(last) dl('search.json',JSON.stringify(last,null,2),'application/json'); };
+
+// --- показать почему ----------------------------------------------------
+// Карта строится по тем же косинусам, по которым принимается решение:
+// каждый участок кадра прогоняется через ту же голову и сравнивается с целью.
+// Поэтому это разложение самой оценки, а не догадка о внимании модели.
+$('#why').onclick=async()=>{
+  if(!last||!last.candidates||!last.candidates.length) return;
+  let fd; try{fd=form();}catch(e){return err(e.message);}
+  const top=last.candidates[0];
+  fd.append('gallery_id',top.id);
+  $('#why').disabled=true; $('#why').textContent='Считаю…';
+  try{
+    const r=await fetch('/api/v1/explain',{method:'POST',body:fd});
+    const d=await r.json();
+    if(!r.ok){ $('#whybox').hidden=false;
+      $('#whytext').innerHTML='<b>Объяснение недоступно.</b><br>'+esc(d.detail||('Ошибка '+r.status));
+      $('#whynote').textContent=''; return; }
+    drawWhy(d,top);
+  }catch(e){ err('Сеть недоступна: '+e.message); }
+  finally{ $('#why').disabled=false; $('#why').textContent='Показать почему'; }
+};
+
+function drawWhy(d,top){
+  $('#whybox').hidden=false;
+  const cv=$('#whycv'), g=cv.getContext('2d'), S=cv.width;
+  g.clearRect(0,0,S,S);
+  if(bbox&&img.complete){
+    const pad=0.10, px=bbox.w*pad, py=bbox.h*pad;
+    const sx=Math.max(0,bbox.x-px), sy=Math.max(0,bbox.y-py);
+    const sw=Math.min(img.naturalWidth-sx,bbox.w+2*px);
+    const sh=Math.min(img.naturalHeight-sy,bbox.h+2*py);
+    g.drawImage(img,sx,sy,sw,sh,0,0,S,S);
+  }
+  const n=d.grid, cell=S/n, span=(d.max-d.min)||1;
+  for(let i=0;i<d.weights.length;i++){
+    const v=(d.weights[i]-d.min)/span;
+    if(v<0.45) continue;                     // слабые участки не закрашиваем
+    const a=(v-0.45)/0.55*0.62;
+    g.fillStyle='rgba(255,'+Math.round(210*(1-v))+',0,'+a.toFixed(3)+')';
+    g.fillRect((i%n)*cell,Math.floor(i/n)*cell,cell+0.5,cell+0.5);
+  }
+  const srt=d.weights.map((v,i)=>[v,i]).sort((a,b)=>b[0]-a[0]);
+  const share=srt.slice(0,Math.ceil(d.weights.length*0.1))
+                 .reduce((s,x)=>s+x[0],0)/d.weights.reduce((s,x)=>s+x,0);
+  $('#whycap').textContent='сходство с кандидатом #1';
+  $('#whynote').textContent='участков '+d.grid+'x'+d.grid+' · '+d.took_ms+' мс';
+  $('#whytext').innerHTML=
+    '<b>Сравнение с:</b> '+esc(top.vehicle_id||('запись #'+top.id))+
+    ' (сходство '+Math.round(top.confidence*100)+'%)<br><br>'+
+    'Подсвечены участки кадра, которые дали сходство именно с этим кандидатом. '+
+    'Значение на карте — тот же косинус, по которому принимается решение, '+
+    'посчитанный по участкам 16x16 пикселей.<br><br>'+
+    '<b>Верхние 10% участков дают '+Math.round(share*100)+'% сходства.</b> '+
+    'Если подсветка легла на номерной знак, а не на кузов — это сигнал, что '+
+    'модель пошла коротким путём: по условию задачи номер использовать нельзя.<br><br>'+
+    'Метод: один прямой проход, градиенты не считаются. Это не Grad-CAM, '+
+    'а разложение самой оценки сходства.';
+}
 </script>
 </body>
 </html>

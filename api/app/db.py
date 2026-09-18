@@ -146,6 +146,16 @@ def list_items(limit: int, offset: int) -> List[Dict[str, Any]]:
         ]
 
 
+def fetch_vector(item_id: int):
+    """Вектор одной записи галереи — нужен, чтобы объяснить конкретное совпадение."""
+    import numpy as np
+
+    with pool().connection() as conn, conn.cursor() as cur:
+        cur.execute("SELECT embedding FROM gallery WHERE id = %s", (item_id,))
+        row = cur.fetchone()
+    return None if row is None else np.asarray(row[0], dtype="float32")
+
+
 def count() -> int:
     with pool().connection() as conn, conn.cursor() as cur:
         cur.execute("SELECT count(*) FROM gallery")
