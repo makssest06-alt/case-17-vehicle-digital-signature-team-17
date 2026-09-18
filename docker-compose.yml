@@ -48,8 +48,10 @@ services:
       OMP_NUM_THREADS: "2"
       HF_HUB_OFFLINE: "1"
       HF_HOME: /opt/hfcache
+      REID_WEIGHTS: ${REID_WEIGHTS:-/models/reid_current.pt}
     volumes:
       - /opt/case17/data:/data:ro
+      - /opt/case17/models:/models:ro
       - ./artifacts:/artifacts
     ports:
       - "8000:8000"
