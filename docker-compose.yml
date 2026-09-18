@@ -50,8 +50,8 @@ services:
       HF_HOME: /opt/hfcache
       REID_WEIGHTS: ${REID_WEIGHTS:-/models/reid_current.pt}
     volumes:
-      - /opt/case17/data:/data:ro
-      - /opt/case17/models:/models:ro
+      - ${DATA_HOST_DIR:-/opt/case17/data}:/data:ro
+      - ${MODELS_HOST_DIR:-/opt/case17/models}:/models:ro
       - ./artifacts:/artifacts
     ports:
       - "8000:8000"
