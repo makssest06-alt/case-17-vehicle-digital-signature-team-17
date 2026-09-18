@@ -52,8 +52,20 @@ def build_val(orig, flip, head=None, seed=42):
     return emb(qry), emb(gal), qry, gal
 
 
-def run(q, g, qry, gal, seed=42):
-    """Половине машин убираем их саму из галереи -> запросы заведомо без пары."""
+def run(q, g, qry, gal, seed=42, cross_camera_only=True):
+    """Половине машин убираем их саму из галереи -> запросы заведомо без пары.
+
+    cross_camera_only управляет протоколом:
+
+      * True  — «как считает жюри»: совпадения внутри той же камеры
+        исключаются, положительная пара всегда кросс-камерная. Это правильный
+        протокол для mAP и Rank.
+      * False — «как работает сервис»: camera_id по ТЗ на вход не подаётся,
+        значит отфильтровать свою камеру мы физически не можем и в выдачу
+        попадает в том числе соседний кадр с той же камеры. Порог отказа надо
+        калибровать именно здесь, иначе он приедет из более трудного
+        распределения и на проде не отказывает никогда.
+    """
     rng = np.random.default_rng(seed)
     vids = sorted({r["vehicle_id"] for _, r in qry})
     unknown = set(rng.choice(vids, size=len(vids) // 2, replace=False).tolist())
@@ -65,7 +77,7 @@ def run(q, g, qry, gal, seed=42):
     known_top1, unknown_top1 = [], []
     for i, (_, qr) in enumerate(qry):
         v = qr["vehicle_id"]
-        keep = g_cam != qr["camera_id"]
+        keep = (g_cam != qr["camera_id"]) if cross_camera_only else np.ones(len(g_vid), bool)
         if v in unknown:
             keep = keep & (g_vid != v)          # его машины в галерее нет вовсе
         if not keep.any():
@@ -125,14 +137,22 @@ def main() -> int:
     ap.add_argument("--backbone", default="clip_vitb16")
     ap.add_argument("--heads", default="", help="теги обученных голов через запятую")
     ap.add_argument("--out", default="refusal.png")
+    ap.add_argument("--protocol", default="jury", choices=["jury", "deployment"],
+                    help="jury — кросс-камерный расчёт; deployment — как ищет сервис")
+    ap.add_argument("--results-name", default=None,
+                    help="имя json в research/results (по умолчанию refusal[_protocol].json)")
     a = ap.parse_args()
+    cross = a.protocol == "jury"
+    print(f"протокол: {a.protocol} "
+          f"({'совпадения своей камеры исключены' if cross else 'галерея не фильтруется'})",
+          flush=True)
 
     orig = np.load(FEAT / f"train_{a.backbone}_orig.npy")
     flip = np.load(FEAT / f"train_{a.backbone}_flip.npy")
     results, pairs = {}, []
 
     q, g, qry, gal = build_val(orig, flip, head=None)
-    st, pos, neg = run(q, g, qry, gal)
+    st, pos, neg = run(q, g, qry, gal, cross_camera_only=cross)
     results[f"{a.backbone}_raw"] = st
     pairs.append((f"{a.backbone} без головы", pos, neg, st))
     print(f"{a.backbone} без головы:", st, flush=True)
@@ -143,12 +163,13 @@ def main() -> int:
         head = ReidHead(ar.get("in_dim", 768), ar["hidden"], ar["out_dim"], ar["dropout"])
         head.load_state_dict(ck["head"]); head.eval()
         q, g, qry, gal = build_val(orig, flip, head=head)
-        st, pos, neg = run(q, g, qry, gal)
+        st, pos, neg = run(q, g, qry, gal, cross_camera_only=cross)
         results[tag] = st; pairs.append((f"CLIP + голова ({tag})", pos, neg, st))
         print(f"{tag}:", st, flush=True)
 
     out = HERE / "results"; out.mkdir(exist_ok=True)
-    (out / "refusal.json").write_text(json.dumps(results, ensure_ascii=False, indent=2))
+    name = a.results_name or (f"refusal.json" if cross else f"refusal_{a.protocol}.json")
+    (out / name).write_text(json.dumps(results, ensure_ascii=False, indent=2))
     plot(pairs, HERE / a.out)
     print("график:", HERE / a.out, flush=True)
     return 0

@@ -54,6 +54,10 @@ def main() -> int:
     ap.add_argument("--out", default=settings.artifacts_dir)
     ap.add_argument("--threshold", type=float, default=settings.search_threshold)
     ap.add_argument("--batch", type=int, default=settings.batch_size)
+    ap.add_argument("--reuse-embeddings", action="store_true",
+                    help="взять готовый embeddings.npy вместо пересчёта — нужен, когда "
+                         "меняется только порог: счёт векторов занимает ~20 минут, "
+                         "а порог влияет лишь на candidates.csv")
     args = ap.parse_args()
 
     data = Path(args.data)
@@ -66,17 +70,35 @@ def main() -> int:
     if len(g_ids) < TOP_K:
         print(f"ВНИМАНИЕ: в галерее всего {len(g_ids)} объектов, топ-10 не набрать", file=sys.stderr)
 
-    model = build_model(settings.embed_model, settings.input_size)
-    t0 = time.perf_counter()
-    model.load()
-    print(f"модель {model.name} загружена за {time.perf_counter() - t0:.1f} с, dim={model.dim}")
-
-    t_embed = time.perf_counter()
-    q_emb = embed_folder(model, data / "query", q_ids, args.batch, "query")
-    g_emb = embed_folder(model, data / "gallery", g_ids, args.batch, "gallery")
-    embed_s = time.perf_counter() - t_embed
     total = len(q_ids) + len(g_ids)
-    print(f"эмбеддинги посчитаны за {embed_s:.1f} с — {total / embed_s:.1f} кадров/с")
+    emb_path = out / "embeddings.npy"
+
+    if args.reuse_embeddings:
+        if not emb_path.exists():
+            print(f"нет {emb_path} — пересчитать нечего, убери --reuse-embeddings",
+                  file=sys.stderr)
+            return 1
+        saved = np.load(emb_path)
+        if saved.shape[0] != total:
+            print(f"в {emb_path} {saved.shape[0]} векторов, а нужно {total} — "
+                  f"файл от другого набора данных", file=sys.stderr)
+            return 1
+        q_emb, g_emb = saved[:len(q_ids)], saved[len(q_ids):]
+        dim = saved.shape[1]
+        model_name = settings.embed_model
+        print(f"векторы взяты из {emb_path}: {saved.shape}, модель не грузится")
+    else:
+        model = build_model(settings.embed_model, settings.input_size)
+        t0 = time.perf_counter()
+        model.load()
+        print(f"модель {model.name} загружена за {time.perf_counter() - t0:.1f} с, dim={model.dim}")
+        dim, model_name = model.dim, model.name
+
+        t_embed = time.perf_counter()
+        q_emb = embed_folder(model, data / "query", q_ids, args.batch, "query")
+        g_emb = embed_folder(model, data / "gallery", g_ids, args.batch, "gallery")
+        embed_s = time.perf_counter() - t_embed
+        print(f"эмбеддинги посчитаны за {embed_s:.1f} с — {total / embed_s:.1f} кадров/с")
 
     # векторы уже L2-нормированы, значит скалярное произведение = косинус
     sim = q_emb @ g_emb.T
@@ -90,8 +112,8 @@ def main() -> int:
             top = order[qi, :TOP_K]
             w.writerow([q] + [g_ids[j] for j in top])
 
-    emb_path = out / "embeddings.npy"
-    np.save(emb_path, np.vstack([q_emb, g_emb]).astype("float32"))
+    if not args.reuse_embeddings:
+        np.save(emb_path, np.vstack([q_emb, g_emb]).astype("float32"))
 
     cand_path = out / "candidates.csv"
     accepted, refused = 0, 0
@@ -112,7 +134,7 @@ def main() -> int:
 
     print()
     print(f"submission.csv   {sub_path}  строк {len(q_ids)}")
-    print(f"embeddings.npy   {emb_path}  форма {(total, model.dim)}")
+    print(f"embeddings.npy   {emb_path}  форма {(total, dim)}  модель {model_name}")
     print(f"candidates.csv   {cand_path}  порог {args.threshold}")
     print(f"  принято query: {accepted}, отказов: {refused} ({refused / len(q_ids) * 100:.1f}%)")
     return 0

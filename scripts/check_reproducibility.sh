@@ -38,6 +38,28 @@ cleanup() {
 }
 trap cleanup EXIT
 
+say "0. Проверяю, что путь свободен"
+# compose-файл фиксирует имена контейнеров (case17-api и т.д.) и порты 8000/8080,
+# поэтому рабочий стек и проверочный одновременно не живут. Ловим это заранее,
+# иначе проверка упадёт на сборке и будет выглядеть как нарушенная
+# воспроизводимость, хотя дело в нашем же запущенном контейнере.
+BUSY=""
+for c in case17-db case17-api case17-web; do
+  docker ps --format '{{.Names}}' | grep -qx "$c" && BUSY="$BUSY $c"
+done
+for prt in 8000 8080; do
+  if (command -v ss >/dev/null && ss -ltn "sport = :$prt" 2>/dev/null | grep -q LISTEN); then
+    BUSY="$BUSY порт:$prt"
+  fi
+done
+if [ -n "$BUSY" ]; then
+  bad "занято:$BUSY"
+  echo "  Останови рабочий стек и запусти проверку заново:"
+  echo "    cd /opt/case17/app && docker compose down"
+  exit 1
+fi
+ok "контейнеры и порты 8000/8080 свободны"
+
 say "1. Клонирую ветку $BRANCH из $REPO_URL"
 git clone -q --branch "$BRANCH" --depth 1 "$REPO_URL" "$WORK/repo" || { bad "клонирование не удалось"; exit 1; }
 cd "$WORK/repo"
