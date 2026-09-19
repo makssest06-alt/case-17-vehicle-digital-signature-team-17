@@ -90,15 +90,29 @@ class RandomErasing:
 # ------------------------------------------------------------------- датасет
 
 class CropDataset(Dataset):
-    def __init__(self, rows, tf, aug=None, train=True):
+    def __init__(self, rows, tf, aug=None, train=True, images_dir=None, context=0.10):
         self.rows, self.tf, self.aug, self.train = rows, tf, aug, train
+        self.images_dir = Path(images_dir) if images_dir else None
+        self.context = context
 
     def __len__(self):
         return len(self.rows)
 
     def __getitem__(self, i):
         r = self.rows[i]
-        img = Image.open(CROPS / f"{r['image_id']}.jpg").convert("RGB")
+        if self.images_dir is None:
+            img = Image.open(CROPS / f"{r['image_id']}.jpg").convert("RGB")
+        else:
+            img = Image.open(self.images_dir / f"{r['image_id']}.jpg").convert("RGB")
+            # The public dataset stores full frames. Crop the annotated vehicle
+            # here so the training script works without a second 1GB crop cache.
+            x, y, w, h = (float(r[k]) for k in ("x", "y", "w", "h"))
+            px, py = w * self.context, h * self.context
+            left = max(0, int(round(x - px)))
+            top = max(0, int(round(y - py)))
+            right = min(img.width, int(round(x + w + px)))
+            bottom = min(img.height, int(round(y + h + py)))
+            img = img.crop((left, top, right, bottom))
         if self.train and self.aug is not None:
             img = self.aug(img)
         x = self.tf(img)
@@ -162,6 +176,13 @@ def main() -> int:
     ap.add_argument("--steps", type=int, default=0, help="ограничить число шагов (для smoke)")
     ap.add_argument("--tag", default="finetune")
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--images-dir", default="", help="full-frame JPEG directory; crop is made from bbox on the fly")
+    ap.add_argument("--train-csv", default="", help="CSV with image_id,x,y,w,h,vehicle_id,camera_id")
+    ap.add_argument("--val-ids", default=str(HERE / "val_ids.txt"))
+    ap.add_argument("--models-dir", default=str(MODELS))
+    # Must match api/app/imaging.py and BBOX_PAD in the service configuration.
+    # The supplied/precomputed crops use 10% of bbox width/height on every side.
+    ap.add_argument("--context", type=float, default=0.10)
     a = ap.parse_args()
 
     torch.manual_seed(a.seed); np.random.seed(a.seed); random.seed(a.seed)
@@ -174,12 +195,20 @@ def main() -> int:
             return 1
 
     spec = backbones.get(a.backbone)
+    if device.type == "cuda":
+        print(f"CUDA_ACTIVE device={torch.cuda.get_device_name(0)} "
+              f"vram_total={torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f}GiB",
+              flush=True)
+    else:
+        print("CUDA_INACTIVE device=cpu", flush=True)
     _, tf, encoder = backbones.build_encoder(spec)
     for p in encoder.parameters():
         p.requires_grad_(True)  # в отличие от train_head.py бэкбон размораживаем
 
-    idx = list(csv.DictReader((Path("/opt/case17/data/crops") / "crops_train.csv").open()))
-    val_ids = {l.strip() for l in (HERE / "val_ids.txt").read_text().split() if l.strip()}
+    train_csv = Path(a.train_csv) if a.train_csv else Path("/opt/case17/data/crops/crops_train.csv")
+    images_dir = Path(a.images_dir) if a.images_dir else None
+    idx = list(csv.DictReader(train_csv.open(encoding="utf-8")))
+    val_ids = {l.strip() for l in Path(a.val_ids).read_text().split() if l.strip()}
     rows = [r for r in idx if r["vehicle_id"] not in val_ids]
     vids = sorted({r["vehicle_id"] for r in rows})
     lab = {v: i for i, v in enumerate(vids)}
@@ -187,7 +216,8 @@ def main() -> int:
         r["_label"] = lab[r["vehicle_id"]]
     print(f"[{a.tag}] train {len(rows)} кадров / {len(vids)} машин, устройство {device}", flush=True)
 
-    ds = CropDataset(rows, tf, NightAndGlare(size=spec.input_size), train=True)
+    ds = CropDataset(rows, tf, NightAndGlare(size=spec.input_size), train=True,
+                     images_dir=images_dir, context=a.context)
     sampler = PKBatchSampler(rows, a.P, a.K, a.seed)
     dl = DataLoader(ds, batch_sampler=sampler, num_workers=0 if a.smoke else a.workers,
                     pin_memory=device.type == "cuda")
@@ -203,9 +233,12 @@ def main() -> int:
 
     steps_total = a.steps if a.steps else a.epochs * max(1, len(sampler))
     step, t0 = 0, time.perf_counter()
-    MODELS.mkdir(parents=True, exist_ok=True)
+    models_dir = Path(a.models_dir)
+    models_dir.mkdir(parents=True, exist_ok=True)
 
     for ep in range(a.epochs):
+        model.train()
+        margin.train()
         for x, y in dl:
             x, y = x.to(device, non_blocking=True), y.to(device, non_blocking=True)
             frac = step / max(1, steps_total)
@@ -221,13 +254,19 @@ def main() -> int:
             scaler.step(opt); scaler.update()
             step += 1
             if step % 20 == 0 or a.smoke:
-                print(f"  шаг {step}/{steps_total}  loss {loss.item():.3f}  "
-                      f"{(time.perf_counter()-t0)/step:.2f} с/шаг", flush=True)
+                gpu_info = ""
+                if device.type == "cuda":
+                    torch.cuda.synchronize()
+                    gpu_info = (f"  gpu_mem={torch.cuda.memory_allocated() / 1024**3:.2f}/"
+                                f"{torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f}GiB")
+                print(f"  STEP {step}/{steps_total}  loss={loss.item():.3f}  "
+                      f"sec_per_step={(time.perf_counter()-t0)/step:.2f}{gpu_info}", flush=True)
             if a.steps and step >= a.steps:
                 break
         if a.steps and step >= a.steps:
             break
-        torch.save({"model": model.state_dict(), "args": vars(a)}, MODELS / f"{a.tag}_ep{ep+1}.pt")
+        torch.save({"model": model.state_dict(), "margin": margin.state_dict(), "args": vars(a)},
+                   models_dir / f"{a.tag}_ep{ep+1}.pt")
 
     dt = time.perf_counter() - t0
     print(f"готово: {step} шагов за {dt:.1f} с ({dt/max(1,step):.2f} с/шаг)", flush=True)

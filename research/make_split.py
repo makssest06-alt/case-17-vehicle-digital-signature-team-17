@@ -6,24 +6,30 @@
 """
 import csv
 import random
+import argparse
 from collections import defaultdict
 from pathlib import Path
 
 SEED = 42
 N_VEHICLES = 150
-CROPS = Path("/opt/case17/data/crops")
 OUT = Path(__file__).parent
 
 
 def main() -> None:
-    rows = list(csv.DictReader((CROPS / "crops_train.csv").open()))
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--train-csv", default="/opt/case17/data/crops/crops_train.csv")
+    ap.add_argument("--out", default=str(OUT))
+    a = ap.parse_args()
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    rows = list(csv.DictReader(Path(a.train_csv).open(encoding="utf-8")))
     by_vehicle = defaultdict(list)
     for r in rows:
         by_vehicle[r["vehicle_id"]].append(r)
 
     vehicles = sorted(by_vehicle)
     picked = sorted(random.Random(SEED).sample(vehicles, N_VEHICLES), key=int)
-    (OUT / "val_ids.txt").write_text("\n".join(picked) + "\n")
+    (out / "val_ids.txt").write_text("\n".join(picked) + "\n")
 
     split = []
     for vid in picked:
@@ -35,7 +41,7 @@ def main() -> None:
             split.append((items[0], "gallery"))          # по одному кадру с каждой камеры
             split.extend((r, "query") for r in items[1:])  # остальные — запросы
 
-    with (OUT / "val_split.csv").open("w", newline="") as f:
+    with (out / "val_split.csv").open("w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["image_id", "vehicle_id", "camera_id", "role"])
         for r, role in split:

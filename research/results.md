@@ -459,3 +459,63 @@ TNR 0.832 против 0.734. Если после дообучения на GPU 
 
 Воспроизвести: `research/run_presets.sh`, затем
 `python compare_models.py --variants siglip_base:p_baseline siglip_base:p_viewpoint siglip_base:p_centroid`
+
+## Полное дообучение бэкбона на GPU (SigLIP ViT-B/16)
+
+Дата: 19.09.2026. Железо: **RTX 4060 Laptop, 8 ГБ VRAM**. 30 эпох, ~2 ч 10 мин
+(~4,5 мин/эпоха, ~1,58 с/шаг). Протокол оценки тот же, что выше: crop bbox + 10%
+запаса из full-frame, 224x224, cross-camera, метрики mAP / Rank-1 / Rank-5.
+
+Отличие от `train_head.py`: бэкбон **разморожен**, градиент идёт через всю сеть.
+Голова та же (768 -> 1024 -> 512, BNNeck), лоссы те же (ArcFace + batch-hard
+triplet), добавлены аугментации под ночь/блики/смаз/JPEG.
+
+```bash
+python finetune_clip.py --backbone siglip_base --images-dir D:/bm/dataset_extracted/images \
+  --train-csv D:/bm/dataset_extracted/train.csv --val-ids research/val_ids.txt \
+  --epochs 30 --P 8 --K 4 --hidden 1024 --out-dim 512 --context 0.10 \
+  --lr-head 3e-4 --lr-backbone 1e-5 --warmup 3 --amp --workers 0 \
+  --tag siglip_full_pad10 --models-dir D:/bm/gpu_models_siglip
+```
+
+Замер чекпоинтов (`research/eval_checkpoint.py`), без flip и с flip-TTA
+(flip — это ровно то, что делает production `api/app/models/reid_checkpoint.py`):
+
+| Эпоха | mAP | Rank-1 | Rank-5 | mAP (flip) | Rank-1 (flip) | Rank-5 (flip) |
+|---:|---:|---:|---:|---:|---:|---:|
+| 5  | 65.40 | 59.71 | 78.77 | - | - | - |
+| 10 | 70.28 | 64.79 | 83.12 | - | - | - |
+| 15 | 73.33 | 68.06 | 86.03 | - | - | - |
+| 20 | **74.50** | 69.15 | 87.48 | 73.72 | 67.51 | 87.66 |
+| 25 | 73.63 | 67.15 | 87.84 | 74.04 | 68.24 | 88.20 |
+| 26 | - | - | - | 73.96 | 68.60 | 87.48 |
+| 27 | - | - | - | 74.20 | 68.24 | 88.57 |
+| 28 | 73.72 | 67.70 | 87.48 | 74.30 | 68.60 | 88.20 |
+| 29 | 73.56 | 67.15 | 88.02 | **74.38** | **69.15** | 88.02 |
+| 30 | 74.09 | 68.06 | 87.66 | 74.16 | 68.60 | 88.38 |
+
+**Итог:** лучший без flip — эпоха 20 (mAP 74.50). В production режиме (с flip)
+лучшая — **эпоха 29: mAP 74.38, Rank-1 69.15, Rank-5 88.02**. Плато после ~15-й
+эпохи, переобучения не видно.
+
+Сравнение с предыдущими результатами на том же split:
+
+| Модель | mAP | Rank-1 |
+|---|---:|---:|
+| CLIP ViT-B/16 zero-shot | 19.52 | 15.61 |
+| CLIP ViT-B/16 + обученная голова | 47.71 | 40.65 |
+| SigLIP base zero-shot | 46.14 | 41.02 |
+| VERI-Wild R50-IBN (research-only) | 48.58 | 42.11 |
+| SigLIP base + обученная голова (только голова) | 65.16 | 60.44 |
+| **SigLIP base, полное дообучение (эпоха 29, flip)** | **74.38** | **69.15** |
+
+Полное дообучение бэкбона дало **+9,2 mAP** к варианту «только голова».
+
+Production-веса: чекпоинт эпохи 29 скопирован в `models/reid_current.pt`.
+Формат совпадает с тем, что читает `api/app/models/reid_checkpoint.py`
+(`args` + `model.*` с ключами `encoder.*` и `head.*`), поэтому модель
+подключается через `EMBED_MODEL=reid:vit_base_patch16_siglip_224.webli`.
+
+Проверено (`research/verify_production.py`): тот же чекпоинт, загруженный кодом сервиса
+(`api/app/models/reid_checkpoint.py`) и посчитанный его же `embed_batch`, даёт на том же
+split ровно те же метрики — mAP 74.38, Rank-1 69.15, Rank-5 88.02.
