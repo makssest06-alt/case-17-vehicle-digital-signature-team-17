@@ -1,0 +1,27 @@
+device cuda
+query 551  gallery 361
+D:\bm_research\research\verify_team17.py:220: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  "geom_ep30": torch.load("D:/bm/models/siglip_vitb16_reid_geom_ep30.pt", map_location="cpu"),
+D:\bm_research\research\verify_team17.py:221: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  "ep29": torch.load("D:/bm/models/siglip_vitb16_reid_ep29.pt", map_location="cpu"),
+  geom_ep30/timm: 27.7s
+  geom_ep30/squash: 25.2s
+  ep29/timm: 26.9s
+  ep29/squash: 25.8s
+
+== base (no postprocessing) ==
+geom_ep30 timm                         | ours mAP  76.74 R1  72.05 | off mAP  75.82 R1  70.96 R5  87.11 | off@10  80.53 (used 551)
+geom_ep30 squash                       | ours mAP  78.95 R1  72.60 | off mAP  77.80 R1  70.96 R5  91.11 | off@10  82.62 (used 551)
+ep29 timm                              | ours mAP  74.38 R1  69.15 | off mAP  73.25 R1  67.88 R5  87.11 | off@10  80.40 (used 551)
+ep29 squash                            | ours mAP  73.93 R1  68.06 | off mAP  72.95 R1  66.97 R5  85.84 | off@10  80.67 (used 551)
+
+== with postprocessing (QE+CSLS+rerank) ==
+geom_ep30 timm +pp                     | ours mAP  79.74 R1  73.87 | off mAP  79.22 R1  73.32 R5  90.20 | off@10  83.96 (used 551)
+geom_ep30 squash +pp                   | ours mAP  82.63 R1  76.95 | off mAP  81.68 R1  75.86 R5  91.47 | off@10  85.94 (used 551)
+ep29 timm +pp                          | ours mAP  79.57 R1  74.59 | off mAP  78.95 R1  74.05 R5  88.93 | off@10  83.21 (used 551)
+ep29 squash +pp                        | ours mAP  80.47 R1  73.87 | off mAP  79.21 R1  72.23 R5  89.66 | off@10  84.54 (used 551)
+
+== ensembles (with postprocessing) ==
+geom squash0.8+base0.2 +pp             | ours mAP  83.41 R1  77.13 | off mAP  82.39 R1  76.04 R5  92.20 | off@10  85.91 (used 551)
+geom-squash0.8+ep29base0.2 +pp         | ours mAP  83.96 R1  78.95 | off mAP  83.04 R1  77.86 R5  92.01 | off@10  86.56 (used 551)
+geom-squash0.7+ep29base0.3 +pp         | ours mAP  84.02 R1  78.95 | off mAP  83.27 R1  78.22 R5  92.56 | off@10  86.78 (used 551)

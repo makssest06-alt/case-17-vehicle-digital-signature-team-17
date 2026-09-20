@@ -1,0 +1,14 @@
+split #1 mAP: {'base geom_timm (no pp)': 75.84, 'geom_squash +pp': 82.17, 'geom 0.8 squash + 0.2 base +pp': 83.11, 'geom-sq0.8 + ep29-base0.2 +pp': 83.04, 'geom-sq0.7 + ep29-base0.3 +pp': 83.53}
+
+config                              mean mAP     min     max  wins/20
+------------------------------------------------------------------------
+base geom_timm (no pp)                 76.29   75.44   76.94        0
+geom_squash +pp                        82.68   81.44   83.50        0
+geom 0.8 squash + 0.2 base +pp         83.01   82.33   83.76        0
+geom-sq0.8 + ep29-base0.2 +pp          83.61   82.82   84.62        5
+geom-sq0.7 + ep29-base0.3 +pp          83.93   83.06   85.07       15
+gain over baseline [geom_squash +pp]: mean +6.39  min +5.58  max +7.23  positive 20/20
+gain over baseline [geom-sq0.8 + ep29-base0.2 +pp]: mean +7.31  min +6.35  max +8.23  positive 20/20
+gain over baseline [geom-sq0.7 + ep29-base0.3 +pp]: mean +7.64  min +6.51  max +8.70  positive 20/20
+gain over prev best [geom-sq0.8 + ep29-base0.2 +pp]: mean +0.93  min +0.15  max +1.72  positive 20/20
+gain over prev best [geom-sq0.7 + ep29-base0.3 +pp]: mean +1.25  min +0.67  max +1.70  positive 20/20
