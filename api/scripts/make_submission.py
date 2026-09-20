@@ -110,6 +110,10 @@ def main() -> int:
     ap.add_argument("--out", default=settings.artifacts_dir)
     ap.add_argument("--threshold", type=float, default=settings.search_threshold)
     ap.add_argument("--batch", type=int, default=settings.batch_size)
+    ap.add_argument("--query-csv", default=None,
+                    help="канонический test_query.csv; по умолчанию DATA_DIR/test_query.csv")
+    ap.add_argument("--gallery-csv", default=None,
+                    help="канонический test_gallery.csv; по умолчанию DATA_DIR/test_gallery.csv")
     ap.add_argument("--rerank", action="store_true",
                     help="k-reciprocal пересортировка выдачи: +3.16 mAP на валидации. "
                          "Меняет только ПОРЯДОК кандидатов; confidence остаётся "
@@ -131,8 +135,21 @@ def main() -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
-    q_ids = read_ids(data / "crops_query.csv")
-    g_ids = read_ids(data / "crops_gallery.csv")
+    # Порядок строк задаёт README датасета: сначала все image_id из
+    # test_query.csv в порядке файла, затем все из test_gallery.csv.
+    # Организаторы по embeddings.npy проверяют, что submission.csv получен
+    # моделью, а не собран руками, — при другом порядке эта проверка падает.
+    # Наши crops_*.csv отсортированы по image_id и каноническому порядку
+    # НЕ соответствуют, поэтому читать их здесь нельзя.
+    q_csv = Path(args.query_csv) if args.query_csv else Path(settings.data_dir) / "test_query.csv"
+    g_csv = Path(args.gallery_csv) if args.gallery_csv else Path(settings.data_dir) / "test_gallery.csv"
+    for pth, name in ((q_csv, "test_query.csv"), (g_csv, "test_gallery.csv")):
+        if not pth.exists():
+            print(f"нет {pth}: без {name} канонический порядок строк восстановить "
+                  f"нельзя, а другой порядок организаторы не примут", file=sys.stderr)
+            return 1
+    q_ids = read_ids(q_csv)
+    g_ids = read_ids(g_csv)
     print(f"query: {len(q_ids)}, gallery: {len(g_ids)}")
     if len(g_ids) < TOP_K:
         print(f"ВНИМАНИЕ: в галерее всего {len(g_ids)} объектов, топ-10 не набрать", file=sys.stderr)
@@ -150,6 +167,30 @@ def main() -> int:
             print(f"в {emb_path} {saved.shape[0]} векторов, а нужно {total} — "
                   f"файл от другого набора данных", file=sys.stderr)
             return 1
+        # Переиспользовать векторы можно только зная, в каком порядке они легли.
+        # Без индекса это ставка на удачу, а порядок здесь — часть контракта.
+        idx_path = out / "embeddings_index.csv"
+        if not idx_path.exists():
+            print(f"нет {idx_path}: порядок строк в {emb_path} неизвестен, "
+                  f"переиспользовать нельзя — пересчитай без --reuse-embeddings",
+                  file=sys.stderr)
+            return 1
+        saved_ids = [r["image_id"] for r in csv.DictReader(idx_path.open())]
+        want_ids = list(q_ids) + list(g_ids)
+        if saved_ids != want_ids:
+            if sorted(saved_ids) != sorted(want_ids):
+                print("в embeddings.npy другой набор объектов, пересчитай заново",
+                      file=sys.stderr)
+                return 1
+            pos = {v: i for i, v in enumerate(saved_ids)}
+            saved = saved[[pos[v] for v in want_ids]]
+            np.save(emb_path, saved.astype("float32"))
+            with idx_path.open("w", newline="") as f:
+                w = csv.writer(f)
+                w.writerow(["row", "split", "image_id"])
+                for i, v in enumerate(want_ids):
+                    w.writerow([i, "query" if i < len(q_ids) else "gallery", v])
+            print("порядок строк приведён к каноническому и перезаписан")
         q_emb, g_emb = saved[:len(q_ids)], saved[len(q_ids):]
         dim = saved.shape[1]
         model_name = settings.embed_model
@@ -171,6 +212,12 @@ def main() -> int:
     sim = q_emb @ g_emb.T
 
     if args.rerank:
+        print("ВНИМАНИЕ: --rerank меняет порядок кандидатов, и топ-1 в "
+              "submission.csv перестаёт совпадать с топ-1 по embeddings.npy "
+              "примерно на 11% запросов. Организаторы сверяют submission с "
+              "векторами, поэтому по умолчанию артефакты собираются без "
+              "пересортировки. Подробности в docs/SUBMISSION_README.md.",
+              file=sys.stderr)
         t_rr = time.perf_counter()
         rr = re_ranking(q_emb, g_emb, args.rerank_k1, args.rerank_k2, args.rerank_lambda)
         order = np.argsort(-rr, axis=1)
@@ -187,8 +234,18 @@ def main() -> int:
             top = order[qi, :TOP_K]
             w.writerow([q] + [g_ids[j] for j in top])
 
+    index_path = out / "embeddings_index.csv"
     if not args.reuse_embeddings:
         np.save(emb_path, np.vstack([q_emb, g_emb]).astype("float32"))
+        # Порядок строк — часть контракта сдачи, поэтому он фиксируется рядом
+        # с файлом: так его можно проверить, не пересчитывая векторы.
+        with index_path.open("w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["row", "split", "image_id"])
+            for i, q in enumerate(q_ids):
+                w.writerow([i, "query", q])
+            for j, g in enumerate(g_ids):
+                w.writerow([len(q_ids) + j, "gallery", g])
 
     cand_path = out / "candidates.csv"
     accepted, refused = 0, 0
@@ -201,6 +258,11 @@ def main() -> int:
                 for j in order[qi, :TOP_K]
                 if float(sim[qi, j]) >= args.threshold
             ]
+            # candidates.csv — это выдача режима отказа, и его контракт —
+            # уверенность. При включённом --rerank порядок в order задан
+            # пересортировкой, а confidence остаётся исходным косинусом, и
+            # список перестаёт убывать. Здесь сортируем по самой уверенности.
+            rows.sort(key=lambda r: -r[2])
             if rows:
                 w.writerows(rows)
                 accepted += 1

@@ -382,3 +382,34 @@ ssh lct 'cd /opt/case17/app && \
 Все три пресета прогнаны smoke-тестом на сервере: код каждого отрабатывает
 целиком на CPU с крошечным конфигом, включая построение центроидов и
 центроидный лосс.
+
+## Масштабирование поиска
+
+```bash
+python research/ann_benchmark.py --build          # база на 10^6 векторов, ~70 с
+python research/ann_benchmark.py --method exact   # затем hnsw, затем ivfpq
+python research/ann_benchmark.py --report         # таблица и график
+```
+
+Каждый метод идёт отдельным процессом: три индекса одновременно в 3.9 ГБ не
+живут, а пиковую память имеет смысл мерить только в чистом процессе. Стек при
+этом лучше опустить (`docker compose down`) — HNSW на миллионе векторов
+занимает 2 ГБ. Результаты и оговорки — в `research/ANN.md`.
+
+## Картинки для презентации
+
+```bash
+python research/make_pitch_assets.py
+```
+
+Складывает всё в `research/pitch_assets/`. Структура слайдов — в
+`research/PITCH_OUTLINE.md`, там же список того, что ещё нужно доснять.
+
+## Проверка артефактов сдачи
+
+```bash
+python scripts/validate_submission.py
+```
+
+24 проверки формата по README датасета, включая сквозную сверку submission
+против embeddings. Гоняется перед каждым коммитом артефактов.
