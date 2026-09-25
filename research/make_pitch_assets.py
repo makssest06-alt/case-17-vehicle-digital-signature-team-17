@@ -73,8 +73,8 @@ def chart_backbones():
         ("SigLIP so400m, без обучения",          60.80, True),
         ("SigLIP base + голова",                 65.16, True),
     ]
-    fig = fig_new(10, 5.6)
-    ax = fig.add_axes([0.34, 0.11, 0.63, 0.74])
+    fig = fig_new(10, 6.0)
+    ax = fig.add_axes([0.34, 0.16, 0.63, 0.68])
     labels = [d[0] for d in data]
     vals = [d[1] for d in data]
     ys = range(len(data))
@@ -99,18 +99,29 @@ def chart_backbones():
     title(fig, "Выбор бэкбона: девять вариантов на одном сплите",
           "Замена CLIP на SigLIP дала +27.8 mAP без единого шага обучения. "
           "Обученная голова добавила ещё +18.4.")
+    # Все девять строк измерены одним офлайн-протоколом, поэтому сравнимы между
+    # собой. Цифру живого сервиса приписываем отдельно, а не подменяем ею строку:
+    # смешивать два протокола в одном столбике нельзя.
+    ex = json.loads((RES / "service_path_extras.json").read_text())
+    fig.text(0.012, 0.012,
+             "Сравнение офлайн, один протокол на все девять строк.\n"
+             f"Тем же кодом, которым отвечает сервис, выбранный вариант даёт "
+             f"{ex['prenorm']['mAP']} mAP — research/eval_service_path.py.",
+             fontsize=9, color=MUTED, va="bottom", linespacing=1.5)
     fig.savefig(OUT / "01_backbones.png", dpi=150, facecolor=SURFACE)
     plt.close(fig)
 
 
 # ------------------------------------------------------------- 2. ракурс
 def chart_viewpoint():
+    """Стадии берутся из замеров, а не из констант в коде."""
+    ex = json.loads((RES / 'service_path_extras.json').read_text())
     stages = [
         ("CLIP, без обучения", 34.7),
         ("SigLIP, без обучения", 12.3),
         ("CLIP + голова", 7.6),
-        ("SigLIP + голова\n(живой сервис)", 4.0),
-        ("+ постобработка\n(артефакты сдачи)", 1.3),
+        ("SigLIP + голова\n(живой сервис)", ex['prenorm']['catastrophic_pct']),
+        ("+ постобработка\n(артефакты сдачи)", ex['prenorm_postprocess']['catastrophic_pct']),
     ]
     fig = fig_new(10, 5.0)
     ax = fig.add_axes([0.07, 0.20, 0.90, 0.60])
@@ -124,9 +135,11 @@ def chart_viewpoint():
     ax.set_ylim(0, 40)
     style(ax, None, grid_axis="y")
     ax.set_ylabel("доля катастрофических провалов", color=INK2, fontsize=10)
-    ax.annotate("", xy=(4.72, 1.3), xytext=(4.72, 34.7),
+    last = stages[-1][1]
+    times = stages[0][1] / last if last else 0
+    ax.annotate("", xy=(4.72, last), xytext=(4.72, stages[0][1]),
                 arrowprops=dict(arrowstyle="-|>", color=MUTED, lw=1.4))
-    ax.text(4.86, 18, "в 27 раз\nменьше", fontsize=11, color=INK,
+    ax.text(4.86, 18, f"в {times:.0f} раз\nменьше", fontsize=11, color=INK,
             weight="bold", va="center")
     ax.set_xlim(-0.6, 5.3)
     title(fig, "Проблема ракурса: измерили и закрыли",
@@ -204,6 +217,55 @@ def chart_ann():
     plt.close(fig)
 
 
+# ------------------------------------------------- 5. распределения и порог
+def chart_refusal():
+    """Два распределения максимального сходства и обе рабочие точки.
+
+    Гистограмма, а не ROC: на защите нужно показать, что решение об отказе
+    принимается по одному числу и что это число разделяет два случая.
+    """
+    import numpy as np
+    npz = RES / "refusal_scores_service.npz"
+    ex = RES / "service_path_extras.json"
+    if not npz.exists() or not ex.exists():
+        print("  пропускаю порог отказа: нет замеров")
+        return
+    z = np.load(npz)
+    r = json.loads(ex.read_text())["refusal_deployment"]
+    pos, neg = z["deployment_pos"], z["deployment_neg"]
+    bal, strict = r["balanced"]["threshold"], r["strict"]["threshold"]
+
+    fig = fig_new(10, 5.0)
+    ax = fig.add_axes([0.07, 0.15, 0.90, 0.55])
+    lo = min(pos.min(), neg.min()); hi = max(pos.max(), neg.max())
+    bins = np.linspace(lo, hi, 46)
+    ax.hist(neg, bins=bins, color=S2, alpha=0.85, zorder=2,
+            label=f"пары в галерее нет ({len(neg)} запросов)")
+    ax.hist(pos, bins=bins, color=S1, alpha=0.85, zorder=2,
+            label=f"пара есть ({len(pos)} запросов)")
+    top = ax.get_ylim()[1]
+    # Подписи разводим по высоте и по стороне: при близких порогах
+    # две подписи в одну строку налезают друг на друга.
+    marks = ((bal, "сбалансированный", "-", 0.99, "right", -0.006),
+             (strict, "строгий", "--", 0.99, "left", 0.006))
+    for x, lab, ls, ypos, ha, dx in marks:
+        ax.axvline(x, color=INK, lw=1.4, ls=ls, zorder=4)
+        ax.text(x + dx, top * ypos, f"{lab}\n{x:.4f}", fontsize=10, color=INK,
+                va="top", ha=ha, weight="bold", zorder=5)
+    style(ax, "максимальное сходство с галереей", grid_axis="y")
+    ax.set_ylabel("число запросов", color=INK2, fontsize=10)
+    # Легенда над полем: внутри она садится поверх подписи порога и столбиков.
+    ax.legend(loc="lower left", bbox_to_anchor=(0, 1.02), ncol=2,
+              frameon=False, fontsize=10, labelcolor=INK2)
+    title(fig, "Порог отказа: откуда взялось число",
+          f"Рабочий протокол, AUC {r['auc']:.4f}. Сбалансированная точка — максимум индекса "
+          f"Юдена:\nF1 {r['balanced']['f1']}, полнота {r['balanced']['recall']}, "
+          f"TNR {r['balanced']['TNR']}. Строгая точка — TNR {r['strict']['TNR']}, "
+          f"точность {r['strict']['precision']}.")
+    fig.savefig(OUT / "05_refusal.png", dpi=150, facecolor=SURFACE)
+    plt.close(fig)
+
+
 # ----------------------------------------------------------- схемы
 def _flow(fig, ax, steps, y=0.5, box_h=0.62, gap=0.026, accent=None):
     """Горизонтальная цепочка прямоугольников со стрелками.
@@ -258,13 +320,17 @@ def chart_architecture():
 
 
 def chart_user_journey():
+    # Пороги берём из замера, иначе схема начинает врать первой:
+    # её правят реже всего, а число на ней видно с последнего ряда.
+    r = json.loads((RES / "service_path_extras.json").read_text())["refusal_deployment"]
+    bal, strict = r["balanced"]["threshold"], r["strict"]["threshold"]
     fig = fig_new(13, 3.1)
-    ax = fig.add_axes([0.015, 0.06, 0.97, 0.62])
+    ax = fig.add_axes([0.015, 0.10, 0.97, 0.62])
     _flow(fig, ax, [
         ("Открывает веб", "порт 8080\nничего не ставит"),
         ("Грузит кадр", "перетащил файл\nили выбрал"),
         ("Обводит машину", "рамка мышью\nили координаты"),
-        ("Выбирает режим", "сбаланс. 0.509\nили строгий 0.635"),
+        ("Выбирает режим", f"сбаланс. {bal}\nили строгий {strict}"),
         ("Получает ответ", "кандидаты\nс уверенностью\nили «нет совпадения»"),
         ("Показать почему", "карта вклада\nучастков кадра"),
         ("Выгружает", "CSV или JSON\nдля отчёта"),
@@ -277,19 +343,29 @@ def chart_user_journey():
 
 
 def copy_existing():
+    """Готовые картинки: коллажи ошибок и скриншоты живого интерфейса.
+
+    Скриншоты снимаются Playwright по SSH-туннелю к демо-стенду и кладутся
+    в /tmp перед запуском — заново их сгенерировать нельзя, поэтому они
+    копируются, а не рисуются.
+    """
     import shutil
     pairs = [
-        (HERE / "refusal_deployment.png", "05_refusal.png"),
         (HERE / "errors" / "error_сильная_смена_ракурса.jpg", "06_errors_viewpoint.jpg"),
         (HERE / "errors" / "error_ночь.jpg", "07_errors_night.jpg"),
         (HERE / "errors" / "error_похожая_машина.jpg", "08_errors_similar.jpg"),
+        (Path("/tmp/ui_search_easy.png"), "09_ui_search.png"),
+        (Path("/tmp/ui_hard.png"), "13_ui_hard_viewpoint.png"),
+        (Path("/tmp/ui_night.png"), "14_ui_night.png"),
+        (Path("/tmp/ui_refusal.png"), "15_ui_refusal.png"),
+        (Path("/tmp/ui_explain.png"), "16_ui_explain.png"),
     ]
     for src, dst in pairs:
         if src.exists():
             shutil.copy2(src, OUT / dst)
             print(f"  скопировано {dst}")
         else:
-            print(f"  нет исходника {src.name}")
+            print(f"  НЕТ ИСХОДНИКА {src}")
 
 
 def main():
@@ -298,6 +374,7 @@ def main():
     chart_viewpoint(); print("  02_viewpoint.png")
     chart_speed();     print("  03_speed.png")
     chart_ann()
+    chart_refusal(); print("  05_refusal.png")
     chart_architecture(); print("  11_architecture.png")
     chart_user_journey(); print("  12_user_journey.png")
     copy_existing()
