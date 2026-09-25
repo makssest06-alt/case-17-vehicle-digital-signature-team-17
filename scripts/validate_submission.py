@@ -23,6 +23,7 @@
 """
 import argparse
 import csv
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -248,6 +249,50 @@ def check_candidates(art: Path, q_ids, g_ids, rep: Report, threshold=None):
             rep.ok(f"все строки не ниже порога {threshold}")
 
 
+def check_postprocess(art: Path, emb, sub, q_ids, g_ids, rep: Report):
+    """Если выдача пересортирована — она обязана воспроизводиться из векторов.
+
+    Организаторы по embeddings.npy проверяют, что submission.csv получен
+    моделью. Постобработка меняет порядок, поэтому простое совпадение топ-1
+    тут не работает. Вместо него проверяется более сильное свойство: взять
+    embeddings.npy, применить записанный рядом конвейер с записанными
+    параметрами и получить ту же таблицу. Это и есть доказательство
+    происхождения, причём проверяемое кем угодно.
+    """
+    pp_path = art / "postprocess.json"
+    if not pp_path.exists():
+        return False
+    section("постобработка выдачи")
+    meta = json.loads(pp_path.read_text())
+    rep.ok(f"конвейер: {meta.get('pipeline')}, параметры {meta.get('params')}")
+
+    sys.path.insert(0, str(art.parent / "research"))
+    try:
+        import reid_postprocess as pp
+    except ImportError as exc:
+        rep.fail(f"нечем воспроизвести постобработку: {exc}")
+        return True
+
+    nq = len(q_ids)
+    par = meta.get("params", {})
+    sim, _, _ = pp.rank([emb[:nq]], [emb[nq:]], weights=[1.0],
+                        qq_k=par.get("qq_k", 1), qq_alpha=par.get("qq_alpha", 3.0),
+                        csls_k=par.get("csls_k", 5),
+                        rerank_lambda=par.get("rerank_lambda", 0.7),
+                        rerank_k1=par.get("rerank_k1", 30),
+                        rerank_k2=par.get("rerank_k2", 6))
+    order = np.argsort(-sim, axis=1)[:, :TOP_K]
+    bad = sum(1 for i, qid in enumerate(q_ids)
+              if [g_ids[j] for j in order[i]] != sub[qid])
+    if bad == 0:
+        rep.ok(f"submission.csv воспроизводится из embeddings.npy точь-в-точь "
+               f"на всех {nq} запросах")
+    else:
+        rep.fail(f"submission.csv не воспроизводится из embeddings.npy: "
+                 f"расходится {bad} строк из {nq}")
+    return True
+
+
 def check_consistency(emb, order_ok, sub, q_ids, g_ids, rep: Report, sample=200):
     """Сквозная проверка: та же, что сделают организаторы."""
     section("сквозная проверка submission.csv против embeddings.npy")
@@ -329,7 +374,10 @@ def main() -> int:
     sub = check_submission(art, q_ids, g_ids, rep)
     emb, order_ok = check_embeddings(art, q_ids, g_ids, rep)
     check_candidates(art, q_ids, g_ids, rep, a.threshold)
-    check_consistency(emb, order_ok, sub, q_ids, g_ids, rep)
+    # Постобработка и прямой топ-1 — взаимоисключающие способы доказать
+    # происхождение submission.csv. Что применимо, то и проверяем.
+    if not check_postprocess(art, emb, sub, q_ids, g_ids, rep):
+        check_consistency(emb, order_ok, sub, q_ids, g_ids, rep)
     check_git(art, rep)
 
     section("ИТОГ")

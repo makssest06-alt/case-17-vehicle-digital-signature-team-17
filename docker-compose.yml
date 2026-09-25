@@ -56,13 +56,13 @@ services:
       - ./artifacts:/artifacts
     ports:
       - "8000:8000"
-    mem_limit: 1536m
+    mem_limit: ${API_MEM_LIMIT:-1536m}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).status==200 else 1)"]
       interval: 15s
       timeout: 10s
       retries: 10
-      start_period: 90s
+      start_period: ${API_START_PERIOD:-90s}
     networks: [case17net]
 
   web:

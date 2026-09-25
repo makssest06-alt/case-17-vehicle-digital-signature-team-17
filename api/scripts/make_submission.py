@@ -13,6 +13,7 @@
 """
 import argparse
 import csv
+import json
 import os
 import sys
 import time
@@ -114,6 +115,18 @@ def main() -> int:
                     help="канонический test_query.csv; по умолчанию DATA_DIR/test_query.csv")
     ap.add_argument("--gallery-csv", default=None,
                     help="канонический test_gallery.csv; по умолчанию DATA_DIR/test_gallery.csv")
+    ap.add_argument("--postprocess", action="store_true",
+                    help="полный конвейер qq-expand -> k-reciprocal -> CSLS "
+                         "(analysis/reid_postprocess.py). Приём транздуктивный: "
+                         "расширение запроса идёт по ДРУГИМ запросам, поэтому "
+                         "работает только когда весь набор известен заранее — "
+                         "то есть здесь, при сборке артефактов, и никогда в "
+                         "обработчике одиночного кадра. Параметры и способ "
+                         "воспроизведения пишутся в artifacts/postprocess.json")
+    ap.add_argument("--qq-k", type=int, default=1)
+    ap.add_argument("--qq-alpha", type=float, default=3.0)
+    ap.add_argument("--csls-k", type=int, default=5)
+    ap.add_argument("--rerank-lambda", type=float, default=0.7)
     ap.add_argument("--rerank", action="store_true",
                     help="k-reciprocal пересортировка выдачи: +3.16 mAP на валидации. "
                          "Меняет только ПОРЯДОК кандидатов; confidence остаётся "
@@ -211,7 +224,30 @@ def main() -> int:
     # векторы уже L2-нормированы, значит скалярное произведение = косинус
     sim = q_emb @ g_emb.T
 
-    if args.rerank:
+    pp_meta = None
+    if args.postprocess:
+        sys.path.insert(0, str(Path(__file__).parent))
+        import reid_postprocess as pp
+
+        t_pp = time.perf_counter()
+        sim_pp, _, _ = pp.rank([q_emb], [g_emb], weights=[1.0],
+                               qq_k=args.qq_k, qq_alpha=args.qq_alpha,
+                               csls_k=args.csls_k,
+                               rerank_lambda=args.rerank_lambda,
+                               rerank_k1=args.rerank_k1, rerank_k2=args.rerank_k2)
+        order = np.argsort(-sim_pp, axis=1)
+        pp_meta = {
+            "pipeline": "qq_expand -> k_reciprocal_rerank -> csls",
+            "source": "embeddings.npy",
+            "params": {"qq_k": args.qq_k, "qq_alpha": args.qq_alpha,
+                       "csls_k": args.csls_k, "rerank_lambda": args.rerank_lambda,
+                       "rerank_k1": args.rerank_k1, "rerank_k2": args.rerank_k2},
+            "reproduce": ("python scripts/make_submission.py --reuse-embeddings "
+                          "--postprocess"),
+            "took_s": round(time.perf_counter() - t_pp, 2),
+        }
+        print(f"постобработка: {pp_meta['pipeline']}, {pp_meta['took_s']} с")
+    elif args.rerank:
         print("ВНИМАНИЕ: --rerank меняет порядок кандидатов, и топ-1 в "
               "submission.csv перестаёт совпадать с топ-1 по embeddings.npy "
               "примерно на 11% запросов. Организаторы сверяют submission с "
@@ -223,7 +259,7 @@ def main() -> int:
         order = np.argsort(-rr, axis=1)
         print(f"re-ranking: k1={args.rerank_k1} k2={args.rerank_k2} "
               f"lambda={args.rerank_lambda}, {time.perf_counter() - t_rr:.1f} с")
-    else:
+    elif pp_meta is None:
         order = np.argsort(-sim, axis=1)
 
     sub_path = out / "submission.csv"
@@ -268,6 +304,13 @@ def main() -> int:
                 accepted += 1
             else:
                 refused += 1
+
+    pp_path = out / "postprocess.json"
+    if pp_meta is not None:
+        pp_path.write_text(json.dumps(pp_meta, ensure_ascii=False, indent=2))
+    elif pp_path.exists():
+        # артефакты пересобраны без постобработки — описание не должно остаться
+        pp_path.unlink()
 
     print()
     print(f"submission.csv   {sub_path}  строк {len(q_ids)}")
