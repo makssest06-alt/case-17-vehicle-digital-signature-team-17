@@ -94,7 +94,18 @@ class ReidCheckpointModel(EmbeddingModel):
         from ..config import settings
 
         x = torch.stack([self._tf(im.convert("RGB")) for im in images])
-        a = self._head(self._model(x))[1]
-        b = self._head(self._model(torch.flip(x, dims=[3])))[1] if settings.tta_flip else None
+        a = self._encode(x)
+        b = self._encode(torch.flip(x, dims=[3])) if settings.tta_flip else None
         feats = F.normalize(a if b is None else (a + b) / 2, p=2, dim=1)
         return feats.cpu().numpy().astype("float32")
+
+    def _encode(self, x: torch.Tensor) -> torch.Tensor:
+        """Бэкбон -> L2 -> голова.
+
+        Нормировка перед головой обязательна: голова обучалась на выходах
+        бэкбона, которые extract_features.py нормирует перед сохранением.
+        Без неё голова получает вектор другой длины, чем видела при обучении,
+        и это стоит 3 пункта mAP и вдвое больше катастрофических промахов
+        (61.52 против 64.54 на валидации, research/results/service_path_extras.json).
+        """
+        return self._head(F.normalize(self._model(x), p=2, dim=1))[1]

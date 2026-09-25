@@ -126,7 +126,8 @@ def main() -> int:
     ap.add_argument("--qq-k", type=int, default=1)
     ap.add_argument("--qq-alpha", type=float, default=3.0)
     ap.add_argument("--csls-k", type=int, default=5)
-    ap.add_argument("--rerank-lambda", type=float, default=0.7)
+    ap.add_argument("--rerank-lambda", type=float, default=0.7,
+                    help="вес исходного косинуса в k-reciprocal; значение по умолчанию совпадает с reid_postprocess.rank")
     ap.add_argument("--rerank", action="store_true",
                     help="k-reciprocal пересортировка выдачи: +3.16 mAP на валидации. "
                          "Меняет только ПОРЯДОК кандидатов; confidence остаётся "
@@ -137,7 +138,6 @@ def main() -> int:
                          "(там он, наоборот, вредит: замер в research/rerank_online.py)")
     ap.add_argument("--rerank-k1", type=int, default=20)
     ap.add_argument("--rerank-k2", type=int, default=6)
-    ap.add_argument("--rerank-lambda", type=float, default=0.3)
     ap.add_argument("--reuse-embeddings", action="store_true",
                     help="взять готовый embeddings.npy вместо пересчёта — нужен, когда "
                          "меняется только порог: счёт векторов занимает ~20 минут, "

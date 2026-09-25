@@ -1,0 +1,64 @@
+{
+  "raw": {
+    "mAP": 61.52,
+    "rank1": 57.17,
+    "rank5": 76.95,
+    "top10_pct": 83.5,
+    "catastrophic_pct": 7.6,
+    "queries": 551
+  },
+  "prenorm": {
+    "mAP": 64.54,
+    "rank1": 59.71,
+    "rank5": 80.04,
+    "top10_pct": 86.0,
+    "catastrophic_pct": 3.8,
+    "queries": 551
+  },
+  "prenorm_postprocess": {
+    "mAP": 69.77,
+    "rank1": 63.7,
+    "rank5": 82.03,
+    "top10_pct": 89.8,
+    "catastrophic_pct": 1.8,
+    "queries": 551
+  },
+  "refusal_jury_cross_camera": {
+    "auc": 0.7267,
+    "pos_median": 0.4499,
+    "neg_median": 0.3583,
+    "balanced": {
+      "threshold": 0.4014,
+      "precision": 0.695,
+      "recall": 0.65,
+      "f1": 0.672,
+      "TNR": 0.712
+    },
+    "strict": {
+      "threshold": 0.6294,
+      "precision": 0.886,
+      "recall": 0.141,
+      "f1": 0.243,
+      "TNR": 0.982
+    }
+  },
+  "refusal_deployment": {
+    "auc": 0.972,
+    "pos_median": 0.8476,
+    "neg_median": 0.3622,
+    "balanced": {
+      "threshold": 0.5114,
+      "precision": 0.929,
+      "recall": 0.939,
+      "f1": 0.934,
+      "TNR": 0.927
+    },
+    "strict": {
+      "threshold": 0.6354,
+      "precision": 0.979,
+      "recall": 0.852,
+      "f1": 0.911,
+      "TNR": 0.982
+    }
+  }
+}

@@ -37,8 +37,21 @@ research/__pycache__/
 research/*.npy
 
 # research: коммитим только скрипты, val_ids.txt и results.md
-research/results/
+# Со слешем на конце git исключает саму папку и внутрь уже не заглядывает,
+# поэтому ни одно исключение ниже не сработало бы. Нужна звёздочка.
+research/results/*
 research/val_split.csv
+
+# Исключение: итоговые замеры, на которые ссылаются README и слайды.
+# Файлы по килобайту, но без них ни одну цифру в документах нельзя
+# проверить, не пересчитывая полчаса на CPU.
+!research/results/service_path.json
+!research/results/service_path_extras.json
+!research/results/demo_cases.json
+!research/results/demo_verified.json
+!research/results/ann/
+research/results/ann/*
+!research/results/ann/summary.json
 
 # Исключения: это часть решения, а не мусор.
 # Обученная голова (5 МБ) обязана ехать вместе с клоном, иначе у постороннего
