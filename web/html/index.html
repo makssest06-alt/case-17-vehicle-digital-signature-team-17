@@ -323,8 +323,11 @@ $('#add').onclick=async()=>{
 function render(d){
   last=d;
   if(d.refusal){
+    // Заголовок и текст от API начинались одинаково — дубль убираем,
+    // чтобы на экране не было одной и той же фразы дважды.
+    const msg=(d.message||'').replace(/^Уверенного совпадения нет[:.]?\s*/,'');
     $('#out').innerHTML='<div class="state refusal"><strong>Уверенного совпадения нет.</strong><br>'+
-      esc(d.message||'')+'</div>';
+      esc(msg)+'</div>';
     $('#exp').style.display='none'; return;
   }
   const cards=d.candidates.map((c,i)=>{
@@ -396,8 +399,13 @@ function drawWhy(d,top){
     g.fillRect((i%n)*cell,Math.floor(i/n)*cell,cell+0.5,cell+0.5);
   }
   const srt=d.weights.map((v,i)=>[v,i]).sort((a,b)=>b[0]-a[0]);
-  const share=srt.slice(0,Math.ceil(d.weights.length*0.1))
-                 .reduce((s,x)=>s+x[0],0)/d.weights.reduce((s,x)=>s+x,0);
+  // Вклад считаем только по положительным участкам: в сумму по всем
+  // попадают и отрицательные косинусы, из-за чего доля уходила в минус
+  // и на экране появлялось «-31% сходства».
+  const posSum=d.weights.reduce((s,x)=>s+(x>0?x:0),0)||1;
+  const topSum=srt.slice(0,Math.ceil(d.weights.length*0.1))
+                  .reduce((s,x)=>s+(x[0]>0?x[0]:0),0);
+  const share=Math.max(0,Math.min(1,topSum/posSum));
   $('#whycap').textContent='сходство с кандидатом #1';
   $('#whynote').textContent='участков '+d.grid+'x'+d.grid+' · '+d.took_ms+' мс';
   $('#whytext').innerHTML=
@@ -406,7 +414,7 @@ function drawWhy(d,top){
     'Подсвечены участки кадра, которые дали сходство именно с этим кандидатом. '+
     'Значение на карте — тот же косинус, по которому принимается решение, '+
     'посчитанный по участкам 16x16 пикселей.<br><br>'+
-    '<b>Верхние 10% участков дают '+Math.round(share*100)+'% сходства.</b> '+
+    '<b>Верхние 10% участков дают '+Math.round(share*100)+'% положительного вклада.</b> '+
     'Если подсветка легла на номерной знак, а не на кузов — это сигнал, что '+
     'модель пошла коротким путём: по условию задачи номер использовать нельзя.<br><br>'+
     'Метод: один прямой проход, градиенты не считаются. Это не Grad-CAM, '+

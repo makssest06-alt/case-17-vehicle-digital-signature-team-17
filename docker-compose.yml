@@ -43,6 +43,10 @@ services:
       EMBED_TTA_FLIP: ${EMBED_TTA_FLIP:-1}
       SEARCH_TOP_N: ${SEARCH_TOP_N:-10}
       SEARCH_THRESHOLD: ${SEARCH_THRESHOLD:-0.75}
+      # Строгая точка режима отказа. Без проброса контейнер берёт
+      # значение по умолчанию из config.py, и переключатель в вебе
+      # показывает не тот порог, что стоит в .env.
+      SEARCH_THRESHOLD_STRICT: ${SEARCH_THRESHOLD_STRICT:-0.8544}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-20}
       DATA_DIR: /data
       ARTIFACTS_DIR: /artifacts
