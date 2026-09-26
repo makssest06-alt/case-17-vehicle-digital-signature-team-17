@@ -5,6 +5,7 @@
 среднее оригинала и горизонтального отражения.
 """
 import os
+from pathlib import Path
 from typing import List
 
 import numpy as np
@@ -14,6 +15,17 @@ import torch.nn.functional as F
 from PIL import Image
 
 from .base import EmbeddingModel
+
+
+# Ключи реестра analysis/backbones.py -> имена timm. Чекпоинт хранит свой
+# бэкбон в args["backbone"], и это надёжнее переменной окружения: если
+# EMBED_MODEL расходится с чекпоинтом, модель построится не под те веса.
+BACKBONE_TIMM = {
+    "siglip_base": "vit_base_patch16_siglip_224.webli",
+    "siglip2_base": "vit_base_patch16_siglip_224.v2_webli",
+    "clip_vitb16": "vit_base_patch16_clip_224.openai",
+    "dinov2_vits14": "vit_small_patch14_dinov2.lvd142m",
+}
 
 
 class _ReidHead(nn.Module):
@@ -56,7 +68,9 @@ class ReidCheckpointModel(EmbeddingModel):
         hidden = int(cfg.get("hidden", 1024))
         out_dim = int(cfg.get("out_dim", 512))
         dropout = float(cfg.get("dropout", 0.3))
-        self.input_size = int(cfg.get("input_size", self.input_size))
+        # analysis/train_reid.py пишет разрешение в args["size"] (0 = родное),
+        # старые чекпоинты — в "input_size"; ноль трактуем как «не задано».
+        self.input_size = int(cfg.get("input_size") or cfg.get("size") or self.input_size)
 
         state = ck.get("model", ck)
         enc = {k[len("encoder."):]: v for k, v in state.items() if k.startswith("encoder.")}
@@ -68,7 +82,17 @@ class ReidCheckpointModel(EmbeddingModel):
         #    значит его надо взять предобученным из образа, иначе он останется
         #    случайно инициализированным и модель выдаст мусор.
         head_only = not enc
-        backbone = timm.create_model(self.backbone_name, pretrained=head_only, num_classes=0)
+        # Бэкбон берём из чекпоинта, если он там объявлен: EMBED_MODEL — это
+        # настройка окружения, а args["backbone"] — факт о весах. Расхождение
+        # означает, что собран не тот чекпоинт, о котором думают.
+        ck_backbone = str(cfg.get("backbone") or "")
+        name = BACKBONE_TIMM.get(ck_backbone, self.backbone_name)
+        if ck_backbone and name != self.backbone_name:
+            print(f"  reid_checkpoint: EMBED_MODEL задан как {self.backbone_name}, "
+                  f"но чекпоинт обучен на {ck_backbone} -> беру {name}", flush=True)
+        backbone = timm.create_model(name, pretrained=head_only,
+                                     num_classes=0, img_size=self.input_size,
+                                     dynamic_img_size=True)
         head = _ReidHead(backbone.num_features, hidden, out_dim, dropout)
 
         if head_only:
@@ -77,13 +101,58 @@ class ReidCheckpointModel(EmbeddingModel):
             backbone.load_state_dict(enc, strict=True)
         head.load_state_dict(hd, strict=True)
 
+        # Нормировать выход бэкбона перед головой нужно ТОЛЬКО для head-only:
+        # такие головы учились на признаках из research/extract_features.py,
+        # а тот скрипт нормирует перед сохранением. Головы полного дообучения
+        # (analysis/train_reid.py, analysis/train_distill.py) учились как
+        # head(encoder(x)) — нормировка на инференсе меняет распределение входа
+        # и стоит 1.2-5.2 mAP (analysis/service_path_grid.py).
+        self._normalize_before_head = head_only
+        # Режим кропа. Приоритет: переменная окружения > args чекпоинта > timm.
+        #
+        # Дефолт именно timm, потому что это прежнее поведение сервиса и оно
+        # верно для production-весов: reid_current.pt (= geom_ep30) и
+        # siglip_vitb16_reid_ep29.pt обучены на base-кропе и args["tf_mode"]
+        # не содержат. Угадывать squash для всех full-чекпоинтов нельзя —
+        # сломает их.
+        #
+        # Squash-модели (analysis/train_reid.py --tf-mode squash,
+        # analysis/train_distill.py) пишут tf_mode в args сами. Для чекпоинтов,
+        # которые его не пишут (дистиллят из team17/clip-ensemble), режим
+        # задаётся переменной REID_TF_MODE — это явное решение оператора,
+        # а не догадка кода.
+        self.tf_mode = os.getenv("REID_TF_MODE") or str(cfg.get("tf_mode") or "timm")
+        if not cfg.get("tf_mode") and not os.getenv("REID_TF_MODE"):
+            print(f"  reid_checkpoint: {Path(self.weights_path).name} не объявил "
+                  f"args[tf_mode] и REID_TF_MODE не задан — беру 'timm' "
+                  f"(прежнее поведение). Если модель обучена на squash-кропе, "
+                  f"поставьте REID_TF_MODE=squash, иначе метрики просядут.",
+                  flush=True)
+        if self.tf_mode not in ("timm", "squash"):
+            raise ValueError(f"REID_TF_MODE/args[tf_mode] = {self.tf_mode!r}, "
+                             f"ожидалось 'timm' или 'squash'")
+
         backbone.eval()
         head.eval()
-        cfgd = timm.data.resolve_data_config({}, model=backbone)
-        cfgd["input_size"] = (3, self.input_size, self.input_size)
-        self._tf = timm.data.create_transform(**cfgd, is_training=False)
+        self._tf = self._build_tf(timm, backbone)
         self._model, self._head = backbone, head
         self.dim = out_dim
+
+    def _build_tf(self, timm, backbone):
+        cfgd = timm.data.resolve_data_config({}, model=backbone)
+        mean, std = tuple(cfgd["mean"]), tuple(cfgd["std"])
+        if self.tf_mode == "squash":
+            from torchvision import transforms as T
+
+            return T.Compose([
+                T.Resize((self.input_size, self.input_size),
+                         interpolation=T.InterpolationMode.BICUBIC, antialias=True),
+                T.ToTensor(),
+                T.Normalize(mean=mean, std=std),
+            ])
+        cfgd = dict(cfgd)
+        cfgd["input_size"] = (3, self.input_size, self.input_size)
+        return timm.data.create_transform(**cfgd, is_training=False)
 
     def patch_saliency(self, image: Image.Image, target: np.ndarray = None):
         """Вклад участков кадра в итоговый вектор — для кнопки «показать почему».
@@ -131,12 +200,20 @@ class ReidCheckpointModel(EmbeddingModel):
         return feats.cpu().numpy().astype("float32")
 
     def _encode(self, x: torch.Tensor) -> torch.Tensor:
-        """Бэкбон -> L2 -> голова.
+        """Бэкбон -> (L2 для head-only) -> голова.
 
-        Нормировка перед головой обязательна: голова обучалась на выходах
-        бэкбона, которые extract_features.py нормирует перед сохранением.
-        Без неё голова получает вектор другой длины, чем видела при обучении,
-        и это стоит 3 пункта mAP и вдвое больше катастрофических промахов
-        (61.52 против 64.54 на валидации, research/results/service_path_extras.json).
+        Нормировка обязательна только для head-only чекпоинтов: их голова
+        училась на выходах бэкбона, которые extract_features.py нормирует
+        перед сохранением. Без неё голова получает вектор другой длины, чем
+        видела при обучении, и это стоит 3 пункта mAP и вдвое больше
+        катастрофических промахов (61.52 против 64.54 на валидации,
+        research/results/service_path_extras.json).
+
+        Для чекпоинтов полного дообучения (ключи encoder.*) нормировка
+        вредит: они учились как head(encoder(x)). Замер на наших моделях —
+        от -1.18 до -5.21 mAP (analysis/service_path_grid.py).
         """
-        return self._head(F.normalize(self._model(x), p=2, dim=1))[1]
+        z = self._model(x)
+        if self._normalize_before_head:
+            z = F.normalize(z, p=2, dim=1)
+        return self._head(z)[1]
