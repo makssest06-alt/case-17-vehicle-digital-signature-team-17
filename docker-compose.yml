@@ -54,6 +54,10 @@ services:
       HF_HUB_OFFLINE: "1"
       HF_HOME: /opt/hfcache
       REID_WEIGHTS: ${REID_WEIGHTS:-/models/reid_current.pt}
+      # Режим кропа для чекпоинтов, которые не пишут tf_mode в args (студент).
+      # Без проброса загрузчик возьмёт timm(base)-кроп и squash-модель
+      # потеряет ~2 mAP. См. api/app/models/reid_checkpoint.py.
+      REID_TF_MODE: ${REID_TF_MODE:-}
     volumes:
       - ${DATA_HOST_DIR:-/opt/case17/data}:/data:ro
       - ${MODELS_HOST_DIR:-/opt/case17/models}:/models:ro
