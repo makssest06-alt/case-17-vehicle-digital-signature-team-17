@@ -1,0 +1,5 @@
+# Только большой чекпоинт студента (362 МБ) уходит в LFS — SourceCraft не
+# принимает прямые blob такого размера. Мелкий head-only weights/reid_current.pt
+# (5 МБ) оставляем прямым blob, как он и был: не мигрируем существующий
+# артефакт без нужды.
+weights/siglip2_distill_ensemble_ep28.pt filter=lfs diff=lfs merge=lfs -text
