@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Цифровой признак ТС — кейс 17</title>
+<style>
+:root{
+  --bg:#f4f4f2; --surface:#fff; --surface-2:#faf9f7;
+  --ink:#16181d; --ink-2:#5b6070; --ink-3:#8b90a0;
+  --line:#e2e2de; --line-2:#cfd0cb;
+  --accent:#1c4ed8; --accent-ink:#fff;
+  --ok:#1a7f4b; --warn:#9a6700; --bad:#b3261e;
+  --r:10px;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1013; --surface:#16191e; --surface-2:#1b1f25;
+    --ink:#e8e9ec; --ink-2:#a2a8b6; --ink-3:#71778a;
+    --line:#272c34; --line-2:#333a45;
+    --accent:#6e9bff; --accent-ink:#0e1013;
+    --ok:#4ec98a; --warn:#e0b341; --bad:#ff6b5e;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1013; --surface:#16191e; --surface-2:#1b1f25;
+  --ink:#e8e9ec; --ink-2:#a2a8b6; --ink-3:#71778a;
+  --line:#272c34; --line-2:#333a45;
+  --accent:#6e9bff; --accent-ink:#0e1013;
+  --ok:#4ec98a; --warn:#e0b341; --bad:#ff6b5e;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font:16px/1.55 var(--sans);
+  padding:0 16px 64px;
+}
+header{
+  max-width:1180px; margin:0 auto; padding:24px 0 20px;
+  border-bottom:1px solid var(--line);
+}
+h1{font-size:19px; font-weight:650; margin:0; letter-spacing:-.01em}
+.sub{color:var(--ink-2); font-size:13.5px; margin-top:4px}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ink-3);margin-right:7px;vertical-align:1px}
+.dot.on{background:var(--ok)} .dot.off{background:var(--bad)}
+main{max-width:1180px; margin:0 auto; display:grid; gap:20px; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); padding-top:20px}
+@media (max-width:900px){ main{grid-template-columns:1fr} }
+section{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:18px}
+h2{font-size:12px; font-weight:650; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-2); margin:0 0 14px}
+.drop{
+  border:1.5px dashed var(--line-2); border-radius:var(--r); background:var(--surface-2);
+  padding:28px 16px; text-align:center; color:var(--ink-2); font-size:14px;
+  cursor:pointer; transition:border-color 160ms ease-out, background-color 160ms ease-out;
+}
+.drop:hover,.drop.over{border-color:var(--accent); background:var(--surface)}
+.drop:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+.stage{position:relative; margin-top:14px; display:none}
+.stage.show{display:block}
+canvas{width:100%; height:auto; display:block; border-radius:8px; background:var(--surface-2); cursor:crosshair; touch-action:none}
+.hint{font-size:12.5px; color:var(--ink-3); margin-top:8px; font-family:var(--mono)}
+.row{display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-top:14px}
+label{display:block; font-size:12px; color:var(--ink-2); margin-bottom:5px}
+input[type=number],input[type=text]{
+  width:100%; padding:9px 10px; font:14px var(--mono); color:var(--ink);
+  background:var(--surface-2); border:1px solid var(--line-2); border-radius:8px;
+  transition:border-color 140ms ease-out;
+}
+input:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+.f{flex:1 1 92px; min-width:82px}
+button{
+  min-height:44px; padding:0 18px; border-radius:8px; border:1px solid transparent;
+  font:600 14px/1 var(--sans); cursor:pointer;
+  transition:background-color 140ms ease-out, transform 90ms ease-out, border-color 140ms ease-out;
+}
+button:active:not(:disabled){transform:scale(.975)}
+button:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+button:disabled{opacity:.45; cursor:not-allowed}
+.primary{background:var(--accent); color:var(--accent-ink)}
+.ghost{background:transparent; color:var(--ink); border-color:var(--line-2)}
+.ghost:hover:not(:disabled){border-color:var(--ink-3)}
+.bar{display:flex; gap:8px; margin-top:16px; flex-wrap:wrap}
+.state{padding:14px; border-radius:8px; font-size:14px; border:1px solid var(--line); background:var(--surface-2); color:var(--ink-2)}
+.state.refusal{border-color:color-mix(in srgb,var(--warn) 45%,var(--line)); background:color-mix(in srgb,var(--warn) 9%,var(--surface)); color:var(--ink)}
+.state.err{border-color:color-mix(in srgb,var(--bad) 45%,var(--line)); background:color-mix(in srgb,var(--bad) 8%,var(--surface)); color:var(--ink)}
+.cards{display:flex; flex-direction:column; gap:8px; margin-top:12px}
+.card{
+  display:grid; grid-template-columns:auto 1fr auto; gap:12px; align-items:center;
+  padding:11px 13px; border:1px solid var(--line); border-radius:8px; background:var(--surface-2);
+  transition:border-color 140ms ease-out;
+}
+.card:hover{border-color:var(--line-2)}
+.rank{font:600 12px var(--mono); color:var(--ink-3); min-width:22px}
+.meta{min-width:0}
+.vid{font:600 14px var(--sans)}
+.path{font:11.5px var(--mono); color:var(--ink-3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.conf{text-align:right; min-width:86px}
+.pct{font:650 15px var(--mono); letter-spacing:-.02em}
+.track{height:3px; border-radius:2px; background:var(--line); margin-top:5px; overflow:hidden}
+.fill{height:100%; background:var(--accent); border-radius:2px}
+.hi .pct{color:var(--ok)} .hi .fill{background:var(--ok)}
+.lo .pct{color:var(--warn)} .lo .fill{background:var(--warn)}
+footer{max-width:1180px; margin:28px auto 0; color:var(--ink-3); font-size:12.5px; border-top:1px solid var(--line); padding-top:14px}
+a{color:var(--accent)}
+@media (prefers-reduced-motion:reduce){*{transition-duration:0.01ms!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Цифровой признак транспортного средства</h1>
+  <div class="sub">
+    Кейс 17 · ЛЦТ 2026 · команда 17 &nbsp;·&nbsp;
+    <span id="status"><span class="dot"></span>проверяю сервис…</span>
+  </div>
+</header>
+
+<main>
+  <section>
+    <h2>1 · Кадр и рамка</h2>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Выбрать изображение">
+      Перетащи фото сюда или нажми, чтобы выбрать
+    </div>
+    <input type="file" id="file" accept="image/*" hidden>
+
+    <div class="stage" id="stage">
+      <canvas id="cv" aria-label="Кадр с выделенной рамкой автомобиля"></canvas>
+      <div class="hint" id="hint">протяни мышью рамку по автомобилю</div>
+      <div class="row">
+        <div class="f"><label for="bx">x</label><input type="number" id="bx" min="0" value="0"></div>
+        <div class="f"><label for="by">y</label><input type="number" id="by" min="0" value="0"></div>
+        <div class="f"><label for="bw">w</label><input type="number" id="bw" min="1" value="0"></div>
+        <div class="f"><label for="bh">h</label><input type="number" id="bh" min="1" value="0"></div>
+      </div>
+      <div class="row">
+        <div class="f"><label for="topn">кандидатов</label><input type="number" id="topn" min="1" max="100" value="10"></div>
+        <div class="f"><label for="vid">vehicle_id (для добавления)</label><input type="text" id="vid" placeholder="необязательно"></div>
+      </div>
+      <div class="modes" role="radiogroup" aria-label="Режим строгости">
+        <button type="button" class="mode on" data-mode="balanced">сбалансированный</button>
+        <button type="button" class="mode" data-mode="strict">строгий</button>
+        <button type="button" class="mode" data-mode="expert">экспертный</button>
+        <input type="number" id="thr" min="0" max="1" step="0.005" value="0.525" hidden
+               aria-label="порог вручную">
+      </div>
+      <div class="modenote" id="modenote">—</div>
+      <div class="bar">
+        <button class="primary" id="go">Найти совпадения</button>
+        <button class="ghost" id="add">Добавить в галерею</button>
+        <button class="ghost" id="reset">Сбросить рамку</button>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>2 · Кандидаты</h2>
+    <div id="out"><div class="state">Загрузи кадр, выдели рамку и нажми «Найти совпадения».</div></div>
+    <div class="bar" id="exp" style="display:none">
+      <button class="ghost" id="why">Показать почему</button>
+      <button class="ghost" id="csv">Выгрузить CSV</button>
+      <button class="ghost" id="json">Выгрузить JSON</button>
+    </div>
+    <div id="whybox" class="whybox" hidden>
+      <div class="whyhead">
+        <strong>Что дало сходство</strong>
+        <span id="whynote">карта строится по участкам кадра</span>
+      </div>
+      <div class="whygrid">
+        <figure><canvas id="whycv" width="336" height="336"></canvas>
+          <figcaption id="whycap">запрос</figcaption></figure>
+        <div class="whytext" id="whytext"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  API и Swagger: <a href="/api/docs" target="_blank" rel="noopener">/api/docs</a> ·
+  сервис отвечает отказом, если уверенного совпадения нет — это осознанное поведение, а не ошибка.
+</footer>
+
+<style>
+.modes{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.mode{padding:8px 14px;border-radius:999px;border:1px solid #d7d9e0;background:#fff;
+      cursor:pointer;font:inherit;font-size:14px;color:#444}
+.mode:hover{border-color:#9aa0ad}
+.mode.on{background:#1b2430;border-color:#1b2430;color:#fff}
+.modenote{margin-top:8px;font-size:13px;color:#667;line-height:1.5}
+.whybox{margin-top:14px;padding:14px;border:1px solid #e3e5ea;border-radius:12px;background:#fafbfc}
+.whyhead{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:10px}
+.whyhead span{font-size:13px;color:#667}
+.whygrid{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
+.whygrid figure{margin:0}
+.whygrid canvas{border-radius:10px;border:1px solid #e3e5ea;background:#fff;max-width:100%}
+.whygrid figcaption{font-size:12px;color:#667;margin-top:6px;text-align:center}
+.whytext{flex:1;min-width:220px;font-size:13px;color:#445;line-height:1.6}
+.whytext b{color:#1b2430}
+@media (prefers-color-scheme: dark){
+  .mode{background:#1c2029;border-color:#333a46;color:#c8ccd4}
+  .mode.on{background:#e8ebf0;border-color:#e8ebf0;color:#11151c}
+  .whybox{background:#171b22;border-color:#2a303b}
+  .whygrid canvas{background:#11151c;border-color:#2a303b}
+  .whytext{color:#c8ccd4}.whytext b{color:#fff}
+}
+</style>
+<script>
+const $=s=>document.querySelector(s);
+const img=new Image(); let bbox=null, last=null, drag=null;
+const cv=$('#cv'), ctx=cv.getContext('2d');
+
+fetch('/api/ready').then(r=>r.json()).then(d=>{
+  $('#status').innerHTML='<span class="dot '+(d.status==='ready'?'on':'off')+'"></span>'+
+    (d.status==='ready'?('сервис готов · в галерее '+d.gallery_size+' записей'):'сервис не готов');
+}).catch(()=>{$('#status').innerHTML='<span class="dot off"></span>сервис недоступен';});
+
+$('#drop').onclick=()=>$('#file').click();
+$('#drop').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('#file').click();}};
+['dragover','dragenter'].forEach(t=>$('#drop').addEventListener(t,e=>{e.preventDefault();$('#drop').classList.add('over');}));
+['dragleave','drop'].forEach(t=>$('#drop').addEventListener(t,e=>{e.preventDefault();$('#drop').classList.remove('over');}));
+$('#drop').addEventListener('drop',e=>{if(e.dataTransfer.files[0])pick(e.dataTransfer.files[0]);});
+$('#file').onchange=e=>{if(e.target.files[0])pick(e.target.files[0]);};
+
+let file=null;
+function pick(f){
+  file=f;
+  const u=URL.createObjectURL(f);
+  img.onload=()=>{cv.width=img.width; cv.height=img.height; bbox=null; $('#stage').classList.add('show'); draw(); URL.revokeObjectURL(u);};
+  img.src=u;
+}
+function draw(){
+  ctx.drawImage(img,0,0);
+  if(!bbox)return;
+  const s=Math.max(2,Math.round(img.width/420));
+  ctx.lineWidth=s; ctx.strokeStyle='#ff2d2d';
+  ctx.strokeRect(bbox.x,bbox.y,bbox.w,bbox.h);
+}
+function canvasPos(e){
+  const r=cv.getBoundingClientRect();
+  return {x:Math.round((e.clientX-r.left)/r.width*img.width), y:Math.round((e.clientY-r.top)/r.height*img.height)};
+}
+cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId); drag=canvasPos(e);});
+cv.addEventListener('pointermove',e=>{
+  if(!drag)return; const p=canvasPos(e);
+  bbox={x:Math.min(drag.x,p.x),y:Math.min(drag.y,p.y),w:Math.abs(p.x-drag.x),h:Math.abs(p.y-drag.y)};
+  sync(); draw();
+});
+cv.addEventListener('pointerup',()=>{drag=null;});
+function sync(){
+  if(!bbox)return;
+  bbox.x=Math.max(0,bbox.x); bbox.y=Math.max(0,bbox.y);
+  bbox.w=Math.min(bbox.w,img.width-bbox.x); bbox.h=Math.min(bbox.h,img.height-bbox.y);
+  bx.value=bbox.x; by.value=bbox.y; bw.value=bbox.w; bh.value=bbox.h;
+  $('#hint').textContent=`кадр ${img.width}x${img.height} · рамка ${bbox.w}x${bbox.h}`;
+}
+['bx','by','bw','bh'].forEach(id=>$('#'+id).oninput=()=>{
+  bbox={x:+bx.value||0,y:+by.value||0,w:+bw.value||0,h:+bh.value||0}; draw();
+});
+$('#reset').onclick=()=>{bbox=null;$('#hint').textContent='протяни мышью рамку по автомобилю';draw();};
+
+function form(){
+  if(!file) throw new Error('Сначала выбери изображение.');
+  if(!bbox||bbox.w<1||bbox.h<1) throw new Error('Выдели рамку на автомобиле.');
+  const fd=new FormData();
+  fd.append('image',file); fd.append('x',bbox.x); fd.append('y',bbox.y);
+  fd.append('w',bbox.w); fd.append('h',bbox.h);
+  return fd;
+}
+function busy(b){['go','add'].forEach(i=>$('#'+i).disabled=b); $('#go').textContent=b?'Ищу…':'Найти совпадения';}
+function err(m){$('#out').innerHTML='<div class="state err">'+esc(m)+'</div>'; $('#exp').style.display='none';}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// --- режимы строгости ---------------------------------------------------
+// Пороги приходят с сервера: они привязаны к конкретной модели, и при смене
+// весов в интерфейсе не должно оставаться зашитых чисел.
+let CFG=null, MODE='balanced';
+fetch('/api/v1/config').then(r=>r.json()).then(d=>{CFG=d; applyMode('balanced');})
+  .catch(()=>{$('#modenote').textContent='настройки режимов недоступны, порог вручную';});
+
+function applyMode(m){
+  MODE=m;
+  document.querySelectorAll('.mode').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));
+  const thr=$('#thr');
+  if(m==='expert'){
+    thr.hidden=false;
+    $('#modenote').innerHTML='Порог задаётся вручную. Полезно, чтобы показать, '+
+      'как смещение порога меняет баланс между пропусками и ложными совпадениями.';
+    return;
+  }
+  thr.hidden=true;
+  if(!CFG) return;
+  const c=CFG.modes[m];
+  thr.value=c.threshold;
+  $('#modenote').innerHTML='<b>Порог '+c.threshold+'.</b> '+esc(c.note);
+}
+document.querySelectorAll('.mode').forEach(b=>b.onclick=()=>applyMode(b.dataset.mode));
+
+$('#go').onclick=async()=>{
+  let fd; try{fd=form();}catch(e){return err(e.message);}
+  fd.append('top_n',$('#topn').value); fd.append('threshold',$('#thr').value);
+  busy(true);
+  try{
+    const r=await fetch('/api/v1/search',{method:'POST',body:fd});
+    const d=await r.json();
+    if(!r.ok) return err(d.detail||('Ошибка '+r.status));
+    render(d);
+  }catch(e){err('Сеть недоступна: '+e.message);} finally{busy(false);}
+};
+
+$('#add').onclick=async()=>{
+  let fd; try{fd=form();}catch(e){return err(e.message);}
+  if($('#vid').value) fd.append('vehicle_id',$('#vid').value);
+  busy(true);
+  try{
+    const r=await fetch('/api/v1/gallery',{method:'POST',body:fd});
+    const d=await r.json();
+    $('#out').innerHTML=r.ok
+      ? '<div class="state">Добавлено в галерею, id '+d.id+'.</div>'
+      : '<div class="state err">'+esc(d.detail||'ошибка')+'</div>';
+  }catch(e){err(e.message);} finally{busy(false);}
+};
+
+function render(d){
+  last=d;
+  if(d.refusal){
+    // Заголовок и текст от API начинались одинаково — дубль убираем,
+    // чтобы на экране не было одной и той же фразы дважды.
+    const msg=(d.message||'').replace(/^Уверенного совпадения нет[:.]?\s*/,'');
+    $('#out').innerHTML='<div class="state refusal"><strong>Уверенного совпадения нет.</strong><br>'+
+      esc(msg)+'</div>';
+    $('#exp').style.display='none'; return;
+  }
+  const cards=d.candidates.map((c,i)=>{
+    const p=Math.round(c.confidence*100);
+    const cls=c.confidence>=d.threshold?'hi':'lo';
+    return `<div class="card ${cls}">
+      <div class="rank">${i+1}</div>
+      <div class="meta">
+        <div class="vid">${esc(c.vehicle_id||('запись #'+c.id))}</div>
+        <div class="path">${esc(c.image_path)}</div>
+      </div>
+      <div class="conf"><div class="pct">${p}%</div><div class="track"><div class="fill" style="width:${p}%"></div></div></div>
+    </div>`;
+  }).join('');
+  $('#out').innerHTML='<div class="state">Найдено '+d.candidates.length+' кандидатов за '+d.took_ms+' мс · модель '+esc(d.model)+'</div><div class="cards">'+cards+'</div>';
+  $('#exp').style.display='flex';
+}
+
+function dl(name,text,type){
+  const b=new Blob([text],{type}); const a=document.createElement('a');
+  a.href=URL.createObjectURL(b); a.download=name; a.click(); URL.revokeObjectURL(a.href);
+}
+$('#csv').onclick=()=>{
+  if(!last)return;
+  const rows=[['rank','id','vehicle_id','image_path','confidence']]
+    .concat(last.candidates.map((c,i)=>[i+1,c.id,c.vehicle_id||'',c.image_path,c.confidence]));
+  dl('candidates.csv',rows.map(r=>r.join(',')).join('\n'),'text/csv');
+};
+$('#json').onclick=()=>{ if(last) dl('search.json',JSON.stringify(last,null,2),'application/json'); };
+
+// --- показать почему ----------------------------------------------------
+// Карта строится по тем же косинусам, по которым принимается решение:
+// каждый участок кадра прогоняется через ту же голову и сравнивается с целью.
+// Поэтому это разложение самой оценки, а не догадка о внимании модели.
+$('#why').onclick=async()=>{
+  if(!last||!last.candidates||!last.candidates.length) return;
+  let fd; try{fd=form();}catch(e){return err(e.message);}
+  const top=last.candidates[0];
+  fd.append('gallery_id',top.id);
+  $('#why').disabled=true; $('#why').textContent='Считаю…';
+  try{
+    const r=await fetch('/api/v1/explain',{method:'POST',body:fd});
+    const d=await r.json();
+    if(!r.ok){ $('#whybox').hidden=false;
+      $('#whytext').innerHTML='<b>Объяснение недоступно.</b><br>'+esc(d.detail||('Ошибка '+r.status));
+      $('#whynote').textContent=''; return; }
+    drawWhy(d,top);
+  }catch(e){ err('Сеть недоступна: '+e.message); }
+  finally{ $('#why').disabled=false; $('#why').textContent='Показать почему'; }
+};
+
+function drawWhy(d,top){
+  $('#whybox').hidden=false;
+  const cv=$('#whycv'), g=cv.getContext('2d'), S=cv.width;
+  g.clearRect(0,0,S,S);
+  if(bbox&&img.complete){
+    const pad=0.10, px=bbox.w*pad, py=bbox.h*pad;
+    const sx=Math.max(0,bbox.x-px), sy=Math.max(0,bbox.y-py);
+    const sw=Math.min(img.naturalWidth-sx,bbox.w+2*px);
+    const sh=Math.min(img.naturalHeight-sy,bbox.h+2*py);
+    g.drawImage(img,sx,sy,sw,sh,0,0,S,S);
+  }
+  const n=d.grid, cell=S/n, span=(d.max-d.min)||1;
+  for(let i=0;i<d.weights.length;i++){
+    const v=(d.weights[i]-d.min)/span;
+    if(v<0.45) continue;                     // слабые участки не закрашиваем
+    const a=(v-0.45)/0.55*0.62;
+    g.fillStyle='rgba(255,'+Math.round(210*(1-v))+',0,'+a.toFixed(3)+')';
+    g.fillRect((i%n)*cell,Math.floor(i/n)*cell,cell+0.5,cell+0.5);
+  }
+  const srt=d.weights.map((v,i)=>[v,i]).sort((a,b)=>b[0]-a[0]);
+  // Вклад считаем только по положительным участкам: в сумму по всем
+  // попадают и отрицательные косинусы, из-за чего доля уходила в минус
+  // и на экране появлялось «-31% сходства».
+  const posSum=d.weights.reduce((s,x)=>s+(x>0?x:0),0)||1;
+  const topSum=srt.slice(0,Math.ceil(d.weights.length*0.1))
+                  .reduce((s,x)=>s+(x[0]>0?x[0]:0),0);
+  const share=Math.max(0,Math.min(1,topSum/posSum));
+  $('#whycap').textContent='сходство с кандидатом #1';
+  $('#whynote').textContent='участков '+d.grid+'x'+d.grid+' · '+d.took_ms+' мс';
+  $('#whytext').innerHTML=
+    '<b>Сравнение с:</b> '+esc(top.vehicle_id||('запись #'+top.id))+
+    ' (сходство '+Math.round(top.confidence*100)+'%)<br><br>'+
+    'Подсвечены участки кадра, которые дали сходство именно с этим кандидатом. '+
+    'Значение на карте — тот же косинус, по которому принимается решение, '+
+    'посчитанный по участкам 16x16 пикселей.<br><br>'+
+    '<b>Верхние 10% участков дают '+Math.round(share*100)+'% положительного вклада.</b> '+
+    'Если подсветка легла на номерной знак, а не на кузов — это сигнал, что '+
+    'модель пошла коротким путём: по условию задачи номер использовать нельзя.<br><br>'+
+    'Метод: один прямой проход, градиенты не считаются. Это не Grad-CAM, '+
+    'а разложение самой оценки сходства.';
+}
+</script>
+</body>
+</html>

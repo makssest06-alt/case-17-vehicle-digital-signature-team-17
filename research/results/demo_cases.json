@@ -1,0 +1,44 @@
+[
+  {
+    "label": "лёгкий",
+    "image_id": "4b90daade9334addb76bf838887e1430",
+    "vehicle_id": "904",
+    "camera_id": "90",
+    "top1": 0.9686,
+    "hit_rank": 1,
+    "hit_conf": 0.9686,
+    "brightness": 136.7
+  },
+  {
+    "label": "сложный ракурс",
+    "image_id": "99af706f6d914d57a99b63bcd5f51a16",
+    "vehicle_id": "71",
+    "camera_id": "90",
+    "top1": 0.5119,
+    "hit_rank": 1,
+    "hit_conf": 0.5119,
+    "brightness": 143.2
+  },
+  {
+    "label": "ночь",
+    "image_id": "961b3d3d27734a3fb31f25964b951b79",
+    "vehicle_id": "871",
+    "camera_id": "92",
+    "top1": 0.8688,
+    "hit_rank": 1,
+    "hit_conf": 0.8688,
+    "brightness": 41.1
+  },
+  {
+    "label": "без пары (отказ)",
+    "image_id": "ab0b9fb18f0c4c958af627794bd0bb88",
+    "vehicle_id": "1009",
+    "removed_from_gallery": [
+      "4e9f7065e90645ddb17e2b7ab196ca1e",
+      "20a20396f681477287e91e5ca9ac9ba0",
+      "ad4e2110946a46b3ba89fbbbdd7dff69",
+      "556bf49fc8454b319ac2f8327b828be3"
+    ],
+    "note": "все кадры этой машины удалены из демо-галереи, пары нет по построению"
+  }
+]

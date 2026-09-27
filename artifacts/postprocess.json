@@ -1,0 +1,42 @@
+{
+  "checkpoint": "siglip2_distill_ensemble_ep28.pt",
+  "checkpoint_sha256": "500f7b47d2a67d2289c74d7f0f94795f12a022507661b07caecffa0d33f3a0c9",
+  "crop": "squash (bbox + 10% context, Resize((224,224)) BICUBIC)",
+  "tta": false,
+  "pipeline": "qq_expand -> k_reciprocal_rerank -> csls",
+  "params": {
+    "qq_k": 3,
+    "qq_alpha": 3.0,
+    "rerank_k1": 10,
+    "rerank_k2": 6,
+    "rerank_lambda": 0.7,
+    "csls_k": 5
+  },
+  "refusal": {
+    "rule": "10-й процентиль top-1",
+    "threshold": 0.094672,
+    "accepted": 999,
+    "refused": 111
+  },
+  "consistency": {
+    "top1_mismatch_pct": 20.45,
+    "note": "доля запросов, где top-1 после постобработки отличается от top-1 по косинусу embeddings.npy; evaluate.py считает основной mAP из submission.csv, из векторов — справочный mAP_full"
+  },
+  "val_metrics_official_evaluate_py": {
+    "qq_k_3": {
+      "mAP@10": 0.8961,
+      "Rank-1": 0.8639,
+      "Rank-5": 0.9637
+    },
+    "qq_k_1": {
+      "mAP@10": 0.8915,
+      "Rank-1": 0.8584,
+      "Rank-5": null
+    },
+    "ensemble4_reference": {
+      "mAP@10": 0.8946,
+      "Rank-1": 0.8675,
+      "Rank-5": 0.9401
+    }
+  }
+}

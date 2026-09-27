@@ -1,0 +1,60 @@
+[
+  {
+    "method": "точный перебор",
+    "index_mb": 1953.1,
+    "batch_total_s": 8.77,
+    "latency": {
+      "p50_ms": 137.18,
+      "p95_ms": 137.9,
+      "mean_ms": 137.12
+    },
+    "build_s": 0.0,
+    "mAP": 62.74,
+    "rank1": 58.98,
+    "top10_pct": 77.7,
+    "not_found_pct": 14.5,
+    "queries": 551,
+    "with_hit": 471,
+    "peak_rss_mb": 2409.6
+  },
+  {
+    "method": "FAISS HNSW (M=16, efSearch=64)",
+    "build_s": 301.2,
+    "index_mb": 2075.2,
+    "batch_total_s": 0.26,
+    "latency": {
+      "p50_ms": 0.41,
+      "p95_ms": 0.52,
+      "mean_ms": 0.51
+    },
+    "mAP": 62.48,
+    "rank1": 59.35,
+    "top10_pct": 77.7,
+    "not_found_pct": 14.7,
+    "queries": 551,
+    "with_hit": 470,
+    "recall@1": 0.9964,
+    "recall@10": 0.8441,
+    "peak_rss_mb": 3448.5
+  },
+  {
+    "method": "FAISS IVF-PQ (nlist=4096, m=64, nprobe=32)",
+    "build_s": 741.2,
+    "index_mb": 69.0,
+    "batch_total_s": 0.44,
+    "latency": {
+      "p50_ms": 1.06,
+      "p95_ms": 1.26,
+      "mean_ms": 1.07
+    },
+    "mAP": 48.91,
+    "rank1": 46.28,
+    "top10_pct": 58.6,
+    "not_found_pct": 35.0,
+    "queries": 551,
+    "with_hit": 358,
+    "recall@1": 0.9474,
+    "recall@10": 0.39,
+    "peak_rss_mb": 2191.6
+  }
+]

@@ -1,0 +1,53 @@
+[
+  {
+    "label": "лёгкий",
+    "image_id": "4b90daade9334addb76bf838887e1430",
+    "vehicle_id": "904",
+    "refusal": false,
+    "took_ms": 676.2,
+    "hit_rank": 1,
+    "top1_conf": 0.9686,
+    "explain": {
+      "grid": 14,
+      "took_ms": 1058.2
+    }
+  },
+  {
+    "label": "сложный ракурс",
+    "image_id": "99af706f6d914d57a99b63bcd5f51a16",
+    "vehicle_id": "71",
+    "refusal": false,
+    "took_ms": 693.8,
+    "hit_rank": 1,
+    "top1_conf": 0.5119,
+    "explain": {
+      "grid": 14,
+      "took_ms": 717.4
+    }
+  },
+  {
+    "label": "ночь",
+    "image_id": "961b3d3d27734a3fb31f25964b951b79",
+    "vehicle_id": "871",
+    "refusal": false,
+    "took_ms": 669.8,
+    "hit_rank": 1,
+    "top1_conf": 0.8688,
+    "explain": {
+      "grid": 14,
+      "took_ms": 662.3
+    }
+  },
+  {
+    "label": "без пары (отказ)",
+    "image_id": "ab0b9fb18f0c4c958af627794bd0bb88",
+    "vehicle_id": "1009",
+    "refusal": true,
+    "took_ms": 669.0,
+    "message": "Уверенного совпадения нет: лучший кандидат 0.296 при пороге 0.511.",
+    "explain": {
+      "grid": 14,
+      "took_ms": 674.0
+    }
+  }
+]

@@ -1,0 +1,48 @@
+{
+  "ranking": {
+    "mAP": 61.52,
+    "rank1": 57.17,
+    "rank5": 76.95,
+    "top10_pct": 83.5,
+    "catastrophic_pct": 7.6,
+    "queries": 551
+  },
+  "jury_cross_camera": {
+    "auc": 0.6552,
+    "pos_median": 0.7355,
+    "neg_median": 0.7084,
+    "balanced": {
+      "threshold": 0.7648,
+      "precision": 0.741,
+      "recall": 0.394,
+      "f1": 0.514,
+      "TNR": 0.861
+    },
+    "strict": {
+      "threshold": 0.8548,
+      "precision": 0.8,
+      "recall": 0.072,
+      "f1": 0.132,
+      "TNR": 0.982
+    }
+  },
+  "deployment": {
+    "auc": 0.9628,
+    "pos_median": 0.9325,
+    "neg_median": 0.7104,
+    "balanced": {
+      "threshold": 0.7964,
+      "precision": 0.923,
+      "recall": 0.91,
+      "f1": 0.916,
+      "TNR": 0.923
+    },
+    "strict": {
+      "threshold": 0.8544,
+      "precision": 0.978,
+      "recall": 0.816,
+      "f1": 0.89,
+      "TNR": 0.982
+    }
+  }
+}
