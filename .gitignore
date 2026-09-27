@@ -24,12 +24,18 @@ id_*
 *.onnx
 *.safetensors
 
-# Артефакты сдачи — ЭТИ ТРИ ФАЙЛА КОММИТИМ (требование README датасета)
+# Артефакты сдачи — ЭТИ ФАЙЛЫ КОММИТИМ (требование README датасета)
+# embeddings_index.csv и postprocess.json тоже нужны: scripts/validate_submission.py
+# проверяет по первому порядок строк embeddings.npy, а по второму — что
+# submission.csv воспроизводится из векторов записанным рядом конвейером.
+# Без postprocess.json проверка происхождения из чистого клона не проходит.
 artifacts/*
 !artifacts/.gitkeep
 !artifacts/submission.csv
 !artifacts/candidates.csv
 !artifacts/embeddings.npy
+!artifacts/embeddings_index.csv
+!artifacts/postprocess.json
 
 # research
 research/.venv/
