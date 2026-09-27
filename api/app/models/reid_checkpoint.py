@@ -20,11 +20,29 @@ from .base import EmbeddingModel
 # Ключи реестра analysis/backbones.py -> имена timm. Чекпоинт хранит свой
 # бэкбон в args["backbone"], и это надёжнее переменной окружения: если
 # EMBED_MODEL расходится с чекпоинтом, модель построится не под те веса.
+#
+# Тег предобученных весов (`.webli`, `.v2_webli`) в списке стоит первым, но
+# разрешается он не во всех версиях timm: `.v2_webli` (SigLIP 2) требует
+# timm >= 1.0.15, а сервис запинен на 1.0.12. Поэтому create_model вызывается
+# по очереди имён и берётся первое сработавшее. Для чекпоинтов полного
+# дообучения это безопасно: pretrained=False, весь энкодер приходит из
+# чекпоинта, а тег нужен только чтобы скачать чужие веса. Проверено на
+# timm 1.0.12 и 1.0.29: эмбеддинги студента совпадают до 7.4e-07
+# (analysis/student_on_timm.py, probe_student_timm112.json).
+#
+# Осторожно: для head-only чекпоинтов (pretrained=True) голое имя
+# `vit_base_patch16_siglip_224` тянет SigLIP 1 (timm/ViT-B-16-SigLIP), а не
+# SigLIP 2. Сегодня это не проблема — единственный head-only чекпоинт
+# (weights/reid_current.pt) обучен на siglip_base.
 BACKBONE_TIMM = {
-    "siglip_base": "vit_base_patch16_siglip_224.webli",
-    "siglip2_base": "vit_base_patch16_siglip_224.v2_webli",
-    "clip_vitb16": "vit_base_patch16_clip_224.openai",
-    "dinov2_vits14": "vit_small_patch14_dinov2.lvd142m",
+    "siglip_base": ["vit_base_patch16_siglip_224.webli",
+                    "vit_base_patch16_siglip_224"],
+    "siglip2_base": ["vit_base_patch16_siglip_224.v2_webli",
+                     "vit_base_patch16_siglip_224"],
+    "clip_vitb16": ["vit_base_patch16_clip_224.openai",
+                    "vit_base_patch16_clip_224"],
+    "dinov2_vits14": ["vit_small_patch14_dinov2.lvd142m",
+                      "vit_small_patch14_dinov2"],
 }
 
 
@@ -86,13 +104,18 @@ class ReidCheckpointModel(EmbeddingModel):
         # настройка окружения, а args["backbone"] — факт о весах. Расхождение
         # означает, что собран не тот чекпоинт, о котором думают.
         ck_backbone = str(cfg.get("backbone") or "")
-        name = BACKBONE_TIMM.get(ck_backbone, self.backbone_name)
-        if ck_backbone and name != self.backbone_name:
+        names = BACKBONE_TIMM.get(ck_backbone, [self.backbone_name])
+        if isinstance(names, str):
+            names = [names]
+        if ck_backbone and names[0] != self.backbone_name:
             print(f"  reid_checkpoint: EMBED_MODEL задан как {self.backbone_name}, "
-                  f"но чекпоинт обучен на {ck_backbone} -> беру {name}", flush=True)
-        backbone = timm.create_model(name, pretrained=head_only,
-                                     num_classes=0, img_size=self.input_size,
-                                     dynamic_img_size=True)
+                  f"но чекпоинт обучен на {ck_backbone} -> беру {names[0]}", flush=True)
+        backbone, used_name = self._create_backbone(timm, names, head_only)
+        if len(names) > 1 and used_name != names[0]:
+            print(f"  reid_checkpoint: тег {names[0]} не разрешился на "
+                  f"timm {timm.__version__} — беру архитектуру {used_name}. "
+                  f"Для чекпоинта полного дообучения это безопасно (веса "
+                  f"приходят из файла, pretrained не используется).", flush=True)
         head = _ReidHead(backbone.num_features, hidden, out_dim, dropout)
 
         if head_only:
@@ -137,6 +160,30 @@ class ReidCheckpointModel(EmbeddingModel):
         self._tf = self._build_tf(timm, backbone)
         self._model, self._head = backbone, head
         self.dim = out_dim
+
+    def _create_backbone(self, timm, names, head_only):
+        """Строит бэкбон, перебирая имена до первого сработавшего.
+
+        Фолбэк с тега на голое имя архитектуры разрешён ТОЛЬКО когда
+        pretrained=False: в этом случае тег ничего не решает — веса целиком
+        приходят из чекпоинта. Для head-only (pretrained=True) голое имя
+        `vit_base_patch16_siglip_224` тянет SigLIP 1 (timm/ViT-B-16-SigLIP),
+        поэтому там фолбэк запрещён: лучше честно упасть, чем молча
+        подставить чужие предобученные веса.
+        """
+        candidates = names if not head_only else names[:1]
+        last = None
+        for name in candidates:
+            try:
+                m = timm.create_model(name, pretrained=head_only, num_classes=0,
+                                      img_size=self.input_size,
+                                      dynamic_img_size=True)
+                return m, name
+            except Exception as e:  # тег не разрешился в этой версии timm
+                last = e
+        raise RuntimeError(
+            f"не удалось построить бэкбон ни по одному из имён {candidates} "
+            f"(timm {timm.__version__}): {last}") from last
 
     def _build_tf(self, timm, backbone):
         cfgd = timm.data.resolve_data_config({}, model=backbone)
