@@ -1,4 +1,13 @@
 models/*.pt filter=lfs diff=lfs merge=lfs -text
+# Shell-скрипты всегда с LF, независимо от core.autocrlf на машине участника.
+# Без этого клон на Windows получает CRLF, и docker-entrypoint-initdb.d
+# не может исполнить 01_schema.sh ("cannot execute: required file not found"),
+# потому что shebang превращается в "#!/bin/bash\r". Схема БД не создаётся,
+# pgvector отсутствует, API падает на старте.
+*.sh                text eol=lf
+db/init/*.sh        text eol=lf
+scripts/*.sh        text eol=lf
+research/*.sh       text eol=lf
 # Полный чекпоинт студента (362 МБ) хранится в LFS — SourceCraft не принимает
 # прямой blob такого размера. head-only weights/reid_current.pt (5 МБ) остаётся
 # прямым blob, как был — существующий артефакт не мигрируется без нужды.
