@@ -17,7 +17,7 @@ from PIL import Image
 HERE = Path("/opt/case17/app/research")
 CROPS = Path("/opt/case17/data/crops")
 API = "http://localhost:8000"
-THR = 0.5114
+THR = 0.8025
 
 sizes = {r["image_id"]: (r["out_w"], r["out_h"])
          for r in csv.DictReader((CROPS / "crops_train.csv").open())}

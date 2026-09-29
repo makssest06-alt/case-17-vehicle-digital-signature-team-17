@@ -3,7 +3,34 @@
 Папка для весов ReID-моделей команды 17. Бинарники хранятся через Git LFS
 (нужен `git lfs install` перед клонированием, иначе скачается указатель).
 
-## Production-модель: `reid_current.pt` = `siglip_vitb16_reid_geom_ep30.pt`
+## Что является production-моделью
+
+**Production — `weights/siglip2_distill_ensemble_ep28.pt`** (дистиллированный
+студент, 362 МБ). Именно его сервис грузит через `REID_WEIGHTS`.
+
+| Файл | Роль |
+|---|---|
+| `weights/siglip2_distill_ensemble_ep28.pt` | **production**, студент, mAP@10 0.8961 |
+| `weights/reid_current.pt` | прежняя head-only модель, mAP 0.6454 |
+| `models/siglip_vitb16_reid_geom_ep30.pt` | один из четырёх учителей ансамбля |
+| `models/siglip_vitb16_reid_ep29.pt` | один из учителей ансамбля |
+
+**Студент.** SigLIP 2 ViT-B/16, squash-кроп, без TTA, 512D L2-нормированный
+выход. Обучен дистилляцией от ансамбля из четырёх моделей
+(`ArcFace + Triplet + 25·(1 − cos(student, teacher))`). Превосходит учителя:
+mAP@10 0.8961 против 0.8946, при этом вчетверо легче и примерно в восемь раз
+быстрее (170 мс/кадр против ~1400). Подробности —
+`analysis/DISTILLATION_REPORT.md`.
+
+Порог отказа пересчитан под студента: 0.8025 (сбалансированный) и 0.8465
+(строгий). Обоснование — `docs/SUBMISSION_README.md`, раздел 4.2.
+
+Раздел ниже описывает прежнюю production-модель `geom_ep30`; он сохранён как
+документация одного из учителей ансамбля и как запись истории обучения.
+
+---
+
+## Прежняя production-модель: `reid_current.pt` = `siglip_vitb16_reid_geom_ep30.pt`
 
 Оба файла — одни и те же веса (LFS хранит их одним объектом):
 
