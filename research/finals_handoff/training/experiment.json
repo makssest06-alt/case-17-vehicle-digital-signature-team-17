@@ -1,0 +1,74 @@
+{
+  "experiment_id": "case17_student_subcenter_arcface_k2_a25_seed7",
+  "status": "completed_candidate_rejected",
+  "objective": "Improve a single SigLIP2 distilled student with 2 Sub-center ArcFace prototypes per train identity.",
+  "hypothesis": "Allowing two angular centers per vehicle can model camera/viewpoint modes while retaining the metric and teacher losses.",
+  "baseline": {
+    "checkpoint": "weights/siglip2_distill_ensemble_ep28.pt",
+    "metric_reference_official_raw_cosine": "mAP@10 0.857729, Rank-1 0.822142, Rank-5 0.923775",
+    "runtime_inference": "squash, 224, no TTA",
+    "weight_size_bytes": 379733973,
+    "official_validation_comparison": "raw cosine only; train/val identity-disjoint; junk = same vehicle AND same camera"
+  },
+  "fixed_settings": {
+    "backbone": "siglip2_base",
+    "initialization": "bm/improve_models/siglip2_init.pt",
+    "train_rows": "bm/improve_models/distill_train_rows.csv",
+    "teacher_embeddings": "bm/improve_models/teacher_emb.npy",
+    "train_images": "bm/dataset_extracted/images",
+    "validation_split": "bm/research/ensemble/val_split.csv",
+    "epochs": 30,
+    "evaluated_epoch": 28,
+    "teacher_cosine_alpha": 25,
+    "arcface_scale": 30,
+    "arcface_margin": 0.25,
+    "triplet_margin": 0.3,
+    "P": 8,
+    "K": 4,
+    "cross_camera_sampling": true,
+    "learning_rate_head": 0.0003,
+    "learning_rate_backbone": 0.00001,
+    "weight_decay": 0.0005,
+    "warmup_epochs": 3,
+    "context": 0.1,
+    "seed": 7,
+    "amp": true,
+    "augmentation": "GeomAug + NightAndGlare + RandomErasing",
+    "subcenters": 2,
+    "test_training": false,
+    "inference_ensemble": false
+  },
+  "input_provenance_sha256": {
+    "initialization_weights": "051f89ae615629a34d4df13d39aa696241c688b4148f3f2adb45673296c78550",
+    "teacher_embeddings": "7135b052b3eff54323b2e145568c376189f4dc7d6ef96ead82896c10b2a86680",
+    "training_rows_csv": "068d46eb1041891ef579dd3c505edaf993fe18173775f6f8a26e04ead73b2e3c",
+    "validation_split_csv": "2852844af0f9585ae3ea80f3653e9b6d203557524d1f715decf1cfb7ef9a3716",
+    "official_evaluator": "655c71db8c2e4d2cd7680c40c768afacfdffff360401111c1a46df921551ffa3",
+    "baseline_student_weights": "500f7b47d2a67d2289c74d7f0f94795f12a022507661b07caecffa0d33f3a0c9",
+    "baseline_query_embeddings": "3168f3ea6f09470d5e64682c0304de01e26378082d0194172d37175f274adc5d",
+    "baseline_gallery_embeddings": "55e7a58c9b9b14b9fb2b0a54c28e780d0e4bd8e0e03e532d58bcf89a13b1790c"
+  },
+  "result": {
+    "candidate_checkpoint_sha256": "9e130fb3431402939699d17079ff24f7128ffd4a991998bc3df178dd1d5abe96",
+    "candidate_checkpoint_bytes": 382584947,
+    "candidate_official_raw_cosine": {"mAP@10": 0.838624, "Rank-1": 0.803993, "Rank-5": 0.927405},
+    "delta_vs_baseline": {"mAP@10": -0.019105, "Rank-1": -0.018149, "Rank-5": 0.003630},
+    "training_steps": 5190,
+    "training_seconds": 2473,
+    "decision": "reject_candidate_keep_baseline"
+  },
+  "output": {
+    "checkpoint": "bm_improve/models/siglip2_distill_subcenter_k2_ep28.pt (local research only)",
+    "keep_checkpoints": [28],
+    "embedding_dim": 512,
+    "expected_student_count": 1
+  },
+  "comparison": {
+    "primary_metric": "official evaluator mAP@10 on raw cosine rankings",
+    "guardrails": ["mAP@10 >= baseline+0.005", "Rank-1 >= baseline-0.005", "Rank-5 >= baseline-0.005", "checkpoint < 2GB"],
+    "select_epoch": 28,
+    "postprocessing_tuned_on_candidate": false,
+    "if_any_guardrail_fails": "retain baseline checkpoint"
+  },
+  "risk": "A second center may fragment identity clusters or be under-supported by sparse IDs; reject the candidate if fixed validation regresses."
+}

@@ -1,0 +1,13 @@
+{
+  "status": "experimental_handoff_not_final_submission",
+  "pipeline": "gallery-top1-blend -> gallery-side CSLS",
+  "params": {
+    "blend": 0.95,
+    "csls_k": 5
+  },
+  "threshold": 0.7625,
+  "confidence": "(CSLS+4)/8 fixed; no statistics across query",
+  "weights_sha256": "500f7b47d2a67d2289c74d7f0f94795f12a022507661b07caecffa0d33f3a0c9",
+  "accepted": 1036,
+  "refused": 74
+}
