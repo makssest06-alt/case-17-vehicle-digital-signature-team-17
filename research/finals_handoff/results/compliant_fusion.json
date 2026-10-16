@@ -1,0 +1,50 @@
+[
+  {
+    "name": "student_TTA raw",
+    "mAP10": 0.8581,
+    "R1": 0.8221,
+    "R5": 0.9238
+  },
+  {
+    "name": "student_TTA +gAQE+CSLSgs5",
+    "mAP10": 0.8848,
+    "R1": 0.8621,
+    "R5": 0.9383
+  },
+  {
+    "name": "teacher4_score_fusion",
+    "mAP10": 0.8394,
+    "R1": 0.7877,
+    "R5": 0.9437
+  },
+  {
+    "name": "teacher4 postproc-fused",
+    "mAP10": 0.8652,
+    "R1": 0.8258,
+    "R5": 0.9474
+  },
+  {
+    "name": "student+teacher w=0.2",
+    "mAP10": 0.8632,
+    "R1": 0.8312,
+    "R5": 0.931
+  },
+  {
+    "name": "student+teacher w=0.3",
+    "mAP10": 0.8644,
+    "R1": 0.833,
+    "R5": 0.931
+  },
+  {
+    "name": "student+teacher w=0.4",
+    "mAP10": 0.8654,
+    "R1": 0.8348,
+    "R5": 0.9328
+  },
+  {
+    "name": "student+teacher w=0.5",
+    "mAP10": 0.8683,
+    "R1": 0.8367,
+    "R5": 0.9401
+  }
+]

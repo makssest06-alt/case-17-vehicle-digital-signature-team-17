@@ -1,0 +1,44 @@
+[
+  {
+    "name": "greedy+distill_a25_ep",
+    "mAP10": 0.8848,
+    "R1": 0.8621,
+    "R5": 0.9383
+  },
+  {
+    "name": "greedy+distill_a25_ep/distill_a12_ep",
+    "mAP10": 0.8882,
+    "R1": 0.8621,
+    "R5": 0.9401
+  },
+  {
+    "name": "greedy+distill_a25_ep/distill_a12_ep/distill_a25_ep",
+    "mAP10": 0.8899,
+    "R1": 0.8639,
+    "R5": 0.9401
+  },
+  {
+    "name": "greedy+distill_a25_ep/distill_a12_ep/distill_a25_ep/siglip2_ng_ep2",
+    "mAP10": 0.8931,
+    "R1": 0.8693,
+    "R5": 0.9419
+  },
+  {
+    "name": "embavg top2 +gAQE+CSLSgs5",
+    "mAP10": 0.8855,
+    "R1": 0.8584,
+    "R5": 0.9401
+  },
+  {
+    "name": "embavg top3 +gAQE+CSLSgs5",
+    "mAP10": 0.8881,
+    "R1": 0.8621,
+    "R5": 0.9383
+  },
+  {
+    "name": "embavg top4 +gAQE+CSLSgs5",
+    "mAP10": 0.8859,
+    "R1": 0.8584,
+    "R5": 0.9383
+  }
+]

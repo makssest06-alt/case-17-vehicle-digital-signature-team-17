@@ -1,0 +1,5 @@
+__pycache__/
+!open_test/embeddings.npy
+!open_test/submission.csv
+!open_test/candidates.csv
+!open_test/embeddings_index.csv
