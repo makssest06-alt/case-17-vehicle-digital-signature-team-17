@@ -1,0 +1,81 @@
+{
+  "compose_ref": "0924fb2",
+  "n_query": 1110,
+  "n_gallery": 750,
+  "profiles": {
+    "compose_default": {
+      "env": {
+        "EMBED_MODEL": "resnet18",
+        "EMBED_DIM": "512",
+        "INPUT_SIZE": "224",
+        "EMBED_TTA_FLIP": "1",
+        "REID_WEIGHTS": "/opt/case17/models/reid_current.pt",
+        "REID_TF_MODE": "",
+        "SEARCH_THRESHOLD": "0.75",
+        "SEARCH_THRESHOLD_STRICT": "0.8544"
+      },
+      "dim": 512,
+      "top1_min": 0.7398,
+      "top1_p10": 0.8728,
+      "top1_median": 0.9453,
+      "threshold": 0.75,
+      "accepted": 1109,
+      "refused": 1
+    },
+    "env_example": {
+      "env": {
+        "EMBED_MODEL": "reid:vit_base_patch16_siglip_224.webli",
+        "EMBED_DIM": "512",
+        "INPUT_SIZE": "224",
+        "REID_WEIGHTS": "<repo>/weights/siglip2_distill_ensemble_ep28.pt",
+        "REID_TF_MODE": "squash",
+        "EMBED_TTA_FLIP": "0",
+        "SEARCH_THRESHOLD": "0.8025",
+        "SEARCH_THRESHOLD_STRICT": "0.8465"
+      },
+      "dim": 512,
+      "top1_min": 0.4686,
+      "top1_p10": 0.8195,
+      "top1_median": 0.9663,
+      "threshold": 0.8025,
+      "accepted": 1015,
+      "refused": 95
+    }
+  },
+  "agreement": {
+    "compose_default_vs_env_example": {
+      "top1_same_pct": 80.36,
+      "top10_overlap_mean": 0.165
+    },
+    "compose_default_vs_submission": {
+      "top1_same_pct": 66.31,
+      "top10_overlap_mean": 0.153
+    },
+    "env_example_vs_artifacts_raw_cosine": {
+      "top1_same_pct": 99.82,
+      "top10_overlap_mean": 0.978
+    },
+    "env_example_vs_submission": {
+      "top1_same_pct": 79.73,
+      "top10_overlap_mean": 0.669
+    }
+  },
+  "ranking_spearman_compose_vs_student": {
+    "mean": 0.132,
+    "median": 0.135
+  },
+  "refusal_decision": {
+    "same_decision_pct": 91.53,
+    "compose_accepts_student_refuses": 94,
+    "compose_refuses_student_accepts": 0,
+    "both_accept_but_different_top1": 133
+  },
+  "parity_student_service_vs_artifacts_embeddings": {
+    "rows": 1860,
+    "cos_min": 0.986197,
+    "cos_p01": 0.996972,
+    "cos_median": 0.999864,
+    "share_ge_0_9999": 0.3844,
+    "share_ge_0_999": 0.9285
+  }
+}
