@@ -32,6 +32,14 @@ services:
     image: case17-api:local
     container_name: case17-api
     restart: unless-stopped
+    # Requires NVIDIA container runtime. Not ignored on a CPU-only host.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     depends_on:
       db:
         condition: service_healthy
