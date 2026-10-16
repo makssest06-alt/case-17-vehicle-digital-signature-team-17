@@ -97,21 +97,28 @@ async def lifespan(app: FastAPI):
             "EMBED_DIM=%d не совпадает с реальной размерностью модели %d, использую реальную",
             settings.embed_dim, model.dim,
         )
-    db.init_pool()
-    db.ensure_schema(model.dim)
-    stored = db.stored_dim()
-    if stored is not None and stored != model.dim:
-        log.error(
-            "В базе вектор размерности %d, а модель даёт %d. "
-            "Нужно пересоздать том базы (docker compose down -v) после смены модели.",
-            stored, model.dim,
-        )
-    app.state.model_loaded = True
-    log.info("сервис готов")
-    yield
-    app.state.model_loaded = False
-    del app.state.model
-    db.close_pool()
+    pool_initialized = False
+    try:
+        db.init_pool()
+        pool_initialized = True
+        db.ensure_schema(model.dim)
+        stored = db.stored_dim()
+        if stored is not None and stored != model.dim:
+            log.error(
+                "В базе вектор размерности %d, а модель даёт %d. "
+                "Нужно пересоздать том базы (docker compose down -v) после смены модели.",
+                stored, model.dim,
+            )
+        app.state.model_loaded = True
+        log.info("сервис готов")
+        yield
+    finally:
+        app.state.model_loaded = False
+        if hasattr(app.state, "model"):
+            del app.state.model
+        if pool_initialized:
+            db.close_pool()
+        log.info("сервис остановлен")
 
 
 app = FastAPI(
