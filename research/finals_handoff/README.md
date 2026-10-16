@@ -133,6 +133,15 @@ Q39 — offline inference; Q46/47 — открытые внешние источ
 
 Личные переписки, контакты, приглашения, SSH-вложения и датасет не публикуются.
 
+## Дополнительный одиночный training experiment
+
+Проверен Sub-center ArcFace с двумя центрами на класс для одного студента.
+Тесты головы, smoke-тренировка и полный run завершились. По официальному
+evaluator на raw-cosine validation mAP@10 просел на 0.0191, Rank-1 на 0.0181;
+кандидат отклонён, production baseline не меняется. Детали и command line:
+`training/RESULTS.md`, контракт: `training/experiment.json`. Checkpoint кандидата
+не включён, поскольку критерий качества не пройден.
+
 ## Проверки перед публикацией
 
 - `git apply --check gpu.patch` — PASS на чистом main d87517d; патч применён
