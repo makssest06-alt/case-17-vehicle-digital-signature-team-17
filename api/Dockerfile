@@ -12,7 +12,7 @@ WORKDIR /srv
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt \
- && python -c "import torch; assert not torch.version.cuda, 'в образ попала CUDA-сборка torch'; print('torch', torch.__version__)"
+ && python -c "import torch; assert torch.version.cuda, 'CUDA torch build required'; print('torch', torch.__version__, 'cuda', torch.version.cuda)"
 
 # Веса скачиваем на этапе сборки и запекаем в образ: в рантайме интернета нет
 # EMBED_MODEL может быть вида reid:<бэкбон> или timm:<бэкбон> — для запекания
