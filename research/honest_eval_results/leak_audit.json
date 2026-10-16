@@ -1,0 +1,178 @@
+{
+  "split_audit": {
+    "source": {
+      "images": 9556,
+      "vehicle_ids": 1541,
+      "duplicate_image_ids": 0
+    },
+    "holdout": {
+      "images": 912,
+      "vehicle_ids": 150,
+      "gallery": 361,
+      "query": 551,
+      "usable_cross_camera_query": 551,
+      "query_without_cross_camera_match": 0
+    },
+    "train": {
+      "images": 8644,
+      "vehicle_ids": 1391,
+      "vehicle_id_overlap_with_holdout": 0,
+      "source": "выведен из source CSV исключением holdout vehicle_id"
+    },
+    "failures": [],
+    "warnings": [],
+    "image_hashes": {
+      "checked": 9556,
+      "missing_files": 0,
+      "train_holdout_exact_duplicates": [],
+      "train_holdout_exact_duplicate_count": 0
+    },
+    "ok": true,
+    "val_ids_rebuilt_equals_repo": true
+  },
+  "student_training_identities": {
+    "arcface_classes": 1391,
+    "train_vehicles_total": 1541,
+    "hypothesis": "классы = sorted(vehicle_id train) без research/val_ids.txt",
+    "hypothesis_class_count_matches": true,
+    "mean_vector_hits_own_prototype_pct": 100.0,
+    "own_prototype_cos_median": 0.6062,
+    "val_vehicles_best_prototype_cos_median": 0.4043,
+    "prototypes_whose_nearest_vehicle_is_in_val": 0,
+    "args": {
+      "init_from": "D:\\bm\\improve_models\\siglip2_init.pt",
+      "teacher": "D:\\bm\\improve_models\\teacher_emb.npy",
+      "rows_csv": "D:\\bm\\improve_models\\distill_train_rows.csv",
+      "epochs": "30",
+      "seed": "7"
+    }
+  },
+  "image_id_overlap": {
+    "test_query∩test_gallery": 0,
+    "test∩train": 0,
+    "holdout_query∩holdout_gallery": 0
+  },
+  "exact_file_duplicates": {},
+  "perceptual_hash_pairs": {
+    "phash": {
+      "hamming<=0": {
+        "train1391: та же машина, та же камера": 264,
+        "holdout: та же машина, та же камера": 31,
+        "test: test_query": 12,
+        "test: test_gallery↔test_query": 40
+      },
+      "hamming<=4": {
+        "train1391: та же машина, та же камера": 1559,
+        "holdout: та же машина, та же камера": 187,
+        "train1391: разные машины": 5,
+        "train↔test": 2,
+        "test: test_gallery↔test_query": 262,
+        "test: test_query": 106
+      },
+      "hamming<=8": {
+        "train1391: та же машина, та же камера": 2890,
+        "holdout: та же машина, та же камера": 324,
+        "holdout: разные машины": 3,
+        "train1391: разные машины": 416,
+        "train↔test": 195,
+        "holdout↔train1391": 66,
+        "holdout: та же машина, другая камера": 1,
+        "train1391: та же машина, другая камера": 2,
+        "test: test_gallery↔test_query": 473,
+        "test: test_query": 198,
+        "test: test_gallery": 1
+      }
+    },
+    "dhash": {
+      "hamming<=0": {
+        "train1391: та же машина, та же камера": 161,
+        "holdout: та же машина, та же камера": 13,
+        "train1391: разные машины": 1,
+        "test: test_gallery↔test_query": 30,
+        "test: test_query": 15
+      },
+      "hamming<=4": {
+        "train1391: та же машина, та же камера": 1692,
+        "holdout: та же машина, та же камера": 179,
+        "train1391: разные машины": 7,
+        "test: test_gallery↔test_query": 270,
+        "test: test_query": 117
+      },
+      "hamming<=8": {
+        "train1391: та же машина, та же камера": 3299,
+        "train1391: разные машины": 195,
+        "train↔test": 78,
+        "holdout: та же машина, та же камера": 368,
+        "holdout↔train1391": 45,
+        "holdout: разные машины": 3,
+        "test: test_gallery↔test_query": 499,
+        "test: test_query": 218,
+        "test: test_gallery": 1
+      }
+    },
+    "both_hashes_le_4": {
+      "train1391: та же машина, та же камера": 1123,
+      "holdout: та же машина, та же камера": 132,
+      "train1391: разные машины": 1,
+      "test: test_gallery↔test_query": 189,
+      "test: test_query": 79
+    }
+  },
+  "near_duplicates_same_vehicle": {
+    "vehicle_camera_groups": 3884,
+    "groups_by_frames": {
+      "1": 551,
+      "2": 994,
+      "3": 2339
+    },
+    "student_cos_same_vehicle_same_camera": {
+      "holdout": {
+        "n": 783,
+        "p10": 0.8225,
+        "median": 0.967,
+        "p90": 0.9929
+      },
+      "train1391": {
+        "n": 7228,
+        "p10": 0.888,
+        "median": 0.9769,
+        "p90": 0.9946
+      }
+    },
+    "student_cos_same_vehicle_other_camera": {
+      "holdout": {
+        "n": 1635,
+        "p10": 0.5141,
+        "median": 0.7315,
+        "p90": 0.8665
+      },
+      "train1391": {
+        "n": 16244,
+        "p10": 0.69,
+        "median": 0.8467,
+        "p90": 0.9319
+      }
+    },
+    "student_cos_different_vehicles": {
+      "holdout": {
+        "n": 352,
+        "p10": -0.1825,
+        "median": -0.0178,
+        "p90": 0.1629
+      },
+      "train1391": {
+        "n": 32635,
+        "p10": -0.1581,
+        "median": -0.0023,
+        "p90": 0.1813
+      }
+    },
+    "dhash_hamming_same_vehicle_same_camera_median": 9.0,
+    "same_camera_pairs_cos>=0.95": 5768,
+    "same_camera_pairs": 8011,
+    "holdout_query": 551,
+    "holdout_query_with_same_camera_frame_in_gallery": 551,
+    "holdout_query_same_camera_gallery_cos>=0.95": 333,
+    "holdout_query_same_camera_gallery_cos_median": 0.967
+  }
+}
