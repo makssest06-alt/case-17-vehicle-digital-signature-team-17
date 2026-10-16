@@ -78,7 +78,7 @@ def env_example(path: Path = ROOT / ".env.example") -> dict:
     return out
 
 
-def profile_env(name: str, compose_ref: str = "") -> dict:
+def profile_env(name: str, compose_ref: str = "", overrides: dict | None = None) -> dict:
     """Окружение сервиса для профиля, с путём /models/* переведённым на хост.
 
     В контейнере веса лежат в /models, а это том ${MODELS_HOST_DIR}. Для
@@ -91,6 +91,9 @@ def profile_env(name: str, compose_ref: str = "") -> dict:
         env = env_example()
     else:
         raise ValueError(f"неизвестный профиль {name!r}, есть: {PROFILES}")
+    # Новая модель меряется тем же путём: профиль env_example плюс, например,
+    # REID_WEIGHTS=/путь/к/весам.pt. Переопределения входят в ключ кэша.
+    env.update(overrides or {})
     host = Path(env.pop("MODELS_HOST_DIR", "/opt/case17/models"))
     if not host.is_absolute():
         host = (ROOT / host).resolve()
@@ -116,17 +119,31 @@ def weights_sha(env: dict) -> str:
     return _sha256(p) if p.exists() else "missing"
 
 
-def cache_path(profile: str, env: dict, ids: list, images_dir: Path, cache_dir: Path) -> Path:
-    key = json.dumps({"profile": profile, "env": env, "weights_sha": weights_sha(env),
-                      "images_dir": str(images_dir), "ids": ids}, sort_keys=True)
+def cache_path(profile: str, env: dict, ids: list, images_dir: Path, cache_dir: Path,
+               frames: str = "") -> Path:
+    spec = {"profile": profile, "env": env, "weights_sha": weights_sha(env),
+            "images_dir": str(images_dir), "ids": ids}
+    if frames:                       # без поля ключ кропов совпадает со старыми кэшами
+        spec["frames"] = frames
+    key = json.dumps(spec, sort_keys=True)
     return cache_dir / f"{profile}-{hashlib.sha256(key.encode()).hexdigest()[:16]}.npz"
 
 
 def embed(profile: str, images_dir: Path, ids: list, cache_dir: Path = DEFAULT_CACHE,
-          batch: int = 16, threads: int = 0, compose_ref: str = "") -> np.ndarray:
-    """Векторы (len(ids), dim) float32, L2-нормированы — как отдаёт сервис."""
-    env = profile_env(profile, compose_ref)
-    out = cache_path(profile, env, ids, images_dir, cache_dir)
+          batch: int = 16, threads: int = 0, compose_ref: str = "",
+          overrides: dict | None = None, frames_zip: Path | None = None,
+          boxes: dict | None = None) -> np.ndarray:
+    """Векторы (len(ids), dim) float32, L2-нормированы — как отдаёт сервис.
+
+    Источник кадра — готовые кропы images_dir/<id>.jpg (так читает
+    make_submission.py) или, при frames_zip, полный кадр из dataset.zip,
+    обрезанный функциями сервиса app.imaging.load_image → validate_bbox →
+    crop_with_pad (так отвечает /v1/embed). boxes: {image_id: (x, y, w, h)}.
+    Кадры, чей bbox сервис отверг, получают нулевой вектор и печатаются.
+    """
+    env = profile_env(profile, compose_ref, overrides)
+    frames = f"zip:{frames_zip}" if frames_zip else ""
+    out = cache_path(profile, env, ids, images_dir, cache_dir, frames)
     if out.exists():
         z = np.load(out, allow_pickle=False)
         if list(z["ids"]) == list(ids):
@@ -142,10 +159,18 @@ def embed(profile: str, images_dir: Path, ids: list, cache_dir: Path = DEFAULT_C
     cmd = [sys.executable, str(Path(__file__).resolve()), "--worker", "--profile", profile,
            "--images-dir", str(images_dir), "--ids-file", ids_file, "--out", str(out),
            "--batch", str(batch)]
+    boxes_file = None
+    if frames_zip:
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump({i: list(boxes[i]) for i in ids}, f)
+            boxes_file = f.name
+        cmd += ["--frames-zip", str(frames_zip), "--boxes-file", boxes_file]
     try:
         subprocess.run(cmd, env=child, check=True)
     finally:
         os.unlink(ids_file)
+        if boxes_file:
+            os.unlink(boxes_file)
     return np.load(out, allow_pickle=False)["emb"]
 
 
@@ -161,11 +186,35 @@ def _worker(a) -> int:
     model = build_model(settings.embed_model, settings.input_size)
     model.load()
     emb = np.zeros((len(ids), model.dim), dtype="float32")
+    rejected = []
+    if a.frames_zip:
+        import zipfile
+
+        from app.imaging import ImageError, crop_with_pad, load_image, validate_bbox  # noqa: E402
+
+        zf = zipfile.ZipFile(a.frames_zip)
+        boxes = json.loads(Path(a.boxes_file).read_text())
+
+        def load(i):
+            """Ровно путь /v1/embed: байты кадра -> load_image -> validate_bbox -> crop_with_pad."""
+            img = load_image(zf.read(f"images/{i}.jpg"), settings.max_upload_bytes)
+            x, y, w, h = (int(float(v)) for v in boxes[i])
+            try:
+                validate_bbox(img, x, y, w, h)
+            except ImageError as exc:
+                rejected.append((i, str(exc)))
+                return None
+            return crop_with_pad(img, x, y, w, h, settings.bbox_pad)
+    else:
+        def load(i):
+            return Image.open(Path(a.images_dir) / f"{i}.jpg").convert("RGB")
     t0 = time.perf_counter()
     for s in range(0, len(ids), a.batch):
         chunk = ids[s:s + a.batch]
-        imgs = [Image.open(Path(a.images_dir) / f"{i}.jpg").convert("RGB") for i in chunk]
-        emb[s:s + len(chunk)] = model.embed_batch(imgs)
+        imgs = [load(i) for i in chunk]
+        keep = [k for k, im in enumerate(imgs) if im is not None]
+        if keep:
+            emb[[s + k for k in keep]] = model.embed_batch([imgs[k] for k in keep])
         done = s + len(chunk)
         if done % (a.batch * 20) == 0 or done == len(ids):
             print(f"  [{a.profile}] {done}/{len(ids)}  "
@@ -173,7 +222,12 @@ def _worker(a) -> int:
     meta = {"profile": a.profile, "model": model.name, "dim": int(model.dim),
             "tta_flip": bool(settings.tta_flip), "tf_mode": getattr(model, "tf_mode", None),
             "env": {k: os.environ.get(k, "") for k in MODEL_KEYS},
+            "source": f"zip:{a.frames_zip}" if a.frames_zip else str(a.images_dir),
+            "rejected_bbox": rejected,
             "seconds": round(time.perf_counter() - t0, 1)}
+    if rejected:
+        print(f"  [{a.profile}] сервис отверг bbox у {len(rejected)} кадров, "
+              f"например {rejected[0]}", flush=True)
     np.savez(a.out, emb=emb, ids=np.array(ids), meta=json.dumps(meta, ensure_ascii=False))
     print(f"  [{a.profile}] -> {a.out}", flush=True)
     return 0
@@ -191,6 +245,8 @@ def main() -> int:
     ap.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--ids-file", help=argparse.SUPPRESS)
     ap.add_argument("--out", help=argparse.SUPPRESS)
+    ap.add_argument("--frames-zip", help=argparse.SUPPRESS)
+    ap.add_argument("--boxes-file", help=argparse.SUPPRESS)
     a = ap.parse_args()
     if a.worker:
         return _worker(a)

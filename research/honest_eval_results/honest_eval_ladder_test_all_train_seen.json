@@ -1,0 +1,545 @@
+{
+  "tag": "ladder_test_all_train_seen",
+  "env": {
+    "EMBED_MODEL": "reid:vit_base_patch16_siglip_224.webli",
+    "EMBED_DIM": "512",
+    "INPUT_SIZE": "224",
+    "REID_WEIGHTS": "<repo>/weights/siglip2_distill_ensemble_ep28.pt",
+    "REID_TF_MODE": "squash",
+    "EMBED_TTA_FLIP": "0",
+    "SEARCH_THRESHOLD": "0.8025",
+    "SEARCH_THRESHOLD_STRICT": "0.8465"
+  },
+  "threshold": 0.8025,
+  "params": {
+    "qq_k": 3,
+    "qq_alpha": 3.0,
+    "csls_k": 5,
+    "rerank_k1": 10,
+    "rerank_k2": 6,
+    "rerank_lambda": 0.7
+  },
+  "holdout_vehicles": 150,
+  "gallery_frames": 361,
+  "query_frames": 546,
+  "excluded_frames": 5,
+  "extra_distractors": 10504,
+  "folds": 5,
+  "openset_frac": 0.25,
+  "seed": 42,
+  "old_protocol": {
+    "raw": {
+      "mAP@10": 0.8565826203439634,
+      "Rank-1": 0.8203266787658802,
+      "Rank-5": 0.925589836660617,
+      "n_scored": 551,
+      "n_openset": 0,
+      "mAP_full": 0.860581182274425,
+      "mINP": 0.8493141709030579,
+      "F1": 0.9633113828786453,
+      "Precision": 0.9980506822612085,
+      "Recall": 0.9309090909090909,
+      "TNR": NaN,
+      "PR-AUC": 1.0,
+      "PR-AUC_all": 1.0,
+      "TP": 512,
+      "FP": 1,
+      "FN": 38,
+      "TN": 0
+    }
+  },
+  "summary": {
+    "small/raw/official": {
+      "n_query": {
+        "mean": 109.2,
+        "std": 4.7074
+      },
+      "n_gallery": {
+        "mean": 54.2,
+        "std": 3.1241
+      },
+      "openset_vehicles": {
+        "mean": 8.0,
+        "std": 0.0
+      },
+      "mAP@10": {
+        "mean": 0.9581,
+        "std": 0.0257
+      },
+      "Rank-1": {
+        "mean": 0.9432,
+        "std": 0.0395
+      },
+      "Rank-5": {
+        "mean": 0.9923,
+        "std": 0.0103
+      },
+      "n_scored": {
+        "mean": 80.0,
+        "std": 2.6077
+      },
+      "n_openset": {
+        "mean": 29.2,
+        "std": 2.7857
+      },
+      "mAP_full": {
+        "mean": 0.9583,
+        "std": 0.0259
+      },
+      "mINP": {
+        "mean": 0.9527,
+        "std": 0.0226
+      },
+      "F1": {
+        "mean": 0.9632,
+        "std": 0.0205
+      },
+      "Precision": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "Recall": {
+        "mean": 0.9297,
+        "std": 0.038
+      },
+      "TNR": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "PR-AUC": {
+        "mean": 0.9901,
+        "std": 0.0041
+      },
+      "PR-AUC_all": {
+        "mean": 0.9989,
+        "std": 0.0014
+      },
+      "TP": {
+        "mean": 74.4,
+        "std": 4.3174
+      },
+      "FP": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "FN": {
+        "mean": 5.6,
+        "std": 3.0067
+      },
+      "TN": {
+        "mean": 29.2,
+        "std": 2.7857
+      }
+    },
+    "small/raw/wholecam": {
+      "n_query": {
+        "mean": 109.2,
+        "std": 4.7074
+      },
+      "n_gallery": {
+        "mean": 54.2,
+        "std": 3.1241
+      },
+      "openset_vehicles": {
+        "mean": 8.0,
+        "std": 0.0
+      },
+      "mAP@10": {
+        "mean": 0.9632,
+        "std": 0.0258
+      },
+      "Rank-1": {
+        "mean": 0.9482,
+        "std": 0.0445
+      },
+      "Rank-5": {
+        "mean": 0.9923,
+        "std": 0.0103
+      },
+      "n_scored": {
+        "mean": 80.0,
+        "std": 2.6077
+      },
+      "n_openset": {
+        "mean": 29.2,
+        "std": 2.7857
+      },
+      "mAP_full": {
+        "mean": 0.9634,
+        "std": 0.026
+      },
+      "mINP": {
+        "mean": 0.9578,
+        "std": 0.0233
+      },
+      "F1": {
+        "mean": 0.4838,
+        "std": 0.075
+      },
+      "Precision": {
+        "mean": 0.98,
+        "std": 0.04
+      },
+      "Recall": {
+        "mean": 0.3236,
+        "std": 0.0639
+      },
+      "TNR": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "PR-AUC": {
+        "mean": 0.8679,
+        "std": 0.0073
+      },
+      "PR-AUC_all": {
+        "mean": 0.9846,
+        "std": 0.0121
+      },
+      "TP": {
+        "mean": 25.8,
+        "std": 5.2688
+      },
+      "FP": {
+        "mean": 0.4,
+        "std": 0.8
+      },
+      "FN": {
+        "mean": 53.8,
+        "std": 4.9153
+      },
+      "TN": {
+        "mean": 29.2,
+        "std": 2.7857
+      }
+    },
+    "small/raw/nodup": {
+      "n_query": {
+        "mean": 109.2,
+        "std": 4.7074
+      },
+      "n_gallery": {
+        "mean": 54.2,
+        "std": 3.1241
+      },
+      "openset_vehicles": {
+        "mean": 8.0,
+        "std": 0.0
+      },
+      "mAP@10": {
+        "mean": 0.9581,
+        "std": 0.0257
+      },
+      "Rank-1": {
+        "mean": 0.9432,
+        "std": 0.0395
+      },
+      "Rank-5": {
+        "mean": 0.9923,
+        "std": 0.0103
+      },
+      "n_scored": {
+        "mean": 80.0,
+        "std": 2.6077
+      },
+      "n_openset": {
+        "mean": 29.2,
+        "std": 2.7857
+      },
+      "mAP_full": {
+        "mean": 0.9583,
+        "std": 0.0259
+      },
+      "mINP": {
+        "mean": 0.9527,
+        "std": 0.0226
+      },
+      "F1": {
+        "mean": 0.4838,
+        "std": 0.075
+      },
+      "Precision": {
+        "mean": 0.98,
+        "std": 0.04
+      },
+      "Recall": {
+        "mean": 0.3236,
+        "std": 0.0639
+      },
+      "TNR": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "PR-AUC": {
+        "mean": 0.8679,
+        "std": 0.0073
+      },
+      "PR-AUC_all": {
+        "mean": 0.9848,
+        "std": 0.0118
+      },
+      "TP": {
+        "mean": 25.8,
+        "std": 5.2688
+      },
+      "FP": {
+        "mean": 0.4,
+        "std": 0.8
+      },
+      "FN": {
+        "mean": 53.8,
+        "std": 4.9153
+      },
+      "TN": {
+        "mean": 29.2,
+        "std": 2.7857
+      }
+    },
+    "big/raw/official": {
+      "n_query": {
+        "mean": 109.2,
+        "std": 4.7074
+      },
+      "n_gallery": {
+        "mean": 10847.0,
+        "std": 1.0954
+      },
+      "openset_vehicles": {
+        "mean": 8.0,
+        "std": 0.0
+      },
+      "mAP@10": {
+        "mean": 0.5589,
+        "std": 0.0894
+      },
+      "Rank-1": {
+        "mean": 0.5346,
+        "std": 0.0969
+      },
+      "Rank-5": {
+        "mean": 0.7128,
+        "std": 0.0921
+      },
+      "n_scored": {
+        "mean": 80.0,
+        "std": 2.6077
+      },
+      "n_openset": {
+        "mean": 29.2,
+        "std": 2.7857
+      },
+      "mAP_full": {
+        "mean": 0.5711,
+        "std": 0.0892
+      },
+      "mINP": {
+        "mean": 0.5377,
+        "std": 0.0916
+      },
+      "F1": {
+        "mean": 0.8889,
+        "std": 0.0403
+      },
+      "Precision": {
+        "mean": 0.8492,
+        "std": 0.0514
+      },
+      "Recall": {
+        "mean": 0.9339,
+        "std": 0.0385
+      },
+      "TNR": {
+        "mean": 0.5769,
+        "std": 0.1639
+      },
+      "PR-AUC": {
+        "mean": 0.9696,
+        "std": 0.009
+      },
+      "PR-AUC_all": {
+        "mean": 0.9699,
+        "std": 0.009
+      },
+      "TP": {
+        "mean": 73.8,
+        "std": 4.1665
+      },
+      "FP": {
+        "mean": 13.2,
+        "std": 4.8332
+      },
+      "FN": {
+        "mean": 5.2,
+        "std": 3.0594
+      },
+      "TN": {
+        "mean": 17.0,
+        "std": 5.5498
+      }
+    },
+    "big/raw/wholecam": {
+      "n_query": {
+        "mean": 109.2,
+        "std": 4.7074
+      },
+      "n_gallery": {
+        "mean": 10847.0,
+        "std": 1.0954
+      },
+      "openset_vehicles": {
+        "mean": 8.0,
+        "std": 0.0
+      },
+      "mAP@10": {
+        "mean": 0.5755,
+        "std": 0.0816
+      },
+      "Rank-1": {
+        "mean": 0.5492,
+        "std": 0.0798
+      },
+      "Rank-5": {
+        "mean": 0.7251,
+        "std": 0.0867
+      },
+      "n_scored": {
+        "mean": 80.0,
+        "std": 2.6077
+      },
+      "n_openset": {
+        "mean": 29.2,
+        "std": 2.7857
+      },
+      "mAP_full": {
+        "mean": 0.5858,
+        "std": 0.0805
+      },
+      "mINP": {
+        "mean": 0.5505,
+        "std": 0.0854
+      },
+      "F1": {
+        "mean": 0.3919,
+        "std": 0.0588
+      },
+      "Precision": {
+        "mean": 0.4721,
+        "std": 0.0266
+      },
+      "Recall": {
+        "mean": 0.3442,
+        "std": 0.096
+      },
+      "TNR": {
+        "mean": 0.6231,
+        "std": 0.1581
+      },
+      "PR-AUC": {
+        "mean": 0.7434,
+        "std": 0.0255
+      },
+      "PR-AUC_all": {
+        "mean": 0.7608,
+        "std": 0.0244
+      },
+      "TP": {
+        "mean": 22.4,
+        "std": 5.0438
+      },
+      "FP": {
+        "mean": 25.0,
+        "std": 5.3292
+      },
+      "FN": {
+        "mean": 43.4,
+        "std": 7.7614
+      },
+      "TN": {
+        "mean": 18.4,
+        "std": 5.4626
+      }
+    },
+    "big/raw/nodup": {
+      "n_query": {
+        "mean": 109.2,
+        "std": 4.7074
+      },
+      "n_gallery": {
+        "mean": 10847.0,
+        "std": 1.0954
+      },
+      "openset_vehicles": {
+        "mean": 8.0,
+        "std": 0.0
+      },
+      "mAP@10": {
+        "mean": 0.5605,
+        "std": 0.0896
+      },
+      "Rank-1": {
+        "mean": 0.5346,
+        "std": 0.0969
+      },
+      "Rank-5": {
+        "mean": 0.7128,
+        "std": 0.0921
+      },
+      "n_scored": {
+        "mean": 80.0,
+        "std": 2.6077
+      },
+      "n_openset": {
+        "mean": 29.2,
+        "std": 2.7857
+      },
+      "mAP_full": {
+        "mean": 0.5711,
+        "std": 0.0892
+      },
+      "mINP": {
+        "mean": 0.5377,
+        "std": 0.0916
+      },
+      "F1": {
+        "mean": 0.3874,
+        "std": 0.0609
+      },
+      "Precision": {
+        "mean": 0.4418,
+        "std": 0.0279
+      },
+      "Recall": {
+        "mean": 0.3515,
+        "std": 0.0928
+      },
+      "TNR": {
+        "mean": 0.5769,
+        "std": 0.1639
+      },
+      "PR-AUC": {
+        "mean": 0.7395,
+        "std": 0.0247
+      },
+      "PR-AUC_all": {
+        "mean": 0.753,
+        "std": 0.026
+      },
+      "TP": {
+        "mean": 22.4,
+        "std": 5.0438
+      },
+      "FP": {
+        "mean": 28.0,
+        "std": 4.2895
+      },
+      "FN": {
+        "mean": 41.8,
+        "std": 6.9109
+      },
+      "TN": {
+        "mean": 17.0,
+        "std": 5.5498
+      }
+    }
+  }
+}
