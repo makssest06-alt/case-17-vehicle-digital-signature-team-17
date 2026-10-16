@@ -89,7 +89,7 @@ async def lifespan(app: FastAPI):
     model = build_model(settings.embed_model, settings.input_size)
     model.load()
     app.state.model = model
-    app.state.model_loaded = True
+    app.state.model_loaded = False
     log.info("модель загружена за %.1f с, размерность %d", time.time() - t0, model.dim)
 
     if model.dim != settings.embed_dim:
@@ -106,6 +106,7 @@ async def lifespan(app: FastAPI):
             "Нужно пересоздать том базы (docker compose down -v) после смены модели.",
             stored, model.dim,
         )
+    app.state.model_loaded = True
     log.info("сервис готов")
     yield
     app.state.model_loaded = False
@@ -177,7 +178,12 @@ def _prepare(raw: bytes, x: int, y: int, w: int, h: int) -> Image.Image:
 @app.get("/health", response_model=HealthResponse, tags=["служебные"])
 def health() -> HealthResponse:
     """Живой ли процесс. Не трогает базу."""
-    return HealthResponse(status="ok", model=_model().name, dim=_model().dim)
+    model = getattr(app.state, "model", None)
+    return HealthResponse(
+        status="ok",
+        model=model.name if model is not None else settings.embed_model,
+        dim=model.dim if model is not None else settings.embed_dim,
+    )
 
 
 @app.get("/ready", response_model=ReadyResponse, tags=["служебные"])
