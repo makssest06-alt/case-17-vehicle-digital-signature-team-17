@@ -1,0 +1,21 @@
+{
+  "model": "reid:vit_base_patch16_siglip_224.webli",
+  "device": "cpu",
+  "dim": 512,
+  "weights_mb": 359.3,
+  "load_s": 1.7,
+  "latency_batch1_ms": {
+    "p50": 674.73,
+    "p95": 759.34,
+    "p99": 1153.54,
+    "mean": 695.29,
+    "min": 666.31,
+    "n": 30
+  },
+  "throughput_fps": {
+    "1": 1.41,
+    "8": 1.58,
+    "16": 1.6
+  },
+  "peak_rss_mb": 799.8
+}
