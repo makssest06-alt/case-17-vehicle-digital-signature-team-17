@@ -33,10 +33,59 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger("case17")
 
 
+def _validate_runtime_config() -> None:
+    """Проверить опасные настройки до загрузки тяжёлой модели."""
+    errors = []
+    if settings.input_size < 32:
+        errors.append(f"INPUT_SIZE должен быть не меньше 32, получено {settings.input_size}")
+    if settings.embed_dim < 1:
+        errors.append(f"EMBED_DIM должен быть положительным, получено {settings.embed_dim}")
+    if settings.batch_size < 1:
+        errors.append(f"BATCH_SIZE должен быть положительным, получено {settings.batch_size}")
+    if not 1 <= settings.search_top_n <= 100:
+        errors.append(f"SEARCH_TOP_N должен быть от 1 до 100, получено {settings.search_top_n}")
+    for name, value in (
+        ("SEARCH_THRESHOLD", settings.search_threshold),
+        ("SEARCH_THRESHOLD_STRICT", settings.search_threshold_strict),
+    ):
+        if not 0.0 <= value <= 1.0:
+            errors.append(f"{name} должен быть от 0 до 1, получено {value}")
+    if settings.search_threshold_strict < settings.search_threshold:
+        errors.append(
+            "SEARCH_THRESHOLD_STRICT должен быть не меньше SEARCH_THRESHOLD"
+        )
+
+    if settings.embed_model.startswith("reid:"):
+        weights = Path(os.getenv("REID_WEIGHTS", "/models/reid_current.pt"))
+        if not weights.is_file():
+            errors.append(f"файл REID_WEIGHTS не найден: {weights}")
+        else:
+            with weights.open("rb") as fh:
+                prefix = fh.read(128)
+            if prefix.startswith(b"version https://git-lfs.github.com/spec/v1"):
+                errors.append(
+                    f"REID_WEIGHTS — это Git LFS pointer, а не веса: {weights}; "
+                    "нужно скачать LFS-объект перед запуском"
+                )
+
+    if errors:
+        raise RuntimeError("ошибка конфигурации: " + "; ".join(errors))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _validate_runtime_config()
     t0 = time.time()
     log.info("загружаю модель %s ...", settings.embed_model)
+    log.info(
+        "конфигурация: input=%d dim=%d batch=%d tta_flip=%s threshold=%.4f strict=%.4f",
+        settings.input_size,
+        settings.embed_dim,
+        settings.batch_size,
+        settings.tta_flip,
+        settings.search_threshold,
+        settings.search_threshold_strict,
+    )
     model = build_model(settings.embed_model, settings.input_size)
     model.load()
     app.state.model = model
