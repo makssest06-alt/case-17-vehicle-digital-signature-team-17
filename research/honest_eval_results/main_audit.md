@@ -122,3 +122,60 @@ README (`README.md:163`, `docs/SUBMISSION_README.md:192`) называет ге�
 
 Проверка:
 `git show origin/main:docker-compose.yml | grep -n -E 'EMBED_MODEL|EMBED_TTA_FLIP|SEARCH_THRESHOLD|REID_WEIGHTS|REID_TF_MODE|MODELS_HOST_DIR'`.
+
+## 6. Замер: compose без `.env` против студента на сдаточном тесте
+
+Весь сдаточный тест (1110 query × 750 gallery), CPU, кропы
+`crops/{query,gallery}` — те же, из которых собираются артефакты. Обе модели
+построены кодом сервиса (`api/app/models/registry.build_model`), окружение
+профиля прочитано из `docker-compose.yml` и `.env.example`
+(`research/service_embeddings.py`). Сырой косинус, как в `/v1/search`.
+
+| | compose без `.env` | студент (`.env.example`) |
+|---|---:|---:|
+| Модель | `timm:resnet18` (ImageNet, без ReID-обучения) | `reid:` SigLIP 2 + голова, squash |
+| TTA-отражение | нет: `EMBED_TTA_FLIP=1`, но `TimmEmbeddingModel` его не применяет | нет (`EMBED_TTA_FLIP=0`) |
+| top-1 косинус: min / p10 / медиана | 0.740 / 0.873 / 0.945 | 0.469 / 0.820 / 0.966 |
+| Порог / принято / отказов | 0.75 / **1109** / **1** | 0.8025 / 1015 / 95 |
+
+Расхождение ответов:
+
+| Пара | top-1 совпадает | пересечение top-10 |
+|---|---:|---:|
+| compose без `.env` ↔ студент | 80.36 % | 0.165 |
+| compose без `.env` ↔ `submission.csv` | 66.31 % | 0.153 |
+| студент (сервис) ↔ `embeddings.npy` (сырой косинус) | 99.82 % | 0.978 |
+| студент (сервис) ↔ `submission.csv` | 79.73 % | 0.669 |
+
+- Корреляция Спирмена строк сходства compose ↔ студент: среднее 0.132.
+- Решение «принять / отказать» совпадает у 91.53 % запросов; все 94
+  расхождения — compose принимает, студент отказывает. Ещё у 133 запросов
+  оба принимают, но с разным top-1.
+- Векторы двух профилей напрямую не сравнимы (разные пространства); вектор
+  студента из сервиса против `artifacts/embeddings.npy` на тех же кадрах:
+  косинус min 0.986197, p01 0.996972, медиана 0.999864; ≥ 0.9999 у 38.4 %
+  строк, ≥ 0.999 у 92.9 %. Разбор — шаг 5 (паритет).
+
+Вывод из чисел, без оценки: высокое совпадение top-1 при пересечении top-10
+0.165 означает, что top-1 на сдаточном тесте определяют почти-дубли (соседний
+кадр той же машины с той же камеры, их находит и ImageNet-resnet18), а
+дальше ранжирования расходятся. Профиль compose без `.env` на этом тесте
+отказывает 1 раз из 1110, то есть TNR на запросах без пары был бы около нуля.
+
+Проверка (≈3 мин на CPU, векторы кэшируются вне репозитория):
+
+```bash
+python research/compare_service_profiles.py --data-dir <папка с test_*.csv и crops/> \
+  --compose-ref 0924fb2 --json research/honest_eval_results/service_profiles_test.json
+```
+
+`--compose-ref 0924fb2` берёт `docker-compose.yml` из main на момент аудита: в
+`origin/glebmain` `6837340` (16.10, 23:28) умолчания compose уже переведены на
+студента (`EMBED_MODEL=reid:…`, `EMBED_TTA_FLIP=0`, `SEARCH_THRESHOLD=0.8025`,
+`REID_WEIGHTS=/models/siglip2_distill_ensemble_ep28.pt`, `REID_TF_MODE=squash`,
+`MODELS_HOST_DIR=./weights`), и без этого флага на свежей ветке оба профиля
+совпадут.
+
+```bash
+git show origin/glebmain:docker-compose.yml | grep -n -E 'EMBED_MODEL|EMBED_TTA_FLIP|SEARCH_THRESHOLD|REID_WEIGHTS|REID_TF_MODE'
+```
