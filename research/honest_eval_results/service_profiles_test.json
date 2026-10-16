@@ -27,7 +27,7 @@
         "EMBED_MODEL": "reid:vit_base_patch16_siglip_224.webli",
         "EMBED_DIM": "512",
         "INPUT_SIZE": "224",
-        "REID_WEIGHTS": "/Users/ilya/lct-case17/case-17-vehicle-digital-signature-team-17/weights/siglip2_distill_ensemble_ep28.pt",
+        "REID_WEIGHTS": "<repo>/weights/siglip2_distill_ensemble_ep28.pt",
         "REID_TF_MODE": "squash",
         "EMBED_TTA_FLIP": "0",
         "SEARCH_THRESHOLD": "0.8025",

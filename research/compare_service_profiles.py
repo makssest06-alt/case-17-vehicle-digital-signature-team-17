@@ -117,7 +117,8 @@ def main() -> int:
     out = {
         "compose_ref": a.compose_ref or "working tree",
         "n_query": len(q_ids), "n_gallery": len(g_ids),
-        "profiles": {n: {"env": {k: v for k, v in p["env"].items()},
+        # путь к репозиторию в отчёт не пишем: он у каждого свой
+        "profiles": {n: {"env": {k: v.replace(str(ROOT), "<repo>") for k, v in p["env"].items()},
                          "dim": int(p["q"].shape[1]),
                          **top1_stats(p["sim"], float(p["env"].get("SEARCH_THRESHOLD", "nan")))}
                      for n, p in prof.items()},
