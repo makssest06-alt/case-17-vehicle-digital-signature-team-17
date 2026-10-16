@@ -1,0 +1,31 @@
+{
+  "submission": {
+    "queries": 1110,
+    "top10_identical_to_reid_postprocess_rank": 1110,
+    "top1_differs_from_raw_cosine_pct": 20.45,
+    "postprocess_json_top1_mismatch_pct": 20.45
+  },
+  "candidates": {
+    "rows": 999,
+    "queries_with_candidates": 999,
+    "max_candidates_per_query": 1,
+    "confidence_min": 0.09471,
+    "confidence_max": 0.505664,
+    "confidence_decimals": [
+      3,
+      4,
+      5,
+      6
+    ],
+    "gallery_id_equals_postprocess_top1": 999,
+    "max_abs_confidence_minus_postprocess_top1": 5.012290743566794e-07,
+    "quantile_0_10_of_postprocess_top1_on_test": 0.094672,
+    "postprocess_json_threshold": 0.094672,
+    "refused_at_that_quantile": 111
+  },
+  "make_submission_default": {
+    "threshold_raw_cosine": 0.8025,
+    "accepted_queries": 1017,
+    "refused_queries": 93
+  }
+}
