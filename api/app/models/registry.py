@@ -6,16 +6,23 @@ from .timm_backbone import TimmEmbeddingModel
 
 
 def build_model(name: str, input_size: int = 224) -> EmbeddingModel:
-    """Поддерживает три формы:
+    """Поддерживает формы:
 
       resnet18                -> бэкбон timm как есть (заглушка)
       timm:resnet18           -> то же самое, явно
       reid:<timm-имя>         -> обученная ReID-модель, веса из REID_WEIGHTS
+      onnx:<путь.onnx>        -> ONNX Runtime с автовыбором провайдера
 
-    Третья форма и есть путь для модели, дообученной на GPU: ставится
-    переменными окружения, без единой правки кода сервиса.
+    Форма reid: — путь для модели, дообученной на GPU: ставится переменными
+    окружения, без единой правки кода сервиса. Форма onnx: — быстрый путь
+    инференса (см. scripts/export_onnx.py), включается тоже через EMBED_MODEL.
     """
     key = name.strip()
+
+    if key.startswith("onnx:"):
+        from .onnx_model import OnnxEmbeddingModel
+
+        return OnnxEmbeddingModel(key.split(":", 1)[1], input_size)
 
     if key.startswith("reid:"):
         from .reid_checkpoint import ReidCheckpointModel
