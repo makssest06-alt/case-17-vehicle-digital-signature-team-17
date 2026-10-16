@@ -284,7 +284,18 @@ def main() -> int:
                          "Пусто = pretrained-веса timm из интернета")
     ap.add_argument("--init-full", action="store_true",
                     help="вместе с энкодером загрузить и голову (дообучение)")
+    ap.add_argument("--save-epochs", default="all",
+                    help="comma-separated epochs to save, or all")
     a = ap.parse_args()
+    if a.save_epochs == "all":
+        save_epochs = None
+    else:
+        try:
+            save_epochs = {int(value) for value in a.save_epochs.split(",") if value.strip()}
+        except ValueError as exc:
+            ap.error(f"invalid --save-epochs: {exc}")
+        if not save_epochs or min(save_epochs) < 1 or max(save_epochs) > a.epochs:
+            ap.error("--save-epochs values must be in [1, --epochs]")
 
     torch.manual_seed(a.seed); np.random.seed(a.seed); random.seed(a.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -393,9 +404,10 @@ def main() -> int:
                 break
         if a.steps and step >= a.steps:
             break
-        torch.save({"model": model.state_dict(), "margin": margin.state_dict(), "args": vars(a)},
-                   models_dir / f"{a.tag}_ep{ep+1}.pt")
-        print(f"  сохранён {a.tag}_ep{ep+1}.pt", flush=True)
+        if save_epochs is None or ep + 1 in save_epochs:
+            torch.save({"model": model.state_dict(), "margin": margin.state_dict(), "args": vars(a)},
+                       models_dir / f"{a.tag}_ep{ep+1}.pt")
+            print(f"  сохранён {a.tag}_ep{ep+1}.pt", flush=True)
 
     dt = time.perf_counter() - t0
     print(f"готово: {step} шагов за {dt:.1f} с ({dt/max(1,step):.2f} с/шаг)", flush=True)
