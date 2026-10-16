@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from PIL import Image
 
@@ -32,35 +32,35 @@ from .schemas import (
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("case17")
 
-MODEL = build_model(settings.embed_model, settings.input_size)
-_model_loaded = False
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _model_loaded
     t0 = time.time()
     log.info("загружаю модель %s ...", settings.embed_model)
-    MODEL.load()
-    _model_loaded = True
-    log.info("модель загружена за %.1f с, размерность %d", time.time() - t0, MODEL.dim)
+    model = build_model(settings.embed_model, settings.input_size)
+    model.load()
+    app.state.model = model
+    app.state.model_loaded = True
+    log.info("модель загружена за %.1f с, размерность %d", time.time() - t0, model.dim)
 
-    if MODEL.dim != settings.embed_dim:
+    if model.dim != settings.embed_dim:
         log.warning(
             "EMBED_DIM=%d не совпадает с реальной размерностью модели %d, использую реальную",
-            settings.embed_dim, MODEL.dim,
+            settings.embed_dim, model.dim,
         )
     db.init_pool()
-    db.ensure_schema(MODEL.dim)
+    db.ensure_schema(model.dim)
     stored = db.stored_dim()
-    if stored is not None and stored != MODEL.dim:
+    if stored is not None and stored != model.dim:
         log.error(
             "В базе вектор размерности %d, а модель даёт %d. "
             "Нужно пересоздать том базы (docker compose down -v) после смены модели.",
-            stored, MODEL.dim,
+            stored, model.dim,
         )
     log.info("сервис готов")
     yield
+    app.state.model_loaded = False
+    del app.state.model
     db.close_pool()
 
 
@@ -73,6 +73,36 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def request_logging(request: Request, call_next):
+    """Логировать метрики запроса без содержимого изображений и секретов."""
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        log.exception("запрос завершился исключением: %s %s", request.method, request.url.path)
+        raise
+
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    log.info(
+        "запрос %s %s -> %d за %.1f мс",
+        request.method,
+        request.url.path,
+        response.status_code,
+        elapsed_ms,
+    )
+    response.headers["X-Process-Time-Ms"] = f"{elapsed_ms:.1f}"
+    return response
+
+
+def _model():
+    """Вернуть модель, загруженную lifespan-ом приложения."""
+    model = getattr(app.state, "model", None)
+    if model is None or not getattr(app.state, "model_loaded", False):
+        raise HTTPException(503, "Модель ещё не загружена.")
+    return model
 
 
 @app.exception_handler(ImageError)
@@ -98,7 +128,7 @@ def _prepare(raw: bytes, x: int, y: int, w: int, h: int) -> Image.Image:
 @app.get("/health", response_model=HealthResponse, tags=["служебные"])
 def health() -> HealthResponse:
     """Живой ли процесс. Не трогает базу."""
-    return HealthResponse(status="ok", model=MODEL.name, dim=MODEL.dim)
+    return HealthResponse(status="ok", model=_model().name, dim=_model().dim)
 
 
 @app.get("/ready", response_model=ReadyResponse, tags=["служебные"])
@@ -109,10 +139,10 @@ def ready() -> ReadyResponse:
         size = db.count()
     except Exception as exc:
         db_ok, detail = False, str(exc)
-    ok = _model_loaded and db_ok
+    ok = getattr(app.state, "model_loaded", False) and db_ok
     return ReadyResponse(
         status="ready" if ok else "not_ready",
-        model_loaded=_model_loaded,
+        model_loaded=getattr(app.state, "model_loaded", False),
         db_ok=db_ok,
         gallery_size=size,
         detail=detail,
@@ -127,9 +157,9 @@ def service_config() -> dict:
     конкретной модели, и при смене весов не должно оставаться зашитых чисел.
     """
     return {
-        "model": MODEL.name,
-        "dim": MODEL.dim,
-        "explain_available": hasattr(MODEL, "patch_saliency"),
+        "model": _model().name,
+        "dim": _model().dim,
+        "explain_available": hasattr(_model(), "patch_saliency"),
         "modes": {
             "balanced": {
                 "threshold": settings.search_threshold,
@@ -163,10 +193,10 @@ async def explain(
     посчитанный по участкам кадра. Поэтому это не догадка о том, «куда
     смотрит модель», а разложение самой оценки сходства.
     """
-    if not hasattr(MODEL, "patch_saliency"):
+    if not hasattr(_model(), "patch_saliency"):
         raise HTTPException(
             501,
-            f"Модель {MODEL.name} не умеет объяснять: карта строится по токенам "
+            f"Модель {_model().name} не умеет объяснять: карта строится по токенам "
             f"трансформера, а этот бэкбон их не отдаёт.",
         )
     t0 = time.perf_counter()
@@ -178,7 +208,7 @@ async def explain(
         if target is None:
             raise HTTPException(404, f"В галерее нет записи {gallery_id}.")
 
-    weights, side = MODEL.patch_saliency(crop, target)
+    weights, side = _model().patch_saliency(crop, target)
     lo, hi = float(weights.min()), float(weights.max())
     return {
         "grid": side,
@@ -186,7 +216,7 @@ async def explain(
         "min": round(lo, 4),
         "max": round(hi, 4),
         "gallery_id": gallery_id,
-        "model": MODEL.name,
+        "model": _model().name,
         "took_ms": round((time.perf_counter() - t0) * 1000, 1),
     }
 
@@ -199,9 +229,9 @@ async def embed(
     """Посчитать цифровой признак автомобиля по кадру и его bbox."""
     t0 = time.perf_counter()
     crop = _prepare(await _read_upload(image), x, y, w, h)
-    vec = MODEL.embed_batch([crop])[0]
+    vec = _model().embed_batch([crop])[0]
     return EmbedResponse(
-        model=MODEL.name, dim=MODEL.dim,
+        model=_model().name, dim=_model().dim,
         embedding=[round(float(v), 6) for v in vec],
         took_ms=round((time.perf_counter() - t0) * 1000, 1),
     )
@@ -216,10 +246,10 @@ async def gallery_add(
     """Добавить автомобиль в галерею известных."""
     t0 = time.perf_counter()
     crop = _prepare(await _read_upload(image), x, y, w, h)
-    vec = MODEL.embed_batch([crop])[0]
+    vec = _model().embed_batch([crop])[0]
     new_id = db.insert_one(vehicle_id, image.filename or "upload", [x, y, w, h], vec)
     return GalleryAddResponse(
-        id=new_id, vehicle_id=vehicle_id, dim=MODEL.dim,
+        id=new_id, vehicle_id=vehicle_id, dim=_model().dim,
         took_ms=round((time.perf_counter() - t0) * 1000, 1),
     )
 
@@ -261,7 +291,7 @@ def gallery_bulk_import(req: BulkImportRequest) -> BulkImportResponse:
         nonlocal imported, batch_imgs, batch_meta
         if not batch_imgs:
             return
-        vecs = MODEL.embed_batch(batch_imgs)
+        vecs = _model().embed_batch(batch_imgs)
         imported += db.insert_many(
             [(m[0], m[1], m[2], vecs[i]) for i, m in enumerate(batch_meta)]
         )
@@ -321,13 +351,13 @@ async def search(
         raise HTTPException(422, "threshold должен быть от 0 до 1.")
 
     crop = _prepare(await _read_upload(image), x, y, w, h)
-    vec = MODEL.embed_batch([crop])[0]
+    vec = _model().embed_batch([crop])[0]
 
     if db.count() == 0:
         return SearchResponse(
             refusal=True, reason="gallery_empty",
             message="Галерея пуста, сравнивать не с чем.",
-            threshold=thr, top_n=n, model=MODEL.name,
+            threshold=thr, top_n=n, model=_model().name,
             took_ms=round((time.perf_counter() - t0) * 1000, 1),
         )
 
@@ -342,11 +372,11 @@ async def search(
                 f"Уверенного совпадения нет: лучший кандидат {best:.3f} "
                 f"при пороге {thr:.3f}."
             ),
-            threshold=thr, top_n=n, model=MODEL.name, took_ms=took, candidates=[],
+            threshold=thr, top_n=n, model=_model().name, took_ms=took, candidates=[],
         )
 
     return SearchResponse(
-        refusal=False, threshold=thr, top_n=n, model=MODEL.name,
+        refusal=False, threshold=thr, top_n=n, model=_model().name,
         took_ms=took, candidates=found,
     )
 
