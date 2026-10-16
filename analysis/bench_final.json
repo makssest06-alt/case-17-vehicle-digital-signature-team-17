@@ -1,0 +1,32 @@
+{
+  "prod_geom_ep30_tta": {
+    "per_image_ms": 334.6,
+    "fps": 2.99,
+    "rss_mb": 793
+  },
+  "prod_geom_ep30": {
+    "per_image_ms": 170.0,
+    "fps": 5.88,
+    "rss_mb": 769
+  },
+  "student_a25_ep28_tta": {
+    "per_image_ms": 343.2,
+    "fps": 2.91,
+    "rss_mb": 796
+  },
+  "student_a25_ep28": {
+    "per_image_ms": 170.6,
+    "fps": 5.86,
+    "rss_mb": 795
+  },
+  "student_dv2s_tta": {
+    "per_image_ms": 124.5,
+    "fps": 8.03,
+    "rss_mb": 489
+  },
+  "student_dv2s": {
+    "per_image_ms": 59.3,
+    "fps": 16.85,
+    "rss_mb": 549
+  }
+}

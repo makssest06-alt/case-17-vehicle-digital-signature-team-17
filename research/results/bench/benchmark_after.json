@@ -1,0 +1,21 @@
+{
+  "model": "onnx:reid.onnx",
+  "device": "cpu",
+  "dim": 512,
+  "weights_mb": 359.1,
+  "load_s": 19.2,
+  "latency_batch1_ms": {
+    "p50": 629.15,
+    "p95": 678.5,
+    "p99": 1044.66,
+    "mean": 644.71,
+    "min": 618.71,
+    "n": 30
+  },
+  "throughput_fps": {
+    "1": 1.54,
+    "8": 1.54,
+    "16": 1.54
+  },
+  "peak_rss_mb": 1045.9
+}

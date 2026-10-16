@@ -1,0 +1,13 @@
+{
+  "distill_a25_ep28_noTTA": {
+    "thr_mean": 0.6850000000000004,
+    "thr_std": 0.058094750193111305,
+    "obj_mean": 0.6497680327298601,
+    "obj_at_0.55": null,
+    "obj_at_0.6": null,
+    "obj_at_0.65": null,
+    "obj_at_0.7": null,
+    "obj_at_0.75": null,
+    "obj_at_0.8": null
+  }
+}

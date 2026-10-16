@@ -1,0 +1,32 @@
+{
+  "model": "reid:vit_base_patch16_siglip_224.webli",
+  "device": "cpu",
+  "dim": 512,
+  "weights_mb": 359.3,
+  "load_s": 1.6,
+  "latency_batch1_ms": {
+    "p50": 668.35,
+    "p95": 800.33,
+    "p99": 1108.47,
+    "mean": 693.01,
+    "min": 659.14,
+    "n": 50
+  },
+  "throughput_fps": {
+    "1": 1.42,
+    "8": 1.59,
+    "16": 1.59,
+    "32": 1.59,
+    "64": 1.52
+  },
+  "peak_rss_mb": 820.3,
+  "memory_stability": {
+    "seconds": 300,
+    "images_processed": 504,
+    "rss_start_mb": 820.3,
+    "rss_end_mb": 801.8,
+    "rss_growth_mb": -18.4,
+    "rss_max_mb": 802.1,
+    "verdict": "стабильна"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "single_siglip2": {
+    "per_image_ms": 580.2,
+    "fps_b1": 1.72
+  },
+  "student_a25": {
+    "per_image_ms": 512.5,
+    "fps_b1": 1.95
+  }
+}

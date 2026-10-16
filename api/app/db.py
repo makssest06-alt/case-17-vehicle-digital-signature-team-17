@@ -156,6 +156,29 @@ def fetch_vector(item_id: int):
     return None if row is None else np.asarray(row[0], dtype="float32")
 
 
+def fetch_all() -> List[Dict[str, Any]]:
+    """Вся галерея разом — для построения индекса в памяти (gallery_index).
+
+    Горячий путь поиска после этого идёт через numpy, а pgvector остаётся
+    хранилищем: переживает перезапуск и хранит метаданные. Не заменяет
+    fetch_vector — тот нужен /v1/explain для одной записи.
+    """
+    with pool().connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, vehicle_id, image_path, bbox, embedding FROM gallery ORDER BY id"
+        )
+        return [
+            {
+                "id": r[0],
+                "vehicle_id": r[1],
+                "image_path": r[2],
+                "bbox": list(r[3]),
+                "embedding": np.asarray(r[4], dtype="float32"),
+            }
+            for r in cur.fetchall()
+        ]
+
+
 def count() -> int:
     with pool().connection() as conn, conn.cursor() as cur:
         cur.execute("SELECT count(*) FROM gallery")
