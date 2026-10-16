@@ -1,0 +1,22 @@
+{
+  "single_siglip2": {
+    "per_image_ms": 176.0,
+    "fps": 5.68,
+    "rss_load_mb": 1091
+  },
+  "team3": {
+    "per_image_ms": 557.5,
+    "fps": 1.79,
+    "rss_load_mb": 1783
+  },
+  "ens4": {
+    "per_image_ms": 751.5,
+    "fps": 1.33,
+    "rss_load_mb": 2080
+  },
+  "ens4_tta": {
+    "per_image_ms": 1443.4,
+    "fps": 0.69,
+    "rss_load_mb": 2084
+  }
+}
