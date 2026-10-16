@@ -28,7 +28,7 @@ services:
     build:
       context: ./api
       args:
-        EMBED_MODEL: ${EMBED_MODEL:-resnet18}
+        EMBED_MODEL: ${EMBED_MODEL:-reid:vit_base_patch16_siglip_224.webli}
     image: case17-api:local
     container_name: case17-api
     restart: unless-stopped
@@ -45,30 +45,30 @@ services:
         condition: service_healthy
     environment:
       DB_DSN: postgresql://${POSTGRES_USER:-case17}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-case17}
-      EMBED_MODEL: ${EMBED_MODEL:-resnet18}
+      EMBED_MODEL: ${EMBED_MODEL:-reid:vit_base_patch16_siglip_224.webli}
       EMBED_DIM: ${EMBED_DIM:-512}
       INPUT_SIZE: ${INPUT_SIZE:-224}
-      EMBED_TTA_FLIP: ${EMBED_TTA_FLIP:-1}
+      EMBED_TTA_FLIP: ${EMBED_TTA_FLIP:-0}
       SEARCH_TOP_N: ${SEARCH_TOP_N:-10}
-      SEARCH_THRESHOLD: ${SEARCH_THRESHOLD:-0.75}
+      SEARCH_THRESHOLD: ${SEARCH_THRESHOLD:-0.8025}
       # Строгая точка режима отказа. Без проброса контейнер берёт
       # значение по умолчанию из config.py, и переключатель в вебе
       # показывает не тот порог, что стоит в .env.
-      SEARCH_THRESHOLD_STRICT: ${SEARCH_THRESHOLD_STRICT:-0.8544}
+      SEARCH_THRESHOLD_STRICT: ${SEARCH_THRESHOLD_STRICT:-0.8465}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-20}
       DATA_DIR: /data
       ARTIFACTS_DIR: /artifacts
       OMP_NUM_THREADS: "2"
       HF_HUB_OFFLINE: "1"
       HF_HOME: /opt/hfcache
-      REID_WEIGHTS: ${REID_WEIGHTS:-/models/reid_current.pt}
+      REID_WEIGHTS: ${REID_WEIGHTS:-/models/siglip2_distill_ensemble_ep28.pt}
       # Режим кропа для чекпоинтов, которые не пишут tf_mode в args (студент).
       # Без проброса загрузчик возьмёт timm(base)-кроп и squash-модель
       # потеряет ~2 mAP. См. api/app/models/reid_checkpoint.py.
-      REID_TF_MODE: ${REID_TF_MODE:-}
+      REID_TF_MODE: ${REID_TF_MODE:-squash}
     volumes:
-      - ${DATA_HOST_DIR:-/opt/case17/data}:/data:ro
-      - ${MODELS_HOST_DIR:-/opt/case17/models}:/models:ro
+      - ${DATA_HOST_DIR:-./data}:/data:ro
+      - ${MODELS_HOST_DIR:-./weights}:/models:ro
       - ./artifacts:/artifacts
     ports:
       - "8000:8000"
