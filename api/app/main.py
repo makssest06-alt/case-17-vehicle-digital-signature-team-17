@@ -391,6 +391,7 @@ async def search(
     вместо выдумывания ответа. Это требование кейса: лучше сказать
     «уверенного совпадения нет», чем подсунуть чужую машину.
     """
+    model = _model()
     t0 = time.perf_counter()
     n = top_n or settings.search_top_n
     thr = settings.search_threshold if threshold is None else threshold
@@ -403,11 +404,16 @@ async def search(
     vec = _model().embed_batch([crop])[0]
 
     if db.count() == 0:
+        took = round((time.perf_counter() - t0) * 1000, 1)
+        log.info(
+            "поиск: gallery=0 threshold=%.4f refusal=gallery_empty took_ms=%.1f",
+            thr,
+            took,
+        )
         return SearchResponse(
             refusal=True, reason="gallery_empty",
             message="Галерея пуста, сравнивать не с чем.",
-            threshold=thr, top_n=n, model=_model().name,
-            took_ms=round((time.perf_counter() - t0) * 1000, 1),
+            threshold=thr, top_n=n, model=model.name, took_ms=took,
         )
 
     found = db.search(vec, n)
@@ -415,17 +421,33 @@ async def search(
     best = found[0]["confidence"] if found else 0.0
 
     if best < thr:
+        log.info(
+            "поиск: returned=%d threshold=%.4f best=%.4f refusal=low_similarity "
+            "candidates=0 took_ms=%.1f",
+            len(found),
+            thr,
+            best,
+            took,
+        )
         return SearchResponse(
             refusal=True, reason="low_similarity",
             message=(
                 f"Уверенного совпадения нет: лучший кандидат {best:.3f} "
                 f"при пороге {thr:.3f}."
             ),
-            threshold=thr, top_n=n, model=_model().name, took_ms=took, candidates=[],
+            threshold=thr, top_n=n, model=model.name, took_ms=took, candidates=[],
         )
 
+    log.info(
+        "поиск: returned=%d threshold=%.4f best=%.4f refusal=false candidates=%d took_ms=%.1f",
+        len(found),
+        thr,
+        best,
+        len(found),
+        took,
+    )
     return SearchResponse(
-        refusal=False, threshold=thr, top_n=n, model=_model().name,
+        refusal=False, threshold=thr, top_n=n, model=model.name,
         took_ms=took, candidates=found,
     )
 
