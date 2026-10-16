@@ -157,9 +157,20 @@ class ReidCheckpointModel(EmbeddingModel):
 
         backbone.eval()
         head.eval()
+        # A CUDA-enabled torch build is required to use an available GPU.
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        if os.getenv("REID_REQUIRE_CUDA", "0") == "1" and self.device.type != "cuda":
+            raise RuntimeError("REID_REQUIRE_CUDA=1 but CUDA is unavailable")
+        self._fp16 = self.device.type == "cuda" and os.getenv("REID_FP16", "1") == "1"
         self._tf = self._build_tf(timm, backbone)
+        backbone.to(self.device)
+        head.to(self.device)
         self._model, self._head = backbone, head
         self.dim = out_dim
+        print(f"  reid_checkpoint: device={self.device} fp16={self._fp16}", flush=True)
+        # Release source tensors after copying; no second checkpoint retained.
+        del ck, state, enc, hd
+
 
     def _create_backbone(self, timm, names, head_only):
         """Строит бэкбон, перебирая имена до первого сработавшего.
@@ -216,7 +227,7 @@ class ReidCheckpointModel(EmbeddingModel):
         """
         if self._model is None:
             raise RuntimeError("модель не загружена, сначала load()")
-        x = self._tf(image.convert("RGB")).unsqueeze(0)
+        x = self._tf(image.convert("RGB")).unsqueeze(0).to(self.device)
         with torch.inference_mode():
             tokens = self._model.forward_features(x)
             n = tokens.shape[1]
@@ -228,7 +239,8 @@ class ReidCheckpointModel(EmbeddingModel):
             v_pool = F.normalize(self._head(pooled)[1], p=2, dim=1)
             v_tok = F.normalize(self._head(tokens[0])[1], p=2, dim=1)
             tgt = v_pool if target is None else F.normalize(
-                torch.from_numpy(np.asarray(target, dtype="float32")).unsqueeze(0), p=2, dim=1)
+                torch.from_numpy(np.asarray(target, dtype="float32")).unsqueeze(0)
+                .to(self.device), p=2, dim=1)
             sim = (v_tok @ tgt.T).squeeze(1)
         return sim.cpu().numpy().astype("float32"), side
 
@@ -241,6 +253,7 @@ class ReidCheckpointModel(EmbeddingModel):
         from ..config import settings
 
         x = torch.stack([self._tf(im.convert("RGB")) for im in images])
+        x = x.to(self.device, non_blocking=True)
         a = self._encode(x)
         b = self._encode(torch.flip(x, dims=[3])) if settings.tta_flip else None
         feats = F.normalize(a if b is None else (a + b) / 2, p=2, dim=1)
@@ -260,6 +273,12 @@ class ReidCheckpointModel(EmbeddingModel):
         вредит: они учились как head(encoder(x)). Замер на наших моделях —
         от -1.18 до -5.21 mAP (analysis/service_path_grid.py).
         """
+        if self._fp16:
+            with torch.autocast("cuda", dtype=torch.float16):
+                z = self._model(x)
+                if self._normalize_before_head:
+                    z = F.normalize(z, p=2, dim=1)
+                return self._head(z)[1].float()
         z = self._model(x)
         if self._normalize_before_head:
             z = F.normalize(z, p=2, dim=1)

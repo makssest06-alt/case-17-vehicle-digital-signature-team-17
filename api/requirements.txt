@@ -1,10 +1,9 @@
-# CPU-сборки torch лежат в отдельном индексе PyTorch.
-# Пины с локальной версией +cpu гарантируют, что ни pip, ни зависимости timm
-# не подтянут CUDA-колёса на несколько гигабайт.
---extra-index-url https://download.pytorch.org/whl/cpu
+# CUDA build for GPU inference; verify host driver compatibility before deployment.
+# Diagnostic CPU execution remains supported by the model loader.
+--extra-index-url https://download.pytorch.org/whl/cu124
 
-torch==2.5.1+cpu
-torchvision==0.20.1+cpu
+torch==2.5.1+cu124
+torchvision==0.20.1+cu124
 
 fastapi==0.115.6
 uvicorn[standard]==0.34.0

@@ -411,5 +411,5 @@ python research/make_pitch_assets.py
 python scripts/validate_submission.py
 ```
 
-24 проверки формата по README датасета, включая сквозную сверку submission
+25 проверок формата по README датасета, включая сквозную сверку submission
 против embeddings. Гоняется перед каждым коммитом артефактов.
