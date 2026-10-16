@@ -1,0 +1,6 @@
+[
+  {"name": "siglip2_squash", "checkpoint": "/ABS/PATH/siglip2_clean_ep28.pt", "tf_mode": "squash", "tta": true, "weight": 0.364},
+  {"name": "siglip1_squash", "checkpoint": "/ABS/PATH/siglip1_clean_ep28.pt", "tf_mode": "squash", "tta": true, "weight": 0.232},
+  {"name": "siglip1_base", "checkpoint": "/ABS/PATH/siglip1_base_clean_ep29.pt", "tf_mode": "timm", "tta": true, "weight": 0.182},
+  {"name": "clip_squash", "checkpoint": "/ABS/PATH/clip_clean_ep28.pt", "tf_mode": "squash", "tta": true, "weight": 0.222}
+]
