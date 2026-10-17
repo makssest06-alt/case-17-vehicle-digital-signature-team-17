@@ -1,0 +1,323 @@
+{
+ "holdout_361": {
+  "raw": {
+   "mAP@10": 0.8671,
+   "Rank-1": 0.8315,
+   "Rank-5": 0.9451
+  },
+  "hub_k5": {
+   "mAP@10": 0.8717,
+   "Rank-1": 0.8407,
+   "Rank-5": 0.9377
+  },
+  "dba_k1": {
+   "mAP@10": 0.879,
+   "Rank-1": 0.8425,
+   "Rank-5": 0.9469
+  },
+  "cam_push[oracle]": {
+   "mAP@10": 0.8748,
+   "Rank-1": 0.837,
+   "Rank-5": 0.9505
+  },
+  "cam_pen0.1[oracle]": {
+   "mAP@10": 0.8712,
+   "Rank-1": 0.8352,
+   "Rank-5": 0.9505
+  },
+  "dba_k1+cam_push[oracle]": {
+   "mAP@10": 0.8893,
+   "Rank-1": 0.8516,
+   "Rank-5": 0.9579
+  },
+  "hub+cam_push[oracle]": {
+   "mAP@10": 0.881,
+   "Rank-1": 0.8498,
+   "Rank-5": 0.9451
+  },
+  "dba_k1_xcam+cam_push[oracle]": {
+   "mAP@10": 0.8859,
+   "Rank-1": 0.8516,
+   "Rank-5": 0.9505
+  },
+  "cam_push+percam_best[oracle]": {
+   "mAP@10": 0.8626,
+   "Rank-1": 0.837,
+   "Rank-5": 0.9103
+  },
+  "diff_k3_a0.3_xcam+cam_push[oracle]": {
+   "mAP@10": 0.8794,
+   "Rank-1": 0.8388,
+   "Rank-5": 0.9469
+  },
+  "diff_k3_a0.6_xcam+cam_push[oracle]": {
+   "mAP@10": 0.8803,
+   "Rank-1": 0.8388,
+   "Rank-5": 0.9451
+  },
+  "dba_xcam+diff0.3+cam_push+percam[oracle]": {
+   "mAP@10": 0.8739,
+   "Rank-1": 0.8516,
+   "Rank-5": 0.9158
+  },
+  "cam_push[pseudo]": {
+   "mAP@10": 0.8595,
+   "Rank-1": 0.826,
+   "Rank-5": 0.9377
+  },
+  "cam_pen0.1[pseudo]": {
+   "mAP@10": 0.8687,
+   "Rank-1": 0.8315,
+   "Rank-5": 0.9505
+  },
+  "dba_k1+cam_push[pseudo]": {
+   "mAP@10": 0.8732,
+   "Rank-1": 0.8388,
+   "Rank-5": 0.9487
+  },
+  "hub+cam_push[pseudo]": {
+   "mAP@10": 0.8647,
+   "Rank-1": 0.8352,
+   "Rank-5": 0.9341
+  },
+  "dba_k1_xcam+cam_push[pseudo]": {
+   "mAP@10": 0.8696,
+   "Rank-1": 0.8388,
+   "Rank-5": 0.9432
+  },
+  "cam_push+percam_best[pseudo]": {
+   "mAP@10": 0.841,
+   "Rank-1": 0.826,
+   "Rank-5": 0.9029
+  },
+  "diff_k3_a0.3_xcam+cam_push[pseudo]": {
+   "mAP@10": 0.8651,
+   "Rank-1": 0.8315,
+   "Rank-5": 0.9341
+  },
+  "diff_k3_a0.6_xcam+cam_push[pseudo]": {
+   "mAP@10": 0.8668,
+   "Rank-1": 0.8333,
+   "Rank-5": 0.9322
+  },
+  "dba_xcam+diff0.3+cam_push+percam[pseudo]": {
+   "mAP@10": 0.8497,
+   "Rank-1": 0.837,
+   "Rank-5": 0.9084
+  }
+ },
+ "holdout+test_1111": {
+  "raw": {
+   "mAP@10": 0.7401,
+   "Rank-1": 0.6777,
+   "Rank-5": 0.8901
+  },
+  "hub_k5": {
+   "mAP@10": 0.7582,
+   "Rank-1": 0.7033,
+   "Rank-5": 0.9066
+  },
+  "dba_k1": {
+   "mAP@10": 0.7449,
+   "Rank-1": 0.6886,
+   "Rank-5": 0.8755
+  },
+  "cam_push[oracle]": {
+   "mAP@10": 0.7571,
+   "Rank-1": 0.696,
+   "Rank-5": 0.9066
+  },
+  "cam_pen0.1[oracle]": {
+   "mAP@10": 0.7535,
+   "Rank-1": 0.6941,
+   "Rank-5": 0.9048
+  },
+  "dba_k1+cam_push[oracle]": {
+   "mAP@10": 0.756,
+   "Rank-1": 0.6941,
+   "Rank-5": 0.8883
+  },
+  "hub+cam_push[oracle]": {
+   "mAP@10": 0.7715,
+   "Rank-1": 0.7125,
+   "Rank-5": 0.9176
+  },
+  "dba_k1_xcam+cam_push[oracle]": {
+   "mAP@10": 0.7633,
+   "Rank-1": 0.6996,
+   "Rank-5": 0.8938
+  },
+  "cam_push+percam_best[oracle]": {
+   "mAP@10": 0.7407,
+   "Rank-1": 0.696,
+   "Rank-5": 0.8626
+  },
+  "diff_k3_a0.3_xcam+cam_push[oracle]": {
+   "mAP@10": 0.7627,
+   "Rank-1": 0.696,
+   "Rank-5": 0.9158
+  },
+  "diff_k3_a0.6_xcam+cam_push[oracle]": {
+   "mAP@10": 0.7619,
+   "Rank-1": 0.685,
+   "Rank-5": 0.9158
+  },
+  "dba_xcam+diff0.3+cam_push+percam[oracle]": {
+   "mAP@10": 0.7456,
+   "Rank-1": 0.6996,
+   "Rank-5": 0.8516
+  },
+  "cam_push[pseudo]": {
+   "mAP@10": 0.7427,
+   "Rank-1": 0.6832,
+   "Rank-5": 0.8938
+  },
+  "cam_pen0.1[pseudo]": {
+   "mAP@10": 0.7498,
+   "Rank-1": 0.6886,
+   "Rank-5": 0.8993
+  },
+  "dba_k1+cam_push[pseudo]": {
+   "mAP@10": 0.7408,
+   "Rank-1": 0.6813,
+   "Rank-5": 0.8755
+  },
+  "hub+cam_push[pseudo]": {
+   "mAP@10": 0.7568,
+   "Rank-1": 0.6996,
+   "Rank-5": 0.9029
+  },
+  "dba_k1_xcam+cam_push[pseudo]": {
+   "mAP@10": 0.7463,
+   "Rank-1": 0.6813,
+   "Rank-5": 0.881
+  },
+  "cam_push+percam_best[pseudo]": {
+   "mAP@10": 0.7207,
+   "Rank-1": 0.6795,
+   "Rank-5": 0.8498
+  },
+  "diff_k3_a0.3_xcam+cam_push[pseudo]": {
+   "mAP@10": 0.7486,
+   "Rank-1": 0.6886,
+   "Rank-5": 0.9048
+  },
+  "diff_k3_a0.6_xcam+cam_push[pseudo]": {
+   "mAP@10": 0.7479,
+   "Rank-1": 0.6777,
+   "Rank-5": 0.9048
+  },
+  "dba_xcam+diff0.3+cam_push+percam[pseudo]": {
+   "mAP@10": 0.7241,
+   "Rank-1": 0.6777,
+   "Rank-5": 0.8425
+  }
+ },
+ "holdout+train_9005": {
+  "raw": {
+   "mAP@10": 0.561,
+   "Rank-1": 0.5366,
+   "Rank-5": 0.6832
+  },
+  "hub_k5": {
+   "mAP@10": 0.7487,
+   "Rank-1": 0.7234,
+   "Rank-5": 0.8516
+  },
+  "dba_k1": {
+   "mAP@10": 0.6615,
+   "Rank-1": 0.652,
+   "Rank-5": 0.7601
+  },
+  "cam_push[oracle]": {
+   "mAP@10": 0.5853,
+   "Rank-1": 0.5623,
+   "Rank-5": 0.7051
+  },
+  "cam_pen0.1[oracle]": {
+   "mAP@10": 0.5793,
+   "Rank-1": 0.5586,
+   "Rank-5": 0.6996
+  },
+  "dba_k1+cam_push[oracle]": {
+   "mAP@10": 0.6792,
+   "Rank-1": 0.6685,
+   "Rank-5": 0.7802
+  },
+  "hub+cam_push[oracle]": {
+   "mAP@10": 0.7597,
+   "Rank-1": 0.7363,
+   "Rank-5": 0.87
+  },
+  "dba_k1_xcam+cam_push[oracle]": {
+   "mAP@10": 0.6508,
+   "Rank-1": 0.6319,
+   "Rank-5": 0.7546
+  },
+  "cam_push+percam_best[oracle]": {
+   "mAP@10": 0.6058,
+   "Rank-1": 0.5623,
+   "Rank-5": 0.7564
+  },
+  "diff_k3_a0.3_xcam+cam_push[oracle]": {
+   "mAP@10": 0.5993,
+   "Rank-1": 0.5696,
+   "Rank-5": 0.7106
+  },
+  "diff_k3_a0.6_xcam+cam_push[oracle]": {
+   "mAP@10": 0.605,
+   "Rank-1": 0.5842,
+   "Rank-5": 0.7033
+  },
+  "dba_xcam+diff0.3+cam_push+percam[oracle]": {
+   "mAP@10": 0.6591,
+   "Rank-1": 0.6337,
+   "Rank-5": 0.7839
+  },
+  "cam_push[pseudo]": {
+   "mAP@10": 0.5703,
+   "Rank-1": 0.5476,
+   "Rank-5": 0.6868
+  },
+  "cam_pen0.1[pseudo]": {
+   "mAP@10": 0.5746,
+   "Rank-1": 0.5531,
+   "Rank-5": 0.6905
+  },
+  "dba_k1+cam_push[pseudo]": {
+   "mAP@10": 0.6611,
+   "Rank-1": 0.652,
+   "Rank-5": 0.7637
+  },
+  "hub+cam_push[pseudo]": {
+   "mAP@10": 0.7446,
+   "Rank-1": 0.7216,
+   "Rank-5": 0.8571
+  },
+  "dba_k1_xcam+cam_push[pseudo]": {
+   "mAP@10": 0.6412,
+   "Rank-1": 0.6282,
+   "Rank-5": 0.7399
+  },
+  "cam_push+percam_best[pseudo]": {
+   "mAP@10": 0.5795,
+   "Rank-1": 0.5458,
+   "Rank-5": 0.7234
+  },
+  "diff_k3_a0.3_xcam+cam_push[pseudo]": {
+   "mAP@10": 0.5795,
+   "Rank-1": 0.5495,
+   "Rank-5": 0.6905
+  },
+  "diff_k3_a0.6_xcam+cam_push[pseudo]": {
+   "mAP@10": 0.5866,
+   "Rank-1": 0.5696,
+   "Rank-5": 0.6832
+  },
+  "dba_xcam+diff0.3+cam_push+percam[pseudo]": {
+   "mAP@10": 0.6424,
+   "Rank-1": 0.6264,
+   "Rank-5": 0.7564
+  }
+ }
+}

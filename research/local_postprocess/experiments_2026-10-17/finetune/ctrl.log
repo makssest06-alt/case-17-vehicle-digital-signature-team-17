@@ -1,0 +1,51 @@
+margin: loaded from A10 checkpoint
+train 8639 rows / 1391 vehicles, mine=0.0, ~173 steps/epoch
+  ep1 step 1/1038 loss 4.865 id 2.951 tri 0.012 anchor_cos 0.8098 s/step 17.58
+  ep1 step 25/1038 loss 4.805 id 2.954 tri 0.004 anchor_cos 0.8153 s/step 0.94
+  ep1 step 50/1038 loss 5.803 id 3.809 tri 0.024 anchor_cos 0.8030 s/step 0.59
+  ep1 step 75/1038 loss 6.730 id 4.405 tri 0.049 anchor_cos 0.7724 s/step 0.48
+  ep1 step 100/1038 loss 6.340 id 4.139 tri 0.012 anchor_cos 0.7812 s/step 0.42
+  ep1 step 125/1038 loss 4.628 id 2.641 tri 0.019 anchor_cos 0.8032 s/step 0.39
+  ep1 step 150/1038 loss 5.526 id 3.574 tri 0.029 anchor_cos 0.8077 s/step 0.36
+  saved ctrl_ep1.pt (61s)
+  ep2 step 175/1038 loss 5.042 id 3.083 tri 0.005 anchor_cos 0.8045 s/step 0.35
+  ep2 step 200/1038 loss 4.298 id 2.290 tri 0.006 anchor_cos 0.7998 s/step 0.34
+  ep2 step 225/1038 loss 4.820 id 2.991 tri 0.028 anchor_cos 0.8199 s/step 0.33
+  ep2 step 250/1038 loss 7.003 id 4.689 tri 0.085 anchor_cos 0.7771 s/step 0.32
+  ep2 step 275/1038 loss 5.988 id 3.909 tri 0.009 anchor_cos 0.7930 s/step 0.32
+  ep2 step 300/1038 loss 4.398 id 2.357 tri 0.001 anchor_cos 0.7960 s/step 0.31
+  ep2 step 325/1038 loss 5.206 id 3.417 tri 0.001 anchor_cos 0.8212 s/step 0.31
+  saved ctrl_ep2.pt (105s)
+  ep3 step 350/1038 loss 5.607 id 3.893 tri 0.025 anchor_cos 0.8311 s/step 0.31
+  ep3 step 375/1038 loss 3.985 id 2.051 tri 0.001 anchor_cos 0.8067 s/step 0.30
+  ep3 step 400/1038 loss 5.048 id 2.757 tri 0.050 anchor_cos 0.7758 s/step 0.30
+  ep3 step 425/1038 loss 6.421 id 4.169 tri 0.029 anchor_cos 0.7777 s/step 0.30
+  ep3 step 450/1038 loss 4.786 id 2.869 tri 0.012 anchor_cos 0.8095 s/step 0.29
+  ep3 step 475/1038 loss 6.403 id 4.333 tri 0.034 anchor_cos 0.7964 s/step 0.29
+  ep3 step 500/1038 loss 4.758 id 2.767 tri 0.001 anchor_cos 0.8009 s/step 0.29
+  saved ctrl_ep3.pt (150s)
+  ep4 step 525/1038 loss 5.303 id 3.246 tri 0.050 anchor_cos 0.7993 s/step 0.29
+  ep4 step 550/1038 loss 6.683 id 4.642 tri 0.042 anchor_cos 0.8001 s/step 0.29
+  ep4 step 575/1038 loss 4.250 id 2.386 tri 0.000 anchor_cos 0.8136 s/step 0.29
+  ep4 step 600/1038 loss 4.766 id 2.894 tri 0.007 anchor_cos 0.8135 s/step 0.29
+  ep4 step 625/1038 loss 4.411 id 2.389 tri 0.002 anchor_cos 0.7980 s/step 0.28
+  ep4 step 650/1038 loss 5.405 id 3.509 tri 0.022 anchor_cos 0.8125 s/step 0.28
+  ep4 step 675/1038 loss 4.258 id 2.359 tri 0.003 anchor_cos 0.8104 s/step 0.28
+  saved ctrl_ep4.pt (194s)
+  ep5 step 700/1038 loss 5.216 id 3.329 tri 0.003 anchor_cos 0.8116 s/step 0.28
+  ep5 step 725/1038 loss 5.105 id 3.083 tri 0.019 anchor_cos 0.7997 s/step 0.28
+  ep5 step 750/1038 loss 3.435 id 1.753 tri 0.000 anchor_cos 0.8319 s/step 0.28
+  ep5 step 775/1038 loss 3.840 id 2.022 tri 0.010 anchor_cos 0.8192 s/step 0.28
+  ep5 step 800/1038 loss 5.480 id 3.300 tri 0.002 anchor_cos 0.7823 s/step 0.28
+  ep5 step 825/1038 loss 5.922 id 3.962 tri 0.060 anchor_cos 0.8099 s/step 0.28
+  ep5 step 850/1038 loss 5.060 id 2.940 tri 0.022 anchor_cos 0.7902 s/step 0.28
+  saved ctrl_ep5.pt (239s)
+  ep6 step 875/1038 loss 4.692 id 2.738 tri 0.007 anchor_cos 0.8053 s/step 0.28
+  ep6 step 900/1038 loss 6.941 id 4.861 tri 0.098 anchor_cos 0.8018 s/step 0.28
+  ep6 step 925/1038 loss 5.927 id 3.694 tri 0.061 anchor_cos 0.7827 s/step 0.28
+  ep6 step 950/1038 loss 5.341 id 3.352 tri 0.011 anchor_cos 0.8023 s/step 0.28
+  ep6 step 975/1038 loss 4.118 id 2.137 tri 0.002 anchor_cos 0.8022 s/step 0.27
+  ep6 step 1000/1038 loss 5.571 id 3.620 tri 0.000 anchor_cos 0.8049 s/step 0.27
+  ep6 step 1025/1038 loss 5.242 id 3.293 tri 0.007 anchor_cos 0.8059 s/step 0.27
+  saved ctrl_ep6.pt (284s)
+wall 290 s

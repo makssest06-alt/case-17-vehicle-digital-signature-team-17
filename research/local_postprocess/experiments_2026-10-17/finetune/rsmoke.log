@@ -1,0 +1,5 @@
+margin: loaded from A10 checkpoint
+train 8639 rows / 1391 vehicles, mine=0.0, ~173 steps/epoch
+  ep1 step 1/1038 loss 5.383 id 3.380 tri 0.017 anchor_cos 0.8014 s/step 18.76
+smoke test done
+wall 31 s
