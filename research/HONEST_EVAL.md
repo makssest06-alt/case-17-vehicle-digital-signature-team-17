@@ -46,6 +46,7 @@ python research/honest_eval.py --data-dir <данные> --suite --tag <имя> 
 | разбор ошибок по подгруппам | `python research/error_breakdown.py --data-dir <данные>` | `error_breakdown.md` |
 | картинки ошибок (номера закрыты) | `python research/error_examples.py --data-dir <данные>` | `error_examples/*.png` |
 | аудит утечек | `python research/audit_leaks.py --data-dir <данные> --zip dataset.zip` | `leak_audit.md` |
+| порог под F1 ТЗ и устойчивость оценок к размеру галереи | `python research/refusal_score.py --data-dir <данные> --env REID_WEIGHTS=<веса> --tag <имя>` | `refusal_score_<имя>.md`, `.png` |
 | пакет для презентации (4 слайда, числа из файлов) | `python research/honest_eval_slides.py` | `slides.md`, `gallery_size_map.png`, `score_scale.png` |
 
 ### Промер прод-модели перед сменой порога
@@ -148,6 +149,13 @@ python research/honest_eval.py --data-dir <данные> --suite --post raw,knn 
   2.2k без почти-дублей; при 0.8025 — 0.323 / 0.889. На 10.8k тот же порог даёт
   TNR 0.298: порог надо проверять на галерее размера прода. knn (k ∈ {2, 3, 5},
   α ∈ {1, 3}) на a10 не помогает ни в одной клетке (`knn_grid_a10.md`).
+- **Порог под метрику ТЗ** (`refusal_score_a10.md`, `refusal_score_a10.png`): F1-оптимальный
+  порог сырого косинуса вне фолда 0.652 ± 0.045 (F1 0.668, TNR 0.545 на 2.2k), рабочая
+  точка 0.70 — F1 0.660, TNR 0.712. F1 с ростом галереи падает у любой оценки уверенности
+  (падает ранжирование); TNR сырого косинуса проваливается (0.71 → 0.30 на 10.8k), а
+  z100 = (s1 − mean(s2..s100)) / std(s2..s100) держит его от 2.2k (0.80 → 0.82) ценой F1
+  на больших галереях. Решение сервиса остаётся на сыром косинусе 0.70, z100 — запасная
+  оценка для галерей от ~9 тыс. кадров.
 
 ## Воспроизводимость (`scripts/check_reproducibility.sh`)
 
