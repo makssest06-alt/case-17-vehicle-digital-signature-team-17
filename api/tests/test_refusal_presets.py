@@ -37,7 +37,7 @@ class RefusalPresetsTest(unittest.TestCase):
     def test_current_service_point_untouched(self):
         from app.config import REFUSAL_PRESETS, Settings
 
-        cur = REFUSAL_PRESETS[(0, "off", "raw")]
+        cur = REFUSAL_PRESETS[(0, "off", "off", "raw")]
         s = Settings()
         self.assertEqual((cur["balanced"], cur["strict"]), (s.search_threshold, s.search_threshold_strict))
 

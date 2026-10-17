@@ -31,12 +31,15 @@ N, D, K = 300, 16, 100
 BOX = (40, 30, 120, 90)
 
 
-MODES = ("bg", "bbox", "both")
+ANDREY = {"pp_dedup_sim_any": 0.94, "pp_dedup_sim": 0.85, "pp_dedup_iou": 0.7, "pp_dedup_center": float("inf")}
+# (ранжирование, отказ, пороги правила рамок); последняя — финальная схема: ранжирование bg, отказ bg OR рамка
+MODES = (("bg", "bg", {}), ("bbox", "bbox", {}), ("both", "both", {}), ("bg", "both", {}), ("bg", "both", ANDREY))
 
 
-def settings(dedup="bg"):
+def settings(rank="bg", refusal="", rule=None):
     from app.config import Settings
-    return dataclasses.replace(Settings(), pp_dba_k=1, pp_dedup=dedup, refusal_score="z100")
+    return dataclasses.replace(Settings(), pp_dba_k=1, pp_dedup_rank=rank, pp_dedup_refusal=refusal,
+                               refusal_score="z100", **(rule or {}))
 
 
 def data():
@@ -62,46 +65,45 @@ def data():
     return g, gbg, gbox, q, qbg, frames
 
 
-def research_side(g, gbg, gbox, q, qbg, tau, rule, dedup):
+def research_side(g, gbg, gbox, q, qbg, tau, rule, rank, refusal):
     sys.path.insert(0, str(RESEARCH))
     import service_score as ss
     from app.pp import dedup as dd
 
     s = q @ ss.dba_gallery(g, 1).T
     top, cos = ss.topk(s, K)
-    flags = np.zeros(cos.shape, bool)
-    if dedup in ("bg", "both"):
-        flags |= ss.pair_cos(qbg, gbg, top) > tau
-    if dedup in ("bbox", "both"):
-        raw = np.take_along_axis(q @ g.T, top, 1)
-        flags |= dd.near_dup_flags(raw, np.array(BOX, float)[None, None, :], gbox[top], **rule)
-    return ss.decide(top, cos, flags)
+    fb = ss.pair_cos(qbg, gbg, top) > tau
+    raw = np.take_along_axis(q @ g.T, top, 1)
+    fx = dd.near_dup_flags(raw, np.array(BOX, float)[None, None, :], gbox[top], **rule)
+    pick = {"bg": fb, "bbox": fx, "both": fb | fx}
+    return ss.decide(top, cos, pick[rank], pick[refusal])
 
 
 @unittest.skipUnless((RESEARCH / "service_score.py").exists(), "нет research/service_score.py")
 class ParityTest(unittest.TestCase):
     def setUp(self):
         self.g, self.gbg, self.gbox, self.q, self.qbg, self.frames = data()
-        st = settings()
-        self.tau = st.pp_camera_tau
-        self.rule = {"s_hi": st.pp_dedup_sim, "t_iou": st.pp_dedup_iou, "t_center": st.pp_dedup_center,
-                     "t_size": st.pp_dedup_size}
+        self.tau = settings().pp_camera_tau
         cos = self.qbg @ self.gbg.T
         self.assertTrue((np.abs(cos - self.tau) > 0.05).all(), "признак фона слишком близко к τ")
-        self.ref = {m: research_side(self.g, self.gbg, self.gbox, self.q, self.qbg, self.tau, self.rule, m)
-                    for m in MODES}
-        for m in MODES:
-            self.assertTrue(any(f.any() for f in self.ref[m]["flags"]), m)          # исключение реально срабатывает
-        self.assertNotEqual([list(o) for o in self.ref["bg"]["order"]], [list(o) for o in self.ref["bbox"]["order"]])
+        self.ref = {}
+        for n, (rank, refusal, rule) in enumerate(MODES):
+            st = settings(rank, refusal, rule)
+            r = {"s_any": st.pp_dedup_sim_any, "s_hi": st.pp_dedup_sim, "t_iou": st.pp_dedup_iou,
+                 "t_center": st.pp_dedup_center, "t_size": st.pp_dedup_size}
+            self.ref[n] = research_side(self.g, self.gbg, self.gbox, self.q, self.qbg, self.tau, r, rank, refusal)
+            self.assertTrue(any(f.any() for f in self.ref[n]["flags"]), MODES[n])   # исключение реально срабатывает
+        self.assertNotEqual([list(o) for o in self.ref[0]["order"]], [list(o) for o in self.ref[1]["order"]])
+        self.assertFalse(np.allclose(self.ref[0]["conf_z100"], self.ref[3]["conf_z100"]))   # отказ ≠ ранжирование
 
     def check(self, store, ids):
-        for m in MODES:
-            pp = pp_state.Postprocess(settings(m), D, store)
+        for n, (rank, refusal, rule) in enumerate(MODES):
+            pp = pp_state.Postprocess(settings(rank, refusal, rule), D, store)
             for i in range(3):
                 found, score = pp.search(self.q[i], K, self.frames[i], BOX)
-                with self.subTest(dedup=m, query=i):
-                    self.assertEqual([c["id"] for c in found], [ids[j] for j in self.ref[m]["order"][i]])
-                    self.assertAlmostEqual(score, self.ref[m]["conf_z100"][i], places=5)
+                with self.subTest(rank=rank, refusal=refusal, andrey=bool(rule), query=i):
+                    self.assertEqual([c["id"] for c in found], [ids[j] for j in self.ref[n]["order"][i]])
+                    self.assertAlmostEqual(score, self.ref[n]["conf_z100"][i], places=5)
 
     def test_fake_db(self):
         db = sf.FakeDB(n=0)

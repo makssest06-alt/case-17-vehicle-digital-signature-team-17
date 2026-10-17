@@ -124,7 +124,8 @@ async def lifespan(app: FastAPI):
             log.info(
                 "постобработка: DBA k=%d, исключение почти-дублей=%s (τ фона=%.4f, правило %s, top-%d), "
                 "оценка отказа=%s, порог=%.4f",
-                settings.pp_dba_k, pp_state.dedup_mode(settings), settings.pp_camera_tau, app.state.pp.rule,
+                settings.pp_dba_k, f"ранжирование {pp_state.dedup_rank(settings)}, отказ {pp_state.dedup_refusal(settings)}",
+                settings.pp_camera_tau, app.state.pp.rule,
                 settings.pp_camera_topk, settings.refusal_score, settings.search_threshold,
             )
             _warn_threshold_preset()
@@ -194,7 +195,7 @@ def _custom_refusal() -> bool:
 def _warn_threshold_preset() -> None:
     from .config import REFUSAL_PRESETS
 
-    key = (settings.pp_dba_k, pp_state.dedup_mode(settings), settings.refusal_score)
+    key = pp_state.preset_key(settings)
     preset = REFUSAL_PRESETS.get(key)
     if preset is None:
         log.warning("для %s нет посчитанного порога (config.REFUSAL_PRESETS): SEARCH_THRESHOLD=%.4f не проверен", key,
@@ -295,14 +296,15 @@ def _config_custom() -> dict:
     """/v1/config при включённой постобработке или оценке отказа не raw."""
     from .config import REFUSAL_PRESETS
 
-    key = (settings.pp_dba_k, pp_state.dedup_mode(settings), settings.refusal_score)
+    key = pp_state.preset_key(settings)
     note = REFUSAL_PRESETS.get(key, {}).get("note", "порог для этого режима не посчитан")
     return {
         "model": _model().name,
         "dim": _model().dim,
         "explain_available": hasattr(_model(), "patch_saliency"),
         "refusal_score": settings.refusal_score,
-        "postprocess": {"dba_k": settings.pp_dba_k, "dedup": pp_state.dedup_mode(settings),
+        "postprocess": {"dba_k": settings.pp_dba_k, "dedup_rank": pp_state.dedup_rank(settings),
+                        "dedup_refusal": pp_state.dedup_refusal(settings),
                         "camera_penalty": settings.pp_camera_penalty, "camera_tau": settings.pp_camera_tau,
                         "camera_topk": settings.pp_camera_topk},
         "modes": {

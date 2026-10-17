@@ -1,9 +1,11 @@
 """Правило Андрея: почти-дубль = очень высокое сходство И та же рамка.
 
 Кандидат — почти-дубль запроса (та же машина с той же камеры, соседний кадр), если
-  сырой косинус эмбеддингов (без DBA) ≥ s_hi
-  и рамки близки в координатах кадра: IoU ≥ t_iou, сдвиг центра ≤ t_center (в долях
-  среднего размера рамки) и размеры отличаются не больше чем в exp(t_size) раз.
+  сырой косинус эмбеддингов (без DBA) ≥ s_any (одного сходства хватает; inf — выкл)
+  ИЛИ сырой косинус ≥ s_hi и рамки близки в координатах кадра: IoU ≥ t_iou, сдвиг
+  центра ≤ t_center (в долях среднего размера рамки), размеры — не больше чем в
+  exp(t_size) раз. Наша калибровка: s_hi 0.84, IoU 0.6, центр 0.3; Андрея: s_any 0.94
+  ИЛИ s_hi 0.85 и IoU 0.7.
 Почти-дубли исключаются из ранжирования и из оценки отказа (в метрике эталона они всё
 равно junk). Пороги подобраны по camera_id обучающих машин вне фолда
 (research/dedup_compare.py, honest_eval_results/dedup_compare_a10.md).
@@ -38,12 +40,16 @@ def box_features(qbox, boxes) -> dict:
     return {"iou": iou, "center": center, "size": size, "ok": ok}
 
 
-def rule_from_features(raw_cos, f: dict, s_hi: float, t_iou: float, t_center: float, t_size: float) -> np.ndarray:
-    """Правило по готовым признакам box_features — одно место и для сервиса, и для калибровки."""
-    return (np.asarray(raw_cos) >= s_hi) & f["ok"] & (f["iou"] >= t_iou) & (f["center"] <= t_center) & \
-        (f["size"] <= t_size)
+def rule_from_features(raw_cos, f: dict, s_hi: float, t_iou: float, t_center: float, t_size: float,
+                       s_any: float = float("inf")) -> np.ndarray:
+    """Правило по готовым признакам box_features — одно место и для сервиса, и для калибровки:
+    cos ≥ s_any ИЛИ (cos ≥ s_hi И рамки близки). s_any = inf — только вторая часть."""
+    c = np.asarray(raw_cos)
+    return (c >= s_any) | ((c >= s_hi) & f["ok"] & (f["iou"] >= t_iou) & (f["center"] <= t_center) &
+                           (f["size"] <= t_size))
 
 
-def near_dup_flags(raw_cos, qbox, boxes, s_hi: float, t_iou: float, t_center: float, t_size: float) -> np.ndarray:
+def near_dup_flags(raw_cos, qbox, boxes, s_hi: float, t_iou: float, t_center: float, t_size: float,
+                   s_any: float = float("inf")) -> np.ndarray:
     """True — кандидат почти-дубль запроса."""
-    return rule_from_features(raw_cos, box_features(qbox, boxes), s_hi, t_iou, t_center, t_size)
+    return rule_from_features(raw_cos, box_features(qbox, boxes), s_hi, t_iou, t_center, t_size, s_any)
