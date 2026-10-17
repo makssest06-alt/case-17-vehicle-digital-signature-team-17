@@ -19,6 +19,11 @@ a + b·ln N, для гауссова — как a + b·√(2 ln N). Обе фо�
 кадр галереи, больше — увереннее), q, g — L2-векторы, Q, G — pandas с
 vehicle_id / camera_id по image_id. Почти-дубли маскируются после скора.
 
+`--score service` — скор сервиса с постобработкой тем же кодом, что api/app/pp
+(DBA k=--pp-dba-k, штраф за ту же камеру по признаку фона, оценка отказа
+rerank.refusal_score), протокол --mode: nodup или neardup («как сервис»: у
+запроса без пары в галерее остаётся кадр его машины с той же камеры).
+
     python research/threshold_vs_gallery.py --data-dir <данные> --env REID_WEIGHTS=<веса> --tag a10
     python research/threshold_vs_gallery.py ... --score-fn andrey_pp.py:rerank --tag a10_andrey
 """
@@ -35,6 +40,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parent / "api"))          # app.pp — код сервиса
 import calibrate_refusal_folds as crf  # noqa: E402
 import honest_eval as he  # noqa: E402
 import refusal_score as rsc  # noqa: E402
@@ -73,6 +79,79 @@ def plugin(spec: str):
     return getattr(mod, fn)
 
 
+# ---------------------------------------------------------------------------
+# скор сервиса: тот же код, что api/app/pp
+# ---------------------------------------------------------------------------
+
+def service_bg(D, a) -> dict:
+    """Признак фона сервиса (градиенты 64×36 + гистограммы) для всех кадров — из кэша cheap_bg."""
+    import cheap_bg as cb
+    import pseudo_camera as pc
+
+    rows = pc.read_rows(a.data_dir)
+    parts = cb.descriptors(rows, a.zip, a.cache_dir / "cheap_bg_desc.npz", 4)
+    return cb.kind_bg(parts, [r["image_id"] for r in rows], "+".join(cb.bgm.SERVICE_PARTS))
+
+
+def records_service(D, q_rows, g_rows, opened: set, bg: dict, conf: str, sp: dict, extra: bool = False) -> dict:
+    """Записи отказа для скора сервиса. conf: s1 → оценка raw, z100 → z100 (обе — в conf_raw / conf_z100).
+    extra — ещё mAP@10 и mINP ранжирования после постобработки (для research/refusal_mode.py)."""
+    import bigallery_pp as bp
+    from app.pp import rerank as rr
+
+    b = bp.make_block(D, q_rows, g_rows, opened, bg)
+    mask = b["mask"][sp["mode"]]
+    s = bp.dba_scores(b, sp["dba_k"], clean=sp["mode"] == "nodup") if sp["dba_k"] else b["qv"] @ b["gv"].T
+    s = np.where(mask, -np.inf, s)
+    k = rr.needed_k(10, sp["camera"], sp["topk"], "z100")
+    top = np.argpartition(-s, k - 1, axis=1)[:, :k]
+    top = np.take_along_axis(top, np.argsort(-np.take_along_axis(s, top, 1), axis=1, kind="stable"), 1)
+    cos = np.take_along_axis(s, top, 1)
+    flags = ((bp.pair_cos(b["qbg"], b["gbg"], top) > sp["tau"]) & np.isfinite(cos) if sp["camera"]
+             else np.zeros(cos.shape, bool))
+    n = len(s)
+    c_raw, c_z, s1, top1 = (np.full(n, -np.inf), np.full(n, -np.inf), np.full(n, -np.inf), np.zeros(n, int))
+    for i in range(n):
+        ok = np.isfinite(cos[i])
+        c, f, t = cos[i][ok], flags[i][ok], top[i][ok]
+        o = rr.rank(c, f)
+        c_raw[i], c_z[i] = rr.refusal_score(c[o], f[o], "raw"), rr.refusal_score(c[o], f[o], "z100")
+        top1[i] = t[o[0]]
+        s1[i] = c_raw[i]
+    rows_ = np.arange(n)
+    rec = {"conf": c_raw if conf == "s1" else c_z, "conf_raw": c_raw, "conf_z100": c_z,
+           "has_match": (b["same_v"] & ~b["same_c"] & ~mask).any(1), "correct": b["same_v"][rows_, top1], "s1": s1}
+    if extra:
+        pen = s.copy()
+        rr_, cc_ = np.nonzero(flags)
+        pen[rr_, top[rr_, cc_]] -= bp.BIG                        # штраф виден и в полном ранжировании
+        ev = bp.evaluate(b, pen, sp["mode"])
+        rec["mAP@10"], rec["Rank-1"], rec["mINP"] = ev["mAP@10"], ev["Rank-1"], minp(b, pen, sp["mode"])
+    return rec
+
+
+def minp(b: dict, s: np.ndarray, mode: str) -> float:
+    """mINP по полному ранжированию (логика honest_eval.full_metrics): почти-дубли и
+    скрытые протоколом кадры не участвуют, позитив — та же машина с другой камеры."""
+    junk = b["same_v"] & b["same_c"]
+    out = []
+    for i in range(len(s)):
+        keep = ~junk[i] & ~b["mask"][mode][i] & np.isfinite(s[i])
+        rel = b["same_v"][i][keep][np.argsort(-s[i][keep], kind="stable")]
+        if rel.any():
+            out.append(int(rel.sum()) / (int(np.max(np.nonzero(rel)[0])) + 1))
+    return float(np.mean(out)) if out else float("nan")
+
+
+def service_params(D, a) -> dict:
+    """Параметры скора сервиса: τ и top-K — значения по умолчанию из api/app/config.py."""
+    from app.config import Settings
+
+    st = Settings()
+    return {"mode": a.mode, "dba_k": a.pp_dba_k, "camera": a.pp_camera == "on", "tau": st.pp_camera_tau,
+            "topk": st.pp_camera_topk, "bg": service_bg(D, a)}
+
+
 def records(D, q_rows, g_rows, score_fn, conf: str) -> dict:
     Q, G = he.frame(q_rows), he.frame(g_rows)
     s = np.asarray(score_fn(D.vectors(list(Q.index)), D.vectors(list(G.index)), Q, G), dtype="float64")
@@ -86,8 +165,9 @@ def records(D, q_rows, g_rows, score_fn, conf: str) -> dict:
     return {"conf": c, "has_match": has, "correct": g_vid[top1] == q_vid, "s1": top[:, 0]}
 
 
-def build(D, score_fn, conf: str, folds: list) -> dict:
-    """Записи по фолдам: сетка N и именованные галереи. Open-set — как в honest_eval."""
+def build(D, score_fn, conf: str, folds: list, service: dict = None) -> dict:
+    """Записи по фолдам: сетка N и именованные галереи. Open-set — как в honest_eval.
+    service — параметры скора сервиса (records_service), тогда score_fn не нужен."""
     qry, gal = D.valid(D.qry), D.valid(D.gal)
     pool = D.valid(D.distractors("test_all+train_seen"))
     named = {name: D.valid(D.distractors(kind)) for name, kind in NAMED}
@@ -98,15 +178,21 @@ def build(D, score_fn, conf: str, folds: list) -> dict:
         n_open = int(round(len(fvids) * D.a.openset_frac))
         opened = set(rng.choice(sorted(fvids, key=int), size=n_open, replace=False).tolist())
         q_rows = [r for r in qry if r["vehicle_id"] in fset]
-        base = [r for r in gal if r["vehicle_id"] not in opened]
+        neardup = service is not None and service["mode"] == "neardup"
+        base = gal if neardup else [r for r in gal if r["vehicle_id"] not in opened]    # «как сервис»: кадры машин без пары в галерее
+        if service is not None:
+            rec = lambda g_rows: records_service(D, q_rows, g_rows, opened, service["bg"], conf, service,
+                                                 service.get("extra", False))
+        else:
+            rec = lambda g_rows: records(D, q_rows, g_rows, score_fn, conf)
         out["base"].append(len(base))
         sizes = [len(base)] + [n for n in GRID if n > len(base)]
         for n in sizes:
             take = min(n - len(base), len(pool))                # у самой большой галереи — весь пул
             sub = np.random.default_rng(1000 * n + f).choice(len(pool), size=take, replace=False) if take > 0 else []
-            out["grid"].setdefault(n, []).append(records(D, q_rows, base + [pool[i] for i in sub], score_fn, conf))
+            out["grid"].setdefault(n, []).append(rec(base + [pool[i] for i in sub]))
         for name, extra in named.items():
-            out["named"][name].append(records(D, q_rows, base + extra, score_fn, conf))
+            out["named"][name].append(rec(base + extra))
     return out
 
 
@@ -128,7 +214,10 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data-dir", type=Path, required=True)
     ap.add_argument("--tag", required=True)
-    ap.add_argument("--score", default="raw", help="raw | dba1 .. dba5")
+    ap.add_argument("--score", default="raw", help="raw | dba1 .. dba5 | service")
+    ap.add_argument("--mode", default="nodup", choices=("nodup", "neardup"), help="протокол галереи (для --score service)")
+    ap.add_argument("--pp-dba-k", type=int, default=1, help="для --score service: 0 — без DBA")
+    ap.add_argument("--pp-camera", default="on", choices=("on", "off"), help="для --score service: штраф за ту же камеру")
     ap.add_argument("--score-fn", default=None, help="файл.py:функция(q, g, Q, G) → скоры; заменяет --score")
     ap.add_argument("--conf", default="s1", choices=("s1", "z100"), help="оценка уверенности из строки скоров")
     ap.add_argument("--holdout", type=Path, default=HERE / "val_ids.txt")
@@ -151,9 +240,15 @@ def main() -> int:
     D = he.Data(a)
     folds = he.folds_by_vehicle(sorted(D.hold), a.folds, a.seed)
     score_name = a.score_fn or a.score
-    score_fn = plugin(a.score_fn) if a.score_fn else builtin(a.score)
-    main_ = build(D, score_fn, a.conf, folds)
-    z = build(D, score_fn, "z100", folds) if a.conf == "s1" else main_
+    service = None
+    if a.score == "service" and not a.score_fn:
+        service = service_params(D, a)
+        score_name = f"service (DBA k={a.pp_dba_k}, штраф {a.pp_camera}, τ={service['tau']:.5f}, {a.mode})"
+        score_fn = None
+    else:
+        score_fn = plugin(a.score_fn) if a.score_fn else builtin(a.score)
+    main_ = build(D, score_fn, a.conf, folds, service)
+    z = build(D, score_fn, "z100", folds, service) if a.conf == "s1" else main_
     ns = sorted(main_["grid"])
     common = [n for n in ns if len(main_["grid"][n]) == a.folds]          # N, посчитанные во всех фолдах
 
@@ -192,7 +287,7 @@ def main() -> int:
         y = np.array([open_max[n] for n in common])
         om_r2[f_] = float(1 - ((y - pred) ** 2).sum() / ((y - y.mean()) ** 2).sum())
 
-    report = {"tag": a.tag, "score": score_name, "conf": a.conf, "tnr_floor": TNR_FLOOR, "grid": common,
+    report = {"tag": a.tag, "score": score_name, "conf": a.conf, "mode": a.mode, "tnr_floor": TNR_FLOOR, "grid": common,
               "base_gallery": main_["base"], "thresholds_by_N": {str(n): rsc.stats(thr[n]) for n in common},
               "form": form, "rmse": rmse, "fits": {f_: fits[f_] for f_ in FORMS},
               "rule_mean": {"a": float(np.mean([p[0] for p in fits[form]])), "b": float(np.mean([p[1] for p in fits[form]]))},
@@ -268,7 +363,8 @@ def markdown(r: dict, stem: str) -> str:
     form = "ln N" if r["form"] == "ln" else "√(2 ln N)"
     cell = lambda d: f"{d['F1']['mean']:.3f} / {d['TNR']['mean']:.3f}"
     lines = [f"# Порог отказа от размера галереи: {r['tag']}", "",
-             f"Скор `{r['score']}`, оценка уверенности `{r['conf']}`, режим без почти-дублей, 5 фолдов. Для каждого N "
+             f"Скор `{r['score']}`, оценка уверенности `{r['conf']}`, "
+             f"{'как сервис (почти-дубли в галерее)' if r.get('mode') == 'neardup' else 'режим без почти-дублей'}, 5 фолдов. Для каждого N "
              f"порог — максимум F1 при TNR ≥ {r['tnr_floor']:.2f} на фолде выбора; правило подобрано на фолде выбора, "
              "проверено на остальных четырёх. Галерея размера N — кадры holdout фолда плюс случайная доля всего "
              "теста и кадров обучающих машин. Картинка — `" + stem + ".png`.", "",

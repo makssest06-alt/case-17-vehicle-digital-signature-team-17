@@ -51,7 +51,8 @@ python research/honest_eval.py --data-dir <данные> --suite --tag <имя> 
 | порог отказа от размера галереи для любого скора | `python research/threshold_vs_gallery.py --data-dir <данные> --env REID_WEIGHTS=<веса> --tag <имя> [--score dba1 \| --score-fn файл.py:функция]` | `threshold_vs_gallery_<имя>.md`, `.png` |
 | стоимость фона и DBA (Мак, оценка для 4060) | `python research/bench_bigallery_pp.py --zip dataset.zip --data-dir <данные>` | `bench_bigallery_pp.json` |
 | дешёвый фон для штрафа (пиксели кадра вместо resnet18), «та же камера» и DBA + штраф | `python research/cheap_bg.py --zip dataset.zip --data-dir <данные> --env REID_WEIGHTS=<веса> --tag <имя>`, затем `--report` | `cheap_bg_<имя>.md` |
-| DBA галереи для сервиса | `from dba import dba, DBAGallery` (`research/dba.py`, только numpy) | — |
+| DBA галереи для сервиса | `from dba import dba, DBAGallery` (`research/dba.py` → код сервиса `api/app/pp/dba.py`) | — |
+| режим отказа: оценка, порог, F1/TNR/PR-AUC/mINP по размерам галереи, пресеты порога | `python research/refusal_mode.py --data-dir <данные> --env REID_WEIGHTS=<веса> --tag <имя>` | `refusal_mode_<имя>.md`, `docs/refusal.md` |
 | пакет для презентации (4 слайда, числа из файлов) | `python research/honest_eval_slides.py` | `slides.md`, `gallery_size_map.png`, `score_scale.png` |
 
 ### Промер прод-модели перед сменой порога
@@ -203,6 +204,8 @@ mAP@10 на 9.0k / 10.8k / 8996 (`bigallery_pp_a10.md`); k ≥ 4 прирост�
   меняет, но убирает ответ «та же машина с той же камеры» у запросов без пары (139 → 31 из
   146) и вместе с DBA поднимает F1 отказа 0.38 → 0.50–0.52; порог thr(N) проигрывает z100
   (`threshold_vs_gallery_a10.md`).
+- **Режим отказа** (`docs/refusal.md`, `refusal_mode_a10.md`): в протоколе «как сервис» текущий порог 0.8025 без постобработки даёт TNR 0.062 на 2.2k и 0.048 на 10.8k — запросу без пары отвечает кадр его же машины с той же камеры.
+  Предварительный итог — DBA k=1 + штраф + z100, порог 4.35: TNR 0.63–0.86 и F1 0.55–0.84 на галереях 361–10 847 кадров (порог выбран вне фолда по всем размерам сразу).
 - **Дешёвый фон для штрафа** (`cheap_bg_a10.md`): вместо resnet18 (18+ мс CPU) — пиксели
   уже декодированного кадра 128×72 без машины, градиенты 64×36 + гистограммы цвета по зонам,
   1.1 мс CPU на запрос. «Та же камера» не хуже resnet18 (точность / полнота 0.92 / 0.30 против

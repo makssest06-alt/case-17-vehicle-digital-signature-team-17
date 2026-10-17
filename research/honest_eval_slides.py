@@ -138,22 +138,16 @@ def slides(pts: list) -> str:
     sc = load("score_contract.json")
     leak = load("leak_audit.json")
     err = load("error_breakdown.json")
-    ref = load("refusal_folds_a10.json")["modes"]["nodup"]           # прод-модель a10
-    ref_old = load("refusal_folds_student_rk.json")["modes"]["nodup"]  # студент из main, те же точки
-    roc = load("refusal_pr_roc.json")                                  # a10, старый — серой линией
-    prod = load("honest_eval_a10_suite.json")["suite"]
-    grid = load("knn_grid_a10.json")["rows"]["raw"]
+    rm = load("refusal_mode_a10.json")                                 # режим отказа, a10, как сервис
     sub = {g["group"]: g for g in err["subgroups"]}
     means = lambda c: {k: v["mean"] for k, v in c.items()}           # среднее по фолдам
     svc_off = means(sc["modes"]["official"]["contracts"]["service (raw, 0.8025)"])
     svc_nod = means(sc["modes"]["nodup"]["contracts"]["service (raw, 0.8025)"])
     mixed = means(sc["modes"]["nodup"]["contracts"]["mixed (CSLS, 0.8025)"])
     art = means(sc["modes"]["nodup"]["contracts"]["artifacts (CSLS, 10-й процентиль)"])
-    cur, cur_old = ref["current"]["сбалансированный 0.8025"], ref_old["current"]["сбалансированный 0.8025"]
-    t65, t7 = ref["targets"]["recall>=0.65"], ref["targets"]["recall>=0.7"]
-    work, work_old = ref["current"]["рабочая точка 0.70"], ref_old["current"]["рабочая точка 0.70"]
-    p70, p80 = roc["points"]["0.7"], roc["points"]["0.8025"]
-    p10 = lambda key, v="raw": prod[key]["metrics"][v]["official"]["mAP@10"]
+    now, fin_z, fin_r = rm["none"]["current"], rm["dba1+camera"]["z100"], rm["dba1+camera"]["raw"]
+    rm_grid = rm["dba1+camera"]["grid"]
+    tz = [v["TNR"]["mean"] for k, v in fin_z["sizes"].items() if k.isdigit()]
     old = st["old_protocol"]
     ec = err["errors_by_category"]
     n_f = err["errors"]
@@ -217,26 +211,25 @@ def slides(pts: list) -> str:
         "выше порога 0.8025.", "",
         "Картинки (номера закрыты): `honest_eval_results/error_examples/fail_1_twin.png`, "
         "`fail_2_front_rear.png`, `fail_4_night.png`, `fail_5_glare.png`", "",
-        "## 4. Рабочая точка отказа (прод-модель a10)", "",
-        f"- a10 по ранжированию на уровне старого студента: mAP@10 raw 2.2k {f3(p10('2.2k (+ весь тест)')['mean'])}, "
-        f"10.8k {f3(p10('10.8k (+ тест и обучающие)')['mean'])} (у старого {f3(big['raw']['official']['mAP@10']['mean'])} "
-        f"и {f3(last['map'])}). Сейчас 0.8025: recall {f3(cur['recall']['mean'])}, TNR {f3(cur['TNR']['mean'])} "
-        f"(2.2k без почти-дублей, среднее {cur['recall']['n']} фолдов; у старого {f3(cur_old['recall']['mean'])} / "
-        f"{f3(cur_old['TNR']['mean'])}).",
-        f"- Порог вне фолда (выбран на одном фолде, проверен на остальных): recall ≥ 0.65 → "
-        f"{f3(t65['threshold']['mean'])} ± {f3(t65['threshold']['std'])} (TNR {f3(t65['TNR']['mean'])}); "
-        f"recall ≥ 0.7 → {f3(t7['threshold']['mean'])} ± {f3(t7['threshold']['std'])} (TNR {f3(t7['TNR']['mean'])}). "
-        "Рабочая точка — 0.70: в полосе recall 0.65–0.70 у неё выше TNR.",
-        f"- На 0.70: recall {f3(work['recall']['mean'])}, TNR {f3(work['TNR']['mean'])} (у старого студента на том же "
-        f"пороге {f3(work_old['recall']['mean'])} / {f3(work_old['TNR']['mean'])}). По всем фолдам вместе против "
-        f"0.8025: recall {f2(p70['recall'])} против {f2(p80['recall'])}, в {p70['recall'] / p80['recall']:.1f} раза "
-        f"больше найденных машин ценой {f2(p80['TNR'] - p70['TNR'])} TNR.",
-        f"- Порог зависит от размера галереи: на 10.8k тот же 0.70 даёт TNR {f3(grid['10.8k']['TNR'])} "
-        f"(`knn_grid_a10.md`, строка raw), 0.8025 — "
-        f"{f3(prod['10.8k (+ тест и обучающие)']['metrics']['raw']['nodup']['TNR']['mean'])}. Для прода порог "
-        "проверять на галерее его размера.", "",
-        "Картинка: `honest_eval_results/refusal_pr_roc.png` (a10, старый студент — серой линией); таблица — "
-        "`honest_eval_results/prod_a10.md`", ""])
+        "## 4. Режим отказа (предварительно, прод-модель a10)", "",
+        f"- Отказ — оценка лучшего кандидата ниже порога. В галерее сервиса у запроса без пары остаётся кадр его "
+        f"машины с той же камеры, и сейчас (raw 0.8025, без постобработки) TNR {f3(now['2.2k']['TNR']['mean'])} на "
+        f"2.2k и {f3(now['10.8k']['TNR']['mean'])} на 10.8k: чужим сервис почти не отказывает.",
+        f"- Итог, предварительно: DBA k=1 + штраф за ту же камеру, оценка z100 = (s1 − mean(s2..s100)) / "
+        f"std(s2..s100), порог {fin_z['threshold']['mean']:.2f}. F1 / TNR {f3(fin_z['sizes']['2.2k']['F1']['mean'])} / "
+        f"{f3(fin_z['sizes']['2.2k']['TNR']['mean'])} на 2.2k, {f3(fin_z['sizes']['10.8k']['F1']['mean'])} / "
+        f"{f3(fin_z['sizes']['10.8k']['TNR']['mean'])} на 10.8k; TNR {f3(min(tz))}–{f3(max(tz))} на галереях от "
+        f"{num(rm_grid[0])} до {num(rm_grid[-1])} кадров.",
+        f"- Почему не сырой косинус: максимум сходства с чужими машинами растёт с размером галереи "
+        f"({f3(fin_r['sizes'][str(rm_grid[0])]['open_s1'])} → {f3(fin_r['sizes'][str(rm_grid[-1])]['open_s1'])}), "
+        f"лучший порог raw — {f3(fin_r['sizes'][str(rm_grid[0])]['own_threshold']['mean'])} → "
+        f"{f3(fin_r['sizes'][str(rm_grid[-1])]['own_threshold']['mean'])}; один порог raw на 10.8k даёт TNR "
+        f"{f3(fin_r['sizes']['10.8k']['TNR']['mean'])}. Порог от N держит TNR, но на 10.8k F1 "
+        f"{f3(rm['dba1+camera']['thr_n']['sizes']['10.8k']['F1']['mean'])}.",
+        "- Порог выбран вне фолда (5 фолдов по 150 машинам holdout) по всем размерам галереи сразу, тест — только "
+        "чужие кадры. Финал — после решения по постобработке, пересчёт одной командой `research/refusal_mode.py`, в "
+        "конфиге меняется одно число.", "",
+        "Подробно: `docs/refusal.md`; картинка — `honest_eval_results/threshold_vs_gallery_a10_service.png`", ""])
 
 
 def main() -> int:
