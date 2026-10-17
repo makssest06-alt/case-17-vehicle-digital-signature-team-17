@@ -7,7 +7,7 @@
 путь — эмбеддинг SigLIP ViT-B/16 224 (a10). Мерится b1 на CPU этого Мака;
 для 4060 время оценено по FLOPs: 8.27 мс SigLIP при b1 (FINAL_WORK_REPORT,
 121 FPS) × (1 + FLOPs фона / FLOPs SigLIP) — это оценка, не замер на GPU.
-DBA: однократный пересчёт галереи (kNN галереи) и стоимость добавления кадра.
+DBA (research/dba.py): пересчёт всей галереи и добавление кадра через DBAGallery.add.
 
     python research/bench_bigallery_pp.py --zip dataset.zip --data-dir <данные>
 """
@@ -28,6 +28,7 @@ from torch.utils.flop_counter import FlopCounterMode
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+import dba as dbam  # noqa: E402
 import pseudo_camera as pc  # noqa: E402
 
 GPU_SIGLIP_MS = 8.27        # RTX 4060, a10, FP16, b1 — FINAL_WORK_REPORT.md §8
@@ -89,15 +90,20 @@ def main() -> int:
     res["gpu_4060_estimate"] = {"siglip_ms": GPU_SIGLIP_MS, "with_background_ms": GPU_SIGLIP_MS * (1 + r),
                                 "fps_before": 1000 / GPU_SIGLIP_MS, "fps_after": 1000 / (GPU_SIGLIP_MS * (1 + r)),
                                 "flops_ratio": r}
-    # DBA: kNN галереи 10.8k × 512 один раз и добавление одного кадра
-    g = np.random.default_rng(0).standard_normal((10847, 512)).astype("float32")
-    g /= np.linalg.norm(g, axis=1, keepdims=True)
+    # DBA (research/dba.py, k=1): пересчёт галереи 10.8k × 512 и добавление одного кадра
+    rng = np.random.default_rng(0)
+    g = dbam.l2(rng.standard_normal((10847, 512)).astype("float32"))
     t0 = time.perf_counter()
-    for s in range(0, len(g), 2048):
-        S = g[s:s + 2048] @ g.T
-        np.argpartition(-S, 6, axis=1)[:, :6]
-    res["dba"] = {"rebuild_10847_s": time.perf_counter() - t0,
-                  "add_one_frame_ms": timed(lambda: np.argpartition(-(g @ g[0]), 6)[:6], n=50)}
+    dbam.dba(g, k=1)
+    rebuild = time.perf_counter() - t0
+    st, new = dbam.DBAGallery(g, k=1), dbam.l2(rng.standard_normal((60, 512)).astype("float32"))
+    j = [0]
+
+    def add_one():
+        j[0] += 1
+        return st.add(new[j[0] % len(new)][None])
+
+    res["dba"] = {"rebuild_10847_s": rebuild, "add_one_frame_ms": timed(add_one, n=50)}
     a.out.write_text(json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(res, ensure_ascii=False, indent=2))
     return 0

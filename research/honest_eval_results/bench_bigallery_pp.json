@@ -1,9 +1,9 @@
 {
   "threads": 4,
   "mac_ms": {
-    "siglip_b1_forward": 52.48745856806636,
-    "resnet18_448x256_forward": 18.662563059478998,
-    "background_full_query": 24.604416568763554
+    "siglip_b1_forward": 50.943124922923744,
+    "resnet18_448x256_forward": 17.973229056224227,
+    "background_full_query": 24.579624994657934
   },
   "gflops": {
     "siglip_224": 33.999814656,
@@ -17,7 +17,7 @@
     "flops_ratio": 0.24384150995767123
   },
   "dba": {
-    "rebuild_10847_s": 0.9533782498911023,
-    "add_one_frame_ms": 0.3665001131594181
+    "rebuild_10847_s": 0.3257727089803666,
+    "add_one_frame_ms": 8.476854534819722
   }
 }
