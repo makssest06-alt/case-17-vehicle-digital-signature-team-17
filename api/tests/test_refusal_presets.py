@@ -23,6 +23,17 @@ class RefusalPresetsTest(unittest.TestCase):
                 got = REFUSAL_PRESETS[ast.literal_eval(key)]
                 self.assertEqual((got["balanced"], got["strict"]), (want["balanced"], want["strict"]))
 
+    def test_dedup_rule_matches_calibration(self):
+        from app.config import Settings
+
+        path = RESULT.parent / "dedup_compare_a10.json"
+        if not path.exists():
+            self.skipTest("нет dedup_compare_a10.json")
+        rule = json.loads(path.read_text(encoding="utf-8"))["rule"]
+        s = Settings()
+        self.assertEqual((s.pp_dedup_sim, s.pp_dedup_iou, s.pp_dedup_center, s.pp_dedup_size),
+                         (rule["s_hi"], rule["t_iou"], rule["t_center"], rule["t_size"]))
+
     def test_current_service_point_untouched(self):
         from app.config import REFUSAL_PRESETS, Settings
 

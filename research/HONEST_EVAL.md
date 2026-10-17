@@ -52,6 +52,7 @@ python research/honest_eval.py --data-dir <данные> --suite --tag <имя> 
 | стоимость фона и DBA (Мак, оценка для 4060) | `python research/bench_bigallery_pp.py --zip dataset.zip --data-dir <данные>` | `bench_bigallery_pp.json` |
 | дешёвый фон для штрафа (пиксели кадра вместо resnet18), «та же камера» и DBA + штраф | `python research/cheap_bg.py --zip dataset.zip --data-dir <данные> --env REID_WEIGHTS=<веса> --tag <имя>`, затем `--report` | `cheap_bg_<имя>.md` |
 | DBA галереи для сервиса | `from dba import dba, DBAGallery` (`research/dba.py` → код сервиса `api/app/pp/dba.py`) | — |
+| правило Андрея (почти-дубль = сходство + рамка) против штрафа по фону, их OR / AND | `python research/dedup_compare.py --data-dir <данные> --env REID_WEIGHTS=<веса> --tag <имя> --zip dataset.zip` | `dedup_compare_<имя>.md` |
 | режим отказа: оценка, порог, F1/TNR/PR-AUC/mINP по размерам галереи, пресеты порога | `python research/refusal_mode.py --data-dir <данные> --env REID_WEIGHTS=<веса> --tag <имя>` | `refusal_mode_<имя>.md`, `docs/refusal.md` |
 | пакет для презентации (4 слайда, числа из файлов) | `python research/honest_eval_slides.py` | `slides.md`, `gallery_size_map.png`, `score_scale.png` |
 
@@ -204,6 +205,8 @@ mAP@10 на 9.0k / 10.8k / 8996 (`bigallery_pp_a10.md`); k ≥ 4 прирост�
   меняет, но убирает ответ «та же машина с той же камеры» у запросов без пары (139 → 31 из
   146) и вместе с DBA поднимает F1 отказа 0.38 → 0.50–0.52; порог thr(N) проигрывает z100
   (`threshold_vs_gallery_a10.md`).
+- **Правило Андрея** (`dedup_compare_a10.md`): сырой top-1 — кадр той же машины с той же камеры у 91 % запросов с парой и 97 % без пары на 2.2k (у 90 % / 94 % на 10.8k). Правило «косинус ≥ 0.84 и IoU ≥ 0.6, сдвиг центра ≤ 0.3» находит почти-дубль с точностью 0.90 и полнотой 0.86.
+  С DBA k=1 и z100 на отказе оно на уровне фона: F1 / TNR на 10.8k 0.579 / 0.772 против 0.570 / 0.766. По ранжированию хуже (mAP@10 0.619 против 0.637: убирает часть настоящих пар), зато стоит 0.04 мс против 1.4 мс. В сервисе — `PP_DEDUP=bbox|bg|both`.
 - **Режим отказа** (`docs/refusal.md`, `refusal_mode_a10.md`): в протоколе «как сервис» текущий порог 0.8025 без постобработки даёт TNR 0.062 на 2.2k и 0.048 на 10.8k — запросу без пары отвечает кадр его же машины с той же камеры.
   Предварительный итог — DBA k=1 + штраф + z100, порог 4.35: TNR 0.63–0.86 и F1 0.55–0.84 на галереях 361–10 847 кадров (порог выбран вне фолда по всем размерам сразу).
 - **Дешёвый фон для штрафа** (`cheap_bg_a10.md`): вместо resnet18 (18+ мс CPU) — пиксели

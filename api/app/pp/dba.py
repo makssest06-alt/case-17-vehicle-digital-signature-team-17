@@ -99,6 +99,13 @@ class DBAGallery:
         """Текущие g' (только чтение)."""
         return self._v
 
+    @property
+    def originals(self) -> np.ndarray:
+        """Исходные L2-векторы галереи в том же порядке строк (только чтение)."""
+        v = self._g.view()
+        v.setflags(write=False)
+        return v
+
     def _kk(self, n: int) -> int:
         return max(min(self.k, n - 1), 0)
 

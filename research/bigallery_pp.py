@@ -255,8 +255,13 @@ def run(blocks: list, folds: list, variant: dict, mode: str, tau: float, params:
     """thresholds — пороги по фолдам с другой галереи (THR_FROM); иначе порог фолда f
     выбирается на запросах фолда f этой же галереи."""
     ev = [evaluate(b, scores(b, variant, mode, tau, params), mode) for b in blocks]
-    recs = [e["rec"] for e in ev]
-    vehicles = [b["vehicle"] for b in blocks]
+    return {"mAP@10": rsc.stats([e["mAP@10"] for e in ev]), "Rank-1": rsc.stats([e["Rank-1"] for e in ev]),
+            "Rank-5": rsc.stats([e["Rank-5"] for e in ev]),
+            **run_records([e["rec"] for e in ev], [b["vehicle"] for b in blocks], folds, thresholds)}
+
+
+def run_records(recs: list, vehicles: list, folds: list, thresholds: list = None) -> dict:
+    """Порог отказа вне фолда по готовым записям (conf, has_match, correct, same_cam_top1)."""
     thr, per = [], []
     for f in range(len(folds)):
         if thresholds is not None:
@@ -275,8 +280,7 @@ def run(blocks: list, folds: list, variant: dict, mode: str, tau: float, params:
         m["n_open"] = int((~test["has_match"]).sum())
         per.append(m)
     st = lambda k: rsc.stats([p[k] for p in per])
-    return {"mAP@10": rsc.stats([e["mAP@10"] for e in ev]), "Rank-1": rsc.stats([e["Rank-1"] for e in ev]),
-            "Rank-5": rsc.stats([e["Rank-5"] for e in ev]), "threshold": rsc.stats(thr),
+    return {"threshold": rsc.stats(thr),
             "thresholds": [float(t) for t in thr], "thresholds_from": "own" if thresholds is None else "other",
             **{k: st(k) for k in ("F1", "TNR", "recall", "precision", "open_same_cam_top1", "n_open")},
             "open_same_cam_top1_all": int(sum((~r["has_match"] & r["same_cam_top1"]).sum() for r in recs)),

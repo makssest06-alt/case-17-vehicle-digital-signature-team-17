@@ -35,11 +35,17 @@ import refusal_score as rsc  # noqa: E402
 import service_embeddings as se  # noqa: E402
 import threshold_vs_gallery as tvg  # noqa: E402
 
-VARIANTS = (("none", "без постобработки", {"dba_k": 0, "camera": False}),
-            ("dba1+camera", "DBA k=1 + штраф за ту же камеру", {"dba_k": 1, "camera": True}))
+VARIANTS = (("none", "без постобработки", {"dba_k": 0, "dedup": "off"}),
+            ("dba1+camera", "DBA k=1 + штраф за ту же камеру", {"dba_k": 1, "dedup": "bg"}),
+            ("dba1+bbox", "DBA k=1 + правило Андрея (сходство + рамка)", {"dba_k": 1, "dedup": "bbox"}),
+            ("dba1+both", "DBA k=1 + оба (OR)", {"dba_k": 1, "dedup": "both"}))
 FORMULAS = ("raw", "z100")
 TNR_FLOOR, STRICT_TNR = 0.70, 0.98
-PRESET_KEY = {"none": (0, "off"), "dba1+camera": (1, "on")}
+PRESET_KEY = {"none": (0, "off"), "dba1+camera": (1, "bg"), "dba1+bbox": (1, "bbox"), "dba1+both": (1, "both")}
+# Итоговый вариант (предварительно, решение за Андреем): DBA k=1 + оба исключения (OR) — выше TNR при том же F1 и
+# меньше всего ответов «та же машина с той же камеры» у запросов без пары (dedup_compare_a10.md).
+FINAL = "dba1+both"
+SHORT = {"dba1+camera": "DBA + штраф по фону", "dba1+bbox": "DBA + правило Андрея", "dba1+both": "DBA + фон OR рамка"}
 
 
 CURRENT = 0.8025                         # SEARCH_THRESHOLD сервиса сейчас (raw, без постобработки)
@@ -127,13 +133,15 @@ def choose_formula(res: dict, variant: str) -> str:
 
 def run(D, a, folds: list) -> dict:
     bg = tvg.service_bg(D, a)
+    rule = tvg.service_rule(a)
     from app.config import Settings
 
     st = Settings()
     res = {"tag": a.tag, "tnr_floor": TNR_FLOOR, "strict_tnr": STRICT_TNR, "tau": st.pp_camera_tau,
            "topk": st.pp_camera_topk}
     for key, label, v in VARIANTS:
-        sp = {"mode": "neardup", "tau": st.pp_camera_tau, "topk": st.pp_camera_topk, "bg": bg, "extra": True, **v}
+        sp = {"mode": "neardup", "tau": st.pp_camera_tau, "topk": st.pp_camera_topk, "bg": bg, "extra": True,
+              **rule, **v}
         out = tvg.build(D, None, "s1", folds, sp)
         ns = sorted(n for n in out["grid"] if len(out["grid"][n]) == a.folds)
         nsize = {name: int(round(np.mean([out["base"][f] + len(D.valid(D.distractors(kind))) for f in range(a.folds)])))
@@ -236,7 +244,8 @@ def markdown(res: dict) -> str:
 
 def docs_md(res: dict) -> str:
     """docs/refusal.md — текст с числами из refusal_mode_<tag>.json (тот же прогон)."""
-    tag, fin = res["tag"], "dba1+camera"
+    tag, fin = res["tag"], res.get("final", "dba1+camera")
+    lab, sh = res[fin]["label"], SHORT[fin]
     pick = res[fin]["chosen_formula"]
     R, Z, raw = res[fin][pick], res[fin]["z100"], res[fin]["raw"]
     cur, tn = res["none"]["current"], res[fin]["thr_n"]
@@ -253,7 +262,7 @@ def docs_md(res: dict) -> str:
     num = lambda n: f"{int(n):,}".replace(",", " ")
     name = lambda k: num(k) if k.isdigit() else f"{k} ({num(R['sizes'][k]['N'])})"
     L = ["# Режим отказа", "",
-         "> **Предварительно.** Итог ниже посчитан для постобработки DBA k=1 + штраф за ту же камеру, которую команда "
+         f"> **Предварительно.** Итог ниже посчитан для постобработки «{lab}», которую команда "
          "ещё не приняла (решение за Андреем). После решения пересчитать одной командой (раздел «Воспроизвести») и "
          "сменить одно число в `api/app/config.py`.", "",
          "## Что считается отказом", "",
@@ -287,7 +296,7 @@ def docs_md(res: dict) -> str:
          "ту, у которой больше минимальный TNR.", "",
          "## Почему сырой порог зависит от размера галереи", "",
          f"- У запроса без пары лучший кандидат — самая похожая чужая машина, то есть максимум из N сходств. С ростом N "
-         f"он растёт: средний s1 у запросов без пары (DBA + штраф) — {g(raw['sizes'], first, 'open_s1'):.3f} при N = "
+         f"он растёт: средний s1 у запросов без пары ({sh}) — {g(raw['sizes'], first, 'open_s1'):.3f} при N = "
          f"{num(first)} и {g(raw['sizes'], last, 'open_s1'):.3f} при N = {num(last)}. Рост ложится на a + b·√(2 ln N), "
          "как у максимума N случайных величин с гауссовым хвостом.",
          f"- Лучший порог raw для каждого N отдельно растёт так же: {g(raw['sizes'], first, 'own_threshold'):.3f} → "
@@ -303,7 +312,7 @@ def docs_md(res: dict) -> str:
          f"{f3(cur['2.2k']['F1']['mean'])}. F1 у него выше итогового только потому, что он почти не отказывает, а "
          "запросов с парой 75 %. Прежние 0.8025 / TNR 0.889 посчитаны без почти-дублей.", "",
          "## Что делаем", "",
-         f"- **Итог (предварительно): DBA k=1 + штраф за ту же камеру, оценка `{pick}`, порог "
+         f"- **Итог (предварительно): {lab}, оценка `{pick}`, порог "
          f"{R['threshold']['mean']:.4f} ± {R['threshold']['std']:.4f} (по фолдам), строгий "
          f"{R['strict_threshold']['mean']:.4f}.** TNR на размерах {f3(t_lo)}–{f3(t_hi)}, F1 {f3(f_lo)}–{f3(f_hi)}. "
          f"Правило TNR ≥ 0.70 на всех размерах при одном пороге не выполнила ни одна формула; z100 выбран по "
@@ -319,6 +328,13 @@ def docs_md(res: dict) -> str:
          f"{tn['b']['mean']:.4f}·√(2 ln N), где N — сколько кадров в галерее сервиса в момент запроса. Держит TNR "
          f"{f3(n_lo)}–{f3(n_hi)} на всех размерах, но F1 на 10.8k {f3(tn['sizes']['10.8k']['F1']['mean'])} против "
          f"{f3(R['sizes']['10.8k']['F1']['mean'])} у `{pick}`. В сервисе не реализовано: нужно два числа, а не одно.",
+         *([f"- **Другие исключения почти-дублей** (разбор — `dedup_compare_a10.md`), та же оценка `{pick}`: "
+            + "; ".join(f"«{res[v]['label']}» — порог {res[v][pick]['threshold']['mean']:.4f}, F1 / TNR "
+                        f"{f3(res[v][pick]['sizes']['2.2k']['F1']['mean'])} / {f3(res[v][pick]['sizes']['2.2k']['TNR']['mean'])} "
+                        f"на 2.2k и {f3(res[v][pick]['sizes']['10.8k']['F1']['mean'])} / "
+                        f"{f3(res[v][pick]['sizes']['10.8k']['TNR']['mean'])} на 10.8k"
+                        for v in ("dba1+camera", "dba1+bbox", "dba1+both") if v in res and v != fin) + ". Таблица ниже."]
+           if "dba1+both" in res else []),
          "- **Порог не переносится между вариантами постобработки.** Включили её — смените `SEARCH_THRESHOLD` (и "
          "`STRICT`) на значение из `REFUSAL_PRESETS`. Иначе сервис предупредит в логе при старте.", "",
          f"## Цифры по размерам галереи: итог, `{pick}`", "",
@@ -331,7 +347,7 @@ def docs_md(res: dict) -> str:
                  f"{f3(v['PR-AUC']['mean'])} | {f3(v['mAP@10']['mean'])} | {f3(v['Rank-1']['mean'])} | "
                  f"{f3(v['Rank-5']['mean'])} | {f3(v['mINP']['mean'])} |")
     fr = R["free"]
-    L += ["", f"## Сколько F1 отдаём за TNR: DBA + штраф, `{pick}`", "",
+    L += ["", f"## Сколько F1 отдаём за TNR: {sh}, `{pick}`", "",
           f"Две точки одной оценки: F1-оптимум без ограничения на TNR (порог {fr['threshold']['mean']:.4f} ± "
           f"{fr['threshold']['std']:.4f}) и наш порог {R['threshold']['mean']:.4f} (F1 при TNR ≥ 0.70); рядом — "
           "сервис сейчас. Оба порога выбраны вне фолда по всем размерам сразу.", "",
@@ -343,13 +359,16 @@ def docs_md(res: dict) -> str:
                  f"{f3(a_['F1']['mean'])} / {f3(a_['TNR']['mean'])} | **{f3(b_['F1']['mean'])} / {f3(b_['TNR']['mean'])}** | "
                  f"{b_['F1']['mean'] - a_['F1']['mean']:+.3f} | {b_['TNR']['mean'] - a_['TNR']['mean']:+.3f} |")
     other = "raw" if pick == "z100" else "z100"
+    extra = [v for v in ("dba1+camera", "dba1+bbox", "dba1+both") if v in res and v != fin]
     L += ["", "## Сравнение вариантов, F1 / TNR", "",
-          f"| Галерея (кадров) | Сейчас: raw 0.8025 без постобработки | DBA + штраф, `{pick}` (итог) | DBA + штраф, "
-          f"`{other}`, один порог | DBA + штраф, raw thr(N) |", "|---|---:|---:|---:|---:|"]
+          f"| Галерея (кадров) | Сейчас: raw 0.8025 без постобработки | {sh}, `{pick}` (итог) | {sh}, "
+          f"`{other}`, один порог | {sh}, raw thr(N) | "
+          + " | ".join(f"{res[v]['label']}, `{pick}`" for v in extra) + " |",
+          "|---|---:|---:|---:|---:|" + "---:|" * len(extra)]
     ft = lambda v: f"{f3(v['F1']['mean'])} / {f3(v['TNR']['mean'])}"
     for k in keys:
         L.append(f"| {name(k)} | {ft(cur[k])} | **{ft(R['sizes'][k])}** | {ft(res[fin][other]['sizes'][k])} | "
-                 f"{ft(tn['sizes'][k])} |")
+                 f"{ft(tn['sizes'][k])} | " + " | ".join(ft(res[v][pick]["sizes"][k]) for v in extra) + " |")
     L += ["", "## Воспроизвести", "",
           "```bash",
           f"python research/refusal_mode.py --data-dir <данные> --env REID_WEIGHTS=<веса a10> --tag {tag} --zip dataset.zip",
@@ -396,6 +415,7 @@ def main() -> int:
         D = he.Data(a)
         res = run(D, a, he.folds_by_vehicle(sorted(D.hold), a.folds, a.seed))
         res["presets"] = presets(res)
+        res["final"] = FINAL
         w = {k: v.replace(str(he.ROOT), "<repo>").replace(str(Path.home()), "~") for k, v in D.env.items()}
         res["weights"] = w.get("REID_WEIGHTS", "")
         stem.with_suffix(".json").write_text(json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8")

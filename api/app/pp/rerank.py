@@ -54,6 +54,6 @@ def ef_search(camera_topk: int) -> int:
     return max(Z_TOPK, int(camera_topk))
 
 
-def needed_k(top_n: int, camera_on: bool, camera_topk: int, formula: str) -> int:
-    """Сколько кандидатов брать из базы, чтобы хватило и ответу, и штрафу, и z100."""
-    return max(top_n, camera_topk if camera_on else 0, Z_TOPK if formula == "z100" else 0)
+def needed_k(top_n: int, dedup_on: bool, camera_topk: int, formula: str) -> int:
+    """Сколько кандидатов брать из базы, чтобы хватило и ответу, и исключению почти-дублей, и z100."""
+    return max(top_n, camera_topk if dedup_on else 0, Z_TOPK if formula == "z100" else 0)

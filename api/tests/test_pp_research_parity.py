@@ -1,6 +1,7 @@
-"""Сервис и исследование на одних данных: top-K, флаги «та же камера», z100 и raw совпадают.
+"""Сервис и исследование на одних данных: top-K, флаги исключения, z100 и raw совпадают.
 
-Сервис — Postprocess.search (DBA k=1 + штраф + z100) на поддельной базе и, если задан
+Сервис — Postprocess.search (DBA k=1 + исключение почти-дублей bg / bbox / both + z100)
+на поддельной базе и, если задан
 PP_TEST_DSN, на настоящем pgvector через HNSW (hnsw.ef_search = max(100, PP_CAMERA_TOPK)).
 Исследование — research/service_score.rank_queries: точный top-K по numpy, тем же
 кодом app.pp. Признаки фона галереи выбраны далеко от τ, чтобы float16 у сервиса не
@@ -30,9 +31,12 @@ N, D, K = 300, 16, 100
 BOX = (40, 30, 120, 90)
 
 
-def settings():
+MODES = ("bg", "bbox", "both")
+
+
+def settings(dedup="bg"):
     from app.config import Settings
-    return dataclasses.replace(Settings(), pp_dba_k=1, pp_camera_penalty="on", refusal_score="z100")
+    return dataclasses.replace(Settings(), pp_dba_k=1, pp_dedup=dedup, refusal_score="z100")
 
 
 def data():
@@ -45,44 +49,66 @@ def data():
     gbg = bgm.l2(rng.standard_normal((N, bgm.BG_DIM)).astype("float32"))          # косинус с запросами ~0
     q = centers[[3, 8, 17]] + 0.2 * rng.standard_normal((3, D))
     q = (q / np.linalg.norm(q, axis=1, keepdims=True)).astype("float32")
+    gbox = np.column_stack([rng.integers(0, 1500, N), rng.integers(0, 800, N), rng.integers(80, 400, N),
+                            rng.integers(60, 300, N)]).astype("float64")                 # рамки далеко от BOX
+    gbox[np.abs(gbox[:, 0] - BOX[0]) < 300, 0] += 600
     for i in range(3):                                                            # «та же камера» у части top
         near = np.argsort(-(g @ q[i]))[: 40: 4]
         gbg[near] = bgm.l2(qbg[i] + 0.01 * rng.standard_normal(bgm.BG_DIM).astype("float32"))
-    return g, gbg, q, qbg, frames
+        twins = np.argsort(-(g @ q[i]))[1: 30: 7]                                   # почти-дубли: сходство + рамка
+        g[twins] = q[i] + 0.02 * rng.standard_normal((len(twins), D))
+        g[twins] /= np.linalg.norm(g[twins], axis=1, keepdims=True)
+        gbox[twins] = BOX
+    return g, gbg, gbox, q, qbg, frames
 
 
-def research_side(g, gbg, q, qbg, tau):
+def research_side(g, gbg, gbox, q, qbg, tau, rule, dedup):
     sys.path.insert(0, str(RESEARCH))
     import service_score as ss
+    from app.pp import dedup as dd
 
     s = q @ ss.dba_gallery(g, 1).T
-    return ss.rank_queries(s, qbg, gbg, K, tau, True)
+    top, cos = ss.topk(s, K)
+    flags = np.zeros(cos.shape, bool)
+    if dedup in ("bg", "both"):
+        flags |= ss.pair_cos(qbg, gbg, top) > tau
+    if dedup in ("bbox", "both"):
+        raw = np.take_along_axis(q @ g.T, top, 1)
+        flags |= dd.near_dup_flags(raw, np.array(BOX, float)[None, None, :], gbox[top], **rule)
+    return ss.decide(top, cos, flags)
 
 
 @unittest.skipUnless((RESEARCH / "service_score.py").exists(), "нет research/service_score.py")
 class ParityTest(unittest.TestCase):
     def setUp(self):
-        self.g, self.gbg, self.q, self.qbg, self.frames = data()
-        self.tau = settings().pp_camera_tau
+        self.g, self.gbg, self.gbox, self.q, self.qbg, self.frames = data()
+        st = settings()
+        self.tau = st.pp_camera_tau
+        self.rule = {"s_hi": st.pp_dedup_sim, "t_iou": st.pp_dedup_iou, "t_center": st.pp_dedup_center,
+                     "t_size": st.pp_dedup_size}
         cos = self.qbg @ self.gbg.T
         self.assertTrue((np.abs(cos - self.tau) > 0.05).all(), "признак фона слишком близко к τ")
-        self.ref = research_side(self.g, self.gbg, self.q, self.qbg, self.tau)
-        self.assertTrue(any(f.any() for f in self.ref["flags"]))                      # штраф реально срабатывает
+        self.ref = {m: research_side(self.g, self.gbg, self.gbox, self.q, self.qbg, self.tau, self.rule, m)
+                    for m in MODES}
+        for m in MODES:
+            self.assertTrue(any(f.any() for f in self.ref[m]["flags"]), m)          # исключение реально срабатывает
+        self.assertNotEqual([list(o) for o in self.ref["bg"]["order"]], [list(o) for o in self.ref["bbox"]["order"]])
 
-    def check(self, pp, ids):
-        for i in range(3):
-            found, score = pp.search(self.q[i], K, self.frames[i], BOX)
-            with self.subTest(query=i):
-                self.assertEqual([c["id"] for c in found], [ids[j] for j in self.ref["order"][i]])
-                self.assertAlmostEqual(score, self.ref["conf_z100"][i], places=5)
+    def check(self, store, ids):
+        for m in MODES:
+            pp = pp_state.Postprocess(settings(m), D, store)
+            for i in range(3):
+                found, score = pp.search(self.q[i], K, self.frames[i], BOX)
+                with self.subTest(dedup=m, query=i):
+                    self.assertEqual([c["id"] for c in found], [ids[j] for j in self.ref[m]["order"][i]])
+                    self.assertAlmostEqual(score, self.ref[m]["conf_z100"][i], places=5)
 
     def test_fake_db(self):
         db = sf.FakeDB(n=0)
         for i in range(N):
-            db._insert(None, f"g{i}.jpg", [1, 2, 3, 4], self.g[i])
+            db._insert(None, f"g{i}.jpg", self.gbox[i], self.g[i])
             db.rows[-1]["bg"] = self.gbg[i]
-        pp = pp_state.Postprocess(settings(), D, db)
-        self.check(pp, [r["id"] for r in db.rows])
+        self.check(db, [r["id"] for r in db.rows])
 
     @unittest.skipUnless(os.getenv("PP_TEST_DSN"), "нет PP_TEST_DSN")
     def test_pgvector_hnsw(self):
@@ -102,9 +128,9 @@ class ParityTest(unittest.TestCase):
         try:
             db.ensure_schema(D)
             db.ensure_pp_schema(D, bgm.BG_DIM)
-            ids = db.insert_pp([(None, f"g{i}.jpg", [1, 2, 3, 4], self.g[i], None, self.gbg[i]) for i in range(N)], [])
-            pp = pp_state.Postprocess(settings(), D, db)
-            self.check(pp, ids)
+            ids = db.insert_pp([(None, f"g{i}.jpg", [int(v) for v in self.gbox[i]], self.g[i], None, self.gbg[i])
+                                for i in range(N)], [])
+            self.check(db, ids)
             with db.pool().connection() as conn, conn.cursor() as cur:            # SET LOCAL не утёк в пул
                 cur.execute("SHOW hnsw.ef_search")
                 self.assertEqual(cur.fetchone()[0], "40")

@@ -145,8 +145,9 @@ def slides(pts: list) -> str:
     svc_nod = means(sc["modes"]["nodup"]["contracts"]["service (raw, 0.8025)"])
     mixed = means(sc["modes"]["nodup"]["contracts"]["mixed (CSLS, 0.8025)"])
     art = means(sc["modes"]["nodup"]["contracts"]["artifacts (CSLS, 10-й процентиль)"])
-    now, fin_z, fin_r = rm["none"]["current"], rm["dba1+camera"]["z100"], rm["dba1+camera"]["raw"]
-    rm_grid = rm["dba1+camera"]["grid"]
+    fin = rm.get("final", "dba1+camera")
+    now, fin_z, fin_r = rm["none"]["current"], rm[fin]["z100"], rm[fin]["raw"]
+    rm_grid = rm[fin]["grid"]
     tz = [v["TNR"]["mean"] for k, v in fin_z["sizes"].items() if k.isdigit()]
     old = st["old_protocol"]
     ec = err["errors_by_category"]
@@ -216,7 +217,7 @@ def slides(pts: list) -> str:
         f"- Отказ — оценка лучшего кандидата ниже порога. В галерее сервиса у запроса без пары остаётся кадр его "
         f"машины с той же камеры, и сейчас (raw 0.8025, без постобработки) TNR {f3(now['2.2k']['TNR']['mean'])} на "
         f"2.2k и {f3(now['10.8k']['TNR']['mean'])} на 10.8k: чужим сервис почти не отказывает.",
-        f"- Итог, предварительно: DBA k=1 + штраф за ту же камеру, оценка z100 = (s1 − mean(s2..s100)) / "
+        f"- Итог, предварительно: {rm[fin]['label']}, оценка z100 = (s1 − mean(s2..s100)) / "
         f"std(s2..s100), порог {fin_z['threshold']['mean']:.2f}. F1 / TNR {f3(fin_z['sizes']['2.2k']['F1']['mean'])} / "
         f"{f3(fin_z['sizes']['2.2k']['TNR']['mean'])} на 2.2k, {f3(fin_z['sizes']['10.8k']['F1']['mean'])} / "
         f"{f3(fin_z['sizes']['10.8k']['TNR']['mean'])} на 10.8k; TNR {f3(min(tz))}–{f3(max(tz))} на галереях от "
@@ -226,7 +227,7 @@ def slides(pts: list) -> str:
         f"лучший порог raw — {f3(fin_r['sizes'][str(rm_grid[0])]['own_threshold']['mean'])} → "
         f"{f3(fin_r['sizes'][str(rm_grid[-1])]['own_threshold']['mean'])}; один порог raw на 10.8k даёт TNR "
         f"{f3(fin_r['sizes']['10.8k']['TNR']['mean'])}. Порог от N держит TNR, но на 10.8k F1 "
-        f"{f3(rm['dba1+camera']['thr_n']['sizes']['10.8k']['F1']['mean'])}.",
+        f"{f3(rm[fin]['thr_n']['sizes']['10.8k']['F1']['mean'])}.",
         "- Порог выбран вне фолда (150 машин holdout, 5 фолдов по 30 машин) по всем размерам галереи сразу, тест — только "
         "чужие кадры. Финал — после решения по постобработке, пересчёт одной командой `research/refusal_mode.py`, в "
         "конфиге меняется одно число.", "",

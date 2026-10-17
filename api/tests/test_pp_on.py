@@ -167,6 +167,47 @@ class CameraTest(Harness):
         self.assertTrue(all(x["bg"] is None for x in self.db.rows[-3:]))
 
 
+class DedupTest(Harness):
+    """PP_DEDUP=bbox — правило Андрея: сырой косинус ≥ s_hi И та же рамка."""
+
+    def query_vec(self, seed=1):
+        im = Image.open(io.BytesIO(sf.png(seed))).convert("RGB")
+        return sf.FakeModel().embed_batch([im.crop((28, 21, 172, 129))])[0]
+
+    def make_twin(self, box):
+        row = self.db.rows[7]
+        row["embedding"], row["bbox"] = self.query_vec().copy(), list(box)    # тот же кадр машины: cos = 1
+        self.pp.reload()
+        return row["id"]
+
+    def test_near_duplicate_goes_last(self):
+        self.start(pp_dedup="bbox")
+        twin = self.make_twin((40, 30, 120, 90))
+        _, body = self.post("/v1/search", 1)
+        ids = [c["id"] for c in body["candidates"]]
+        self.assertNotIn(twin, ids)                                          # 30 кадров, top_n 10: ушёл в конец
+        self.assertEqual(next(c for c in self.db.calls if c[0] == "search_pp")[1:], (100, "embedding", 100))
+
+    def test_far_box_is_not_near_duplicate(self):
+        self.start(pp_dedup="bbox")
+        twin = self.make_twin((300, 150, 20, 20))
+        _, body = self.post("/v1/search", 1)
+        self.assertEqual(body["candidates"][0]["id"], twin)
+
+    def test_with_dba_rule_uses_raw_cosine(self):
+        self.start(pp_dba_k=1, pp_dedup="bbox")
+        twin = self.make_twin((40, 30, 120, 90))
+        q = self.query_vec()
+        raw = self.pp._raw_cos(q, [{"id": twin}], np.array([0.0]))
+        self.assertAlmostEqual(float(raw[0]), 1.0, places=5)                 # не DBA-косинус
+        _, body = self.post("/v1/search", 1)
+        self.assertNotIn(twin, [c["id"] for c in body["candidates"]])
+
+    def test_camera_penalty_on_means_dedup_bg(self):
+        self.start(pp_camera_penalty="on")
+        self.assertEqual((self.pp.dedup, self.pp.use_bg, self.pp.use_bbox), ("bg", True, False))
+
+
 class RefusalScoreTest(unittest.TestCase):
     def test_raw_and_z100(self):
         cos = np.array([0.9, 0.8, 0.5, 0.4, 0.3])
@@ -216,7 +257,8 @@ class ValidationTest(unittest.TestCase):
     def test_bad_flags_rejected(self):
         main = sf.load_app()
         for kw in ({"pp_camera_penalty": "yes"}, {"pp_dba_k": -1}, {"refusal_score": "softmax"},
-                   {"refusal_score": "raw", "search_threshold": 3.0}):
+                   {"refusal_score": "raw", "search_threshold": 3.0}, {"pp_dedup": "iou"},
+                   {"pp_camera_penalty": "on", "pp_dedup": "bbox"}, {"pp_dedup_iou": 1.5}):
             with self.subTest(kw), patch.object(main, "settings", cfg(**{"search_threshold": 0.8, **kw})):
                 with self.assertRaises(RuntimeError):
                     main._validate_runtime_config()

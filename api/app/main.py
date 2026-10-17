@@ -121,9 +121,10 @@ async def lifespan(app: FastAPI):
         if pp_state.enabled(settings):
             app.state.pp = pp_state.Postprocess(settings, model.dim, db)
             log.info(
-                "постобработка: DBA k=%d, штраф за ту же камеру=%s (τ=%.4f, top-%d), оценка отказа=%s, порог=%.4f",
-                settings.pp_dba_k, settings.pp_camera_penalty, settings.pp_camera_tau, settings.pp_camera_topk,
-                settings.refusal_score, settings.search_threshold,
+                "постобработка: DBA k=%d, исключение почти-дублей=%s (τ фона=%.4f, правило %s, top-%d), "
+                "оценка отказа=%s, порог=%.4f",
+                settings.pp_dba_k, pp_state.dedup_mode(settings), settings.pp_camera_tau, app.state.pp.rule,
+                settings.pp_camera_topk, settings.refusal_score, settings.search_threshold,
             )
             _warn_threshold_preset()
         app.state.model_loaded = True
@@ -192,7 +193,7 @@ def _custom_refusal() -> bool:
 def _warn_threshold_preset() -> None:
     from .config import REFUSAL_PRESETS
 
-    key = (settings.pp_dba_k, settings.pp_camera_penalty, settings.refusal_score)
+    key = (settings.pp_dba_k, pp_state.dedup_mode(settings), settings.refusal_score)
     preset = REFUSAL_PRESETS.get(key)
     if preset is None:
         log.warning("для %s нет посчитанного порога (config.REFUSAL_PRESETS): SEARCH_THRESHOLD=%.4f не проверен", key,
@@ -293,15 +294,16 @@ def _config_custom() -> dict:
     """/v1/config при включённой постобработке или оценке отказа не raw."""
     from .config import REFUSAL_PRESETS
 
-    key = (settings.pp_dba_k, settings.pp_camera_penalty, settings.refusal_score)
+    key = (settings.pp_dba_k, pp_state.dedup_mode(settings), settings.refusal_score)
     note = REFUSAL_PRESETS.get(key, {}).get("note", "порог для этого режима не посчитан")
     return {
         "model": _model().name,
         "dim": _model().dim,
         "explain_available": hasattr(_model(), "patch_saliency"),
         "refusal_score": settings.refusal_score,
-        "postprocess": {"dba_k": settings.pp_dba_k, "camera_penalty": settings.pp_camera_penalty,
-                        "camera_tau": settings.pp_camera_tau, "camera_topk": settings.pp_camera_topk},
+        "postprocess": {"dba_k": settings.pp_dba_k, "dedup": pp_state.dedup_mode(settings),
+                        "camera_penalty": settings.pp_camera_penalty, "camera_tau": settings.pp_camera_tau,
+                        "camera_topk": settings.pp_camera_topk},
         "modes": {
             "balanced": {"threshold": settings.search_threshold, "title": "сбалансированный",
                          "note": f"Предварительно: {note}. F1 при TNR ≥ 0.70, docs/refusal.md."},

@@ -101,12 +101,24 @@ def records_service(D, q_rows, g_rows, opened: set, bg: dict, conf: str, sp: dic
     import service_score as ss
     from app.pp import rerank as rr
 
+    from app.pp import dedup as dd
+
     b = bp.make_block(D, q_rows, g_rows, opened, bg)
     mask = b["mask"][sp["mode"]]
-    s = bp.dba_scores(b, sp["dba_k"], clean=sp["mode"] == "nodup") if sp["dba_k"] else b["qv"] @ b["gv"].T
+    raw = b["qv"] @ b["gv"].T
+    s = bp.dba_scores(b, sp["dba_k"], clean=sp["mode"] == "nodup") if sp["dba_k"] else raw.copy()
     s = np.where(mask, -np.inf, s)
-    r = ss.rank_queries(s, b["qbg"], b["gbg"], rr.needed_k(10, sp["camera"], sp["topk"], "z100"), sp["tau"],
-                        sp["camera"])
+    dedup = sp.get("dedup") or ("bg" if sp.get("camera") else "off")
+    top, cos = ss.topk(s, rr.needed_k(10, dedup != "off", sp["topk"], "z100"))
+    fin = np.isfinite(cos)
+    flags = np.zeros(cos.shape, bool)
+    if dedup in ("bg", "both"):
+        flags |= (ss.pair_cos(b["qbg"], b["gbg"], top) > sp["tau"]) & fin
+    if dedup in ("bbox", "both"):
+        qb = np.array([sp["boxes"][i] for i in b["Q"].index], dtype="float64")
+        gb = np.array([sp["boxes"][i] for i in b["G"].index], dtype="float64")
+        flags |= dd.near_dup_flags(np.take_along_axis(raw, top, 1), qb[:, None, :], gb[top], **sp["rule"]) & fin
+    r = ss.decide(top, cos, flags)
     n = len(s)
     top1 = np.array([o[0] if len(o) else 0 for o in r["order"]])
     rows_ = np.arange(n)
@@ -141,8 +153,19 @@ def service_params(D, a) -> dict:
     from app.config import Settings
 
     st = Settings()
-    return {"mode": a.mode, "dba_k": a.pp_dba_k, "camera": a.pp_camera == "on", "tau": st.pp_camera_tau,
-            "topk": st.pp_camera_topk, "bg": service_bg(D, a)}
+    return {"mode": a.mode, "dba_k": a.pp_dba_k, "dedup": a.pp_dedup or ("bg" if a.pp_camera == "on" else "off"),
+            "tau": st.pp_camera_tau, "topk": st.pp_camera_topk, "bg": service_bg(D, a), **service_rule(a)}
+
+
+def service_rule(a) -> dict:
+    """Правило почти-дубля сервиса (PP_DEDUP_* из api/app/config.py) и рамки всех кадров."""
+    import pseudo_camera as pc
+    from app.config import Settings
+
+    st = Settings()
+    return {"rule": {"s_hi": st.pp_dedup_sim, "t_iou": st.pp_dedup_iou, "t_center": st.pp_dedup_center,
+                     "t_size": st.pp_dedup_size},
+            "boxes": {r["image_id"]: r["box"] for r in pc.read_rows(a.data_dir)}}
 
 
 def records(D, q_rows, g_rows, score_fn, conf: str) -> dict:
@@ -211,6 +234,8 @@ def main() -> int:
     ap.add_argument("--mode", default="nodup", choices=("nodup", "neardup"), help="протокол галереи (для --score service)")
     ap.add_argument("--pp-dba-k", type=int, default=1, help="для --score service: 0 — без DBA")
     ap.add_argument("--pp-camera", default="on", choices=("on", "off"), help="для --score service: штраф за ту же камеру")
+    ap.add_argument("--pp-dedup", default=None, choices=("off", "bbox", "bg", "both"),
+                    help="для --score service: исключение почти-дублей (перекрывает --pp-camera)")
     ap.add_argument("--score-fn", default=None, help="файл.py:функция(q, g, Q, G) → скоры; заменяет --score")
     ap.add_argument("--conf", default="s1", choices=("s1", "z100"), help="оценка уверенности из строки скоров")
     ap.add_argument("--holdout", type=Path, default=HERE / "val_ids.txt")
@@ -236,7 +261,7 @@ def main() -> int:
     service = None
     if a.score == "service" and not a.score_fn:
         service = service_params(D, a)
-        score_name = f"service (DBA k={a.pp_dba_k}, штраф {a.pp_camera}, τ={service['tau']:.5f}, {a.mode})"
+        score_name = f"service (DBA k={a.pp_dba_k}, исключение {service['dedup']}, τ={service['tau']:.5f}, {a.mode})"
         score_fn = None
     else:
         score_fn = plugin(a.score_fn) if a.score_fn else builtin(a.score)

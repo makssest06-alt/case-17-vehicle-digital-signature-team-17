@@ -32,15 +32,18 @@ def dba_gallery(gv: np.ndarray, k: int, pool: np.ndarray = None) -> np.ndarray:
     return dba_vectors(gv, idx, sim, k)
 
 
-def rank_queries(s: np.ndarray, qbg: np.ndarray, gbg: np.ndarray, k: int, tau: float, camera: bool) -> dict:
-    """s — скоры (Q, G), −inf — кадра для запроса нет. -> по каждому запросу индексы галереи
-    в порядке ответа сервиса (order), флаги «та же камера» в этом порядке и оценки raw / z100."""
+def topk(s: np.ndarray, k: int) -> tuple:
+    """top-k по строке в порядке убывания скора: (индексы (Q, k), скоры (Q, k))."""
     k = min(k, s.shape[1])
     top = np.argpartition(-s, k - 1, axis=1)[:, :k]
     top = np.take_along_axis(top, np.argsort(-np.take_along_axis(s, top, 1), axis=1, kind="stable"), 1)
-    cos = np.take_along_axis(s, top, 1)
-    flags = (pair_cos(qbg, gbg, top) > tau) & np.isfinite(cos) if camera else np.zeros(cos.shape, bool)
-    n = len(s)
+    return top, np.take_along_axis(s, top, 1)
+
+
+def decide(top: np.ndarray, cos: np.ndarray, flags: np.ndarray) -> dict:
+    """Решение сервиса по готовым флагам исключения: порядок ответа (кандидаты с флагом — в
+    конце), флаги в этом порядке и оценки отказа raw / z100 по кандидатам без флага."""
+    n = len(top)
     out = {"order": [], "flags": [], "cos": [], "conf_raw": np.full(n, -np.inf), "conf_z100": np.full(n, -np.inf)}
     for i in range(n):
         ok = np.isfinite(cos[i])
@@ -52,3 +55,11 @@ def rank_queries(s: np.ndarray, qbg: np.ndarray, gbg: np.ndarray, k: int, tau: f
         out["conf_raw"][i] = rr.refusal_score(c[o], f[o], "raw")
         out["conf_z100"][i] = rr.refusal_score(c[o], f[o], "z100")
     return out
+
+
+def rank_queries(s: np.ndarray, qbg: np.ndarray, gbg: np.ndarray, k: int, tau: float, camera: bool) -> dict:
+    """s — скоры (Q, G), −inf — кадра для запроса нет. -> по каждому запросу индексы галереи
+    в порядке ответа сервиса (order), флаги «та же камера» в этом порядке и оценки raw / z100."""
+    top, cos = topk(s, k)
+    flags = (pair_cos(qbg, gbg, top) > tau) & np.isfinite(cos) if camera else np.zeros(cos.shape, bool)
+    return decide(top, cos, flags)

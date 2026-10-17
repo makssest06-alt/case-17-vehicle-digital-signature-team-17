@@ -63,6 +63,11 @@ services:
       PP_CAMERA_PENALTY: ${PP_CAMERA_PENALTY:-}
       PP_CAMERA_TAU: ${PP_CAMERA_TAU:-}
       PP_CAMERA_TOPK: ${PP_CAMERA_TOPK:-}
+      PP_DEDUP: ${PP_DEDUP:-}
+      PP_DEDUP_SIM: ${PP_DEDUP_SIM:-}
+      PP_DEDUP_IOU: ${PP_DEDUP_IOU:-}
+      PP_DEDUP_CENTER: ${PP_DEDUP_CENTER:-}
+      PP_DEDUP_SIZE: ${PP_DEDUP_SIZE:-}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-20}
       DATA_DIR: /data
       ARTIFACTS_DIR: /artifacts
