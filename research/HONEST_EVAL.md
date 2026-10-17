@@ -47,10 +47,40 @@ python research/honest_eval.py --data-dir <данные> --suite --tag <имя> 
 | картинки ошибок (номера закрыты) | `python research/error_examples.py --data-dir <данные>` | `error_examples/*.png` |
 | аудит утечек | `python research/audit_leaks.py --data-dir <данные> --zip dataset.zip` | `leak_audit.md` |
 
+### Как Андрею сравнить raw и KNN одной командой
+
+```bash
+python research/honest_eval.py --data-dir <данные> --suite --post raw,knn --k 3 --alpha 3 --thr 0.73 \
+  --tag knn_k3 [--env REID_WEIGHTS=<веса>]
+# -> research/honest_eval_results/honest_eval_knn_k3_suite.md: raw и knn строками рядом на всех галереях
+```
+
+- `knn` — расширение запроса по его k ближайшим кадрам галереи (α-QE):
+  `q' = L2(q + Σ max(cos(q, g_i), 0)^α · g_i)` по top-k, скор `q' · g`
+  (`honest_eval.knn_expand`). Нужны только запрос и галерея, другие запросы не
+  участвуют, поэтому сервис может так ответить, и отказ для `knn` считается:
+  кандидат — top-1 по `knn`, решение — по сырому косинусу этого кадра против
+  `--thr`. В режиме «без почти-дублей» соседи берутся без скрытых кадров той же
+  машины с той же камеры.
+- Параметры из командной строки: `--k`, `--alpha`, `--thr` (= `--threshold`),
+  `--post` (= `--postprocess`), любой параметр постобработки — `--pp KEY=VAL`
+  (`knn_k`, `knn_alpha`, `qq_k`, `csls_k`, `rerank_k1`, `rerank_k2`, `rerank_lambda`).
+  С постобработкой `--tag` обязателен, иначе скрипт откажется: так не
+  перезаписываются результаты `honest_eval_student*`.
+- Свой вариант KNN — одна ветка `if variant == ...` в `honest_eval.scores`
+  (функция от векторов запроса и галереи, параметров и маски режима) и имя в
+  `ONLINE_VARIANTS`, если он считается по одному запросу.
+- Пример на студенте из `main` (`honest_eval_student_knn_k3_suite.md`, k = 3,
+  α = 3): mAP@10 raw → knn: 2.2k 0.704 → 0.697, 8996 0.5527 → 0.5416, 10.8k
+  0.559 → 0.545; без почти-дублей при пороге 0.73 recall 0.581 → 0.554 и TNR
+  0.749 → 0.771 на 2.2k. В таком виде knn на больших галереях не помогает.
+  Перебирать k и α на этих же 150 машинах — подбор в выборке; выбранную точку
+  проверять отдельно (другой seed фолдов, `--seed`).
+
 Окружение — `api/requirements.txt` + `pandas matplotlib scikit-learn`; первый
 прогон на CPU считает ~11.4 тыс. кропов (~12 мин на 8 ядрах), дальше векторы
 из кэша. Тесты протокола: `python -m unittest discover -s research/tests`
-(17 тестов). Подробности флагов — `research/README.md`, раздел «Честная валидация».
+(21 тест). Подробности флагов — `research/README.md`, раздел «Честная валидация».
 
 ## Главные цифры (студент из `main`)
 

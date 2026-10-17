@@ -69,7 +69,11 @@ import service_embeddings as se  # noqa: E402
 
 MODES = ("official", "wholecam", "nodup")
 GALLERIES = ("small", "big")
-PP_VARIANTS = ("raw", "qq", "csls", "rerank", "kr", "full")
+PP_VARIANTS = ("raw", "knn", "qq", "csls", "rerank", "kr", "full")
+# Считаются по одному запросу против одной галереи, без других запросов, —
+# так может ответить сервис. Для них считается и отказ: кандидат — top-1 по
+# скору варианта, решение — по сырому косинусу этого кандидата, как в /v1/search.
+ONLINE_VARIANTS = ("raw", "knn")
 
 
 # --------------------------------------------------------------------------
@@ -113,18 +117,54 @@ def frame(rows: list) -> pd.DataFrame:
 # --------------------------------------------------------------------------
 
 def pp_params(path: Path) -> dict:
-    p = {"qq_k": 3, "qq_alpha": 3.0, "csls_k": 5, "rerank_k1": 10, "rerank_k2": 6, "rerank_lambda": 0.7}
+    p = {"qq_k": 3, "qq_alpha": 3.0, "csls_k": 5, "rerank_k1": 10, "rerank_k2": 6, "rerank_lambda": 0.7,
+         "knn_k": 3, "knn_alpha": 3.0}
     if path and path.exists():
         p.update(json.loads(path.read_text(encoding="utf-8")).get("params", {}))
     return p
 
 
-def scores(q: np.ndarray, g: np.ndarray, variant: str, p: dict) -> np.ndarray:
+def mode_mask(query: pd.DataFrame, gallery: pd.DataFrame, mode: str) -> np.ndarray:
+    """Кадры галереи, которых для запроса нет: official — ничего (junk вычистит
+    эталон), wholecam — вся его камера, nodup — та же машина с той же камеры."""
+    q_vid = query.vehicle_id.to_numpy()[:, None]
+    q_cam = query.camera_id.to_numpy()[:, None]
+    g_vid = gallery.vehicle_id.to_numpy()[None, :]
+    g_cam = gallery.camera_id.to_numpy()[None, :]
+    if mode == "wholecam":
+        return np.broadcast_to(g_cam == q_cam, (len(query), len(gallery)))
+    if mode == "nodup":
+        return (g_vid == q_vid) & (g_cam == q_cam)
+    return np.zeros((len(query), len(gallery)), bool)
+
+
+def knn_expand(q: np.ndarray, g: np.ndarray, k: int, alpha: float, exclude: np.ndarray = None) -> np.ndarray:
+    """α-QE по галерее: запрос + его k ближайших кадров галереи с весами
+    max(cos, 0)^alpha, затем L2. Нужны только запрос и галерея — сервис может
+    так ответить на одиночный запрос. exclude — кадры, которых для запроса нет
+    (маска режима): соседями они не становятся."""
+    if k <= 0:
+        return q
+    sim = q @ g.T
+    if exclude is not None:
+        sim = np.where(exclude, -np.inf, sim)
+    k = min(k, g.shape[0])
+    idx = np.argpartition(-sim, k - 1, axis=1)[:, :k]
+    w = np.take_along_axis(sim, idx, axis=1)
+    w = np.where(np.isfinite(w), np.maximum(w, 0.0), 0.0) ** alpha
+    return pp.l2(q + np.einsum("qk,qkd->qd", w, g[idx]))
+
+
+def scores(q: np.ndarray, g: np.ndarray, variant: str, p: dict, exclude: np.ndarray = None) -> np.ndarray:
     """Те же шаги, что research/ablate_postprocess.score_variants, по одному.
-    full = reid_postprocess.rank с параметрами artifacts/postprocess.json."""
+    full = reid_postprocess.rank с параметрами artifacts/postprocess.json.
+    exclude — маска режима (mode_mask); её учитывает только knn, остальные
+    варианты маскирует evaluate."""
     q, g = pp.l2(q), pp.l2(g)
     if variant == "raw":
         return q @ g.T
+    if variant == "knn":
+        return knn_expand(q, g, int(p["knn_k"]), float(p["knn_alpha"]), exclude) @ g.T
     if variant == "kr":
         # k-reciprocal БЕЗ расширения запроса. В ablate_postprocess.score_variants
         # (и в таблицах GENERALIZATION_RESULTS.md / CLEAN_RETRAIN_REPORT.md) строка
@@ -188,16 +228,7 @@ def evaluate(sim: np.ndarray, raw: np.ndarray, query: pd.DataFrame, gallery: pd.
     refusal=False — метрики отказа не считаются (NaN): для постобработки нет
     развёрнутого контракта «кандидат по одному скору, порог по другому».
     """
-    q_vid = query.vehicle_id.to_numpy()[:, None]
-    q_cam = query.camera_id.to_numpy()[:, None]
-    g_vid = gallery.vehicle_id.to_numpy()[None, :]
-    g_cam = gallery.camera_id.to_numpy()[None, :]
-    if mode == "wholecam":
-        mask = g_cam == q_cam
-    elif mode == "nodup":
-        mask = (g_vid == q_vid) & (g_cam == q_cam)
-    else:
-        mask = np.zeros(sim.shape, bool)
+    mask = mode_mask(query, gallery, mode)
     s = np.where(mask, -np.inf, sim)
     r = np.where(mask, -np.inf, raw)
     g_ids = np.array(gallery.index)
@@ -371,8 +402,21 @@ def run_single(D: Data, q_rows: list, g_rows: list, variants: list, params: dict
     Q, G = frame(q_rows), frame(g_rows)
     qv, gv = D.vectors(list(Q.index)), D.vectors(list(G.index))
     raw = qv @ gv.T
-    return {f"{v}/{m}": evaluate(scores(qv, gv, v, params), raw, Q, G, m, threshold, refusal=(v == "raw"))
+    return {f"{v}/{m}": evaluate(variant_scores(qv, gv, v, params, Q, G, m), raw, Q, G, m, threshold,
+                                 refusal=v in ONLINE_VARIANTS)
             for v in variants for m in modes}
+
+
+def variant_scores(q, g, v, params, Q, G, mode, cache=None):
+    """Скор варианта для режима: knn строит соседей без кадров, скрытых режимом,
+    остальные не зависят от режима (их маскирует evaluate) и считаются один раз."""
+    if v == "knn":
+        return scores(q, g, v, params, mode_mask(Q, G, mode))
+    if cache is not None:
+        if v not in cache:
+            cache[v] = scores(q, g, v, params)
+        return cache[v]
+    return scores(q, g, v, params)
 
 
 def run_old(D: Data, variants: list, params: dict, threshold: float) -> dict:
@@ -433,10 +477,11 @@ def run_folds(D: Data, kind: str, variants: list, params: dict, threshold: float
             Qf, Gf = frame(q_rows), frame(g_rows)
             qf, gf = D.vectors(list(Qf.index)), D.vectors(list(Gf.index))
             raw = qf @ gf.T
+            cache = {}
             for v in variants:
-                s = scores(qf, gf, v, params)
                 for mode in MODES:
-                    m = evaluate(s, raw, Qf, Gf, mode, threshold, refusal=(v == "raw"))
+                    s = variant_scores(qf, gf, v, params, Qf, Gf, mode, cache)
+                    m = evaluate(s, raw, Qf, Gf, mode, threshold, refusal=v in ONLINE_VARIANTS)
                     per_fold.append({"fold": f, "gallery": gname, "postprocess": v, "mode": mode,
                                      "n_query": len(q_rows), "n_gallery": len(g_rows),
                                      "openset_vehicles": n_open, **m})
@@ -472,17 +517,18 @@ def suite_markdown(tag: str, report: dict) -> str:
         f"{d['mean']:.3f}" if d["std"] != d["std"] else f"{d['mean']:.3f} ± {d['std']:.3f}")
     for name, block in report["suite"].items():
         for v, s in block["metrics"].items():
-            label = v if v == "raw" else f"{v} ¹"
+            label = v if v in ONLINE_VARIANTS else f"{v} ¹"
             if block["kind"] == "folds":
                 o, n = s["official"], s["nodup"]
-                ref = lambda x: "—" if v != "raw" else f"{pm(x['Recall'])} / {pm(x['TNR'])} / {pm(x['F1'])}"
+                ref = lambda x: ("—" if v not in ONLINE_VARIANTS
+                                 else f"{pm(x['Recall'])} / {pm(x['TNR'])} / {pm(x['F1'])}")
                 rows.append(f"| {name} | {block['n_gallery']} | {label} | {pm(o['mAP@10'])} | "
                             f"{f3(o['Rank-1']['mean'])} | {f3(o['Rank-5']['mean'])} | {f3(o['mAP_full']['mean'])} | "
                             f"{f3(o['mINP']['mean'])} | {ref(o)} | {ref(n)} |")
             else:
                 o = s["official"]
-                ref = "—" if v != "raw" else (f"{f3(o['Recall'])} / {f3(o['TNR'])} / {f3(o['F1'])} "
-                                              f"(без пары {o['n_openset']})")
+                ref = "—" if v not in ONLINE_VARIANTS else (f"{f3(o['Recall'])} / {f3(o['TNR'])} / {f3(o['F1'])} "
+                                                            f"(без пары {o['n_openset']})")
                 rows.append(f"| {name} | {block['n_gallery']} | {label} | {o['mAP@10']:.4f} | {f3(o['Rank-1'])} | "
                             f"{f3(o['Rank-5'])} | {f3(o['mAP_full'])} | {f3(o['mINP'])} | {ref} | — |")
     model = report["env"]
@@ -502,6 +548,11 @@ def suite_markdown(tag: str, report: dict) -> str:
             "всей галерее), её параметры (artifacts/postprocess.json) подобраны на этих же 150 машинах, "
             "и /v1/search так не отвечает; отказ для неё не считается. Строка «1 запрос на камеру» — та же "
             "постобработка без соседних кадров-запросов одного проезда.", ""]
+    if any("knn" in b["metrics"] for b in report["suite"].values()):
+        p = report["params"]
+        head[-1:-1] = [f"- knn — α-QE по галерее (`knn_expand`): k = {p['knn_k']}, α = {p['knn_alpha']}; по одному "
+                       "запросу, без других запросов, соседи — без кадров, скрытых режимом; отказ — top-1 по knn, "
+                       "решение по сырому косинусу этого кадра;"]
     return "\n".join(head + rows) + "\n"
 
 
@@ -537,10 +588,14 @@ def main() -> int:
     ap.add_argument("--one-query-per-camera", action="store_true",
                     help="по одному запросу на (машина, камера): убирает соседние кадры-запросы, "
                          "на которые опирается транздуктивное расширение запроса")
-    ap.add_argument("--postprocess", default="raw",
+    ap.add_argument("--postprocess", "--post", default="raw",
                     help=f"через запятую из {PP_VARIANTS}; raw — как отвечает /v1/search")
     ap.add_argument("--pp-params", type=Path, default=ROOT / "artifacts" / "postprocess.json")
-    ap.add_argument("--threshold", type=float, default=None,
+    ap.add_argument("--pp", action="append", default=[], metavar="KEY=VAL",
+                    help="параметр постобработки поверх --pp-params, например rerank_k1=20 или knn_k=5")
+    ap.add_argument("--k", type=int, default=None, help="knn: соседей из галереи (= --pp knn_k=...)")
+    ap.add_argument("--alpha", type=float, default=None, help="knn: показатель веса соседа (= --pp knn_alpha=...)")
+    ap.add_argument("--threshold", "--thr", type=float, default=None,
                     help="порог отказа по сырому косинусу; по умолчанию SEARCH_THRESHOLD профиля")
     ap.add_argument("--profile", choices=se.PROFILES, default="env_example",
                     help="env_example — студент из .env.example; compose_default — docker compose без .env")
@@ -554,15 +609,32 @@ def main() -> int:
     ap.add_argument("--ids", default=None, help="для --embeddings .npy: файл image_id по строке")
     ap.add_argument("--cache-dir", type=Path, default=se.DEFAULT_CACHE)
     ap.add_argument("--out-dir", type=Path, default=HERE / "honest_eval_results")
-    ap.add_argument("--tag", default="student")
+    ap.add_argument("--tag", default=None,
+                    help="имя результата; без постобработки по умолчанию student, с ней — обязательно")
     a = ap.parse_args()
     if a.source == "frames" and not a.zip:
         ap.error("--source frames требует --zip")
+    if a.tag is None:
+        if a.postprocess.strip() != "raw" or a.pp or a.k is not None or a.alpha is not None:
+            ap.error("с постобработкой укажи --tag: иначе перезапишутся результаты honest_eval_student*")
+        a.tag = "student"
 
     D = Data(a)
     threshold = a.threshold if a.threshold is not None else float(D.env.get("SEARCH_THRESHOLD", "nan"))
     variants = [v.strip() for v in a.postprocess.split(",") if v.strip()]
     params = pp_params(a.pp_params)
+    for kv in a.pp:
+        key, _, val = kv.partition("=")
+        if key not in params:
+            ap.error(f"--pp {kv}: нет параметра {key!r}, есть {sorted(params)}")
+        params[key] = type(params[key])(val)
+    if a.k is not None:
+        params["knn_k"] = a.k
+    if a.alpha is not None:
+        params["knn_alpha"] = a.alpha
+    unknown = [v for v in variants if v not in PP_VARIANTS]
+    if unknown:
+        ap.error(f"--postprocess: неизвестные варианты {unknown}, есть {PP_VARIANTS}")
     report = {"tag": a.tag, "env": {k: v.replace(str(ROOT), "<repo>").replace(str(Path.home()), "~")
                                     for k, v in D.env.items()},
               "profile": a.profile, "compose_ref": a.compose_ref, "source": a.source,

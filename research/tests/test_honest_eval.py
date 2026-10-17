@@ -151,6 +151,47 @@ class Team8996CompositionTests(unittest.TestCase):
         self.assertEqual(sorted(r["image_id"] for r in g), ["hg", "t2"])
 
 
+class KnnTests(unittest.TestCase):
+    """knn — α-QE по одной галерее: без других запросов и без кадров, скрытых режимом."""
+
+    def setUp(self):
+        rng = np.random.default_rng(0)
+        self.q = he.pp.l2(rng.normal(size=(2, 8)))
+        self.g = he.pp.l2(rng.normal(size=(5, 8)))
+        self.p = {**he.pp_params(None), "knn_k": 2, "knn_alpha": 3.0}
+
+    def test_zero_neighbours_is_raw(self):
+        p = {**self.p, "knn_k": 0}
+        np.testing.assert_allclose(he.scores(self.q, self.g, "knn", p), self.q @ self.g.T)
+
+    def test_hidden_frames_are_not_neighbours(self):
+        # почти-дубль с той же камеры, скрытый режимом nodup, не должен тянуть запрос к себе
+        g = self.g.copy()
+        g[0] = self.q[0]
+        query = he.frame(rows([("q0", "A", "1"), ("q1", "B", "1")]))
+        gallery = he.frame(rows([("dup", "A", "1"), ("g1", "A", "2"), ("g2", "C", "3"), ("g3", "D", "4"),
+                                 ("g4", "E", "5")]))
+        mask = he.mode_mask(query, gallery, "nodup")
+        s = he.scores(self.q, g, "knn", self.p, mask)
+        without = he.scores(self.q[:1], g[1:], "knn", self.p)
+        np.testing.assert_allclose(s[0, 1:], without[0])
+
+    def test_scores_do_not_depend_on_other_queries(self):
+        one = he.scores(self.q[:1], self.g, "knn", self.p)
+        both = he.scores(self.q, self.g, "knn", self.p)
+        np.testing.assert_allclose(one[0], both[0])
+        self.assertIn("knn", he.ONLINE_VARIANTS)
+
+    def test_postprocess_without_tag_is_refused(self):
+        import sys
+        from unittest import mock
+        with mock.patch.object(sys, "argv", ["honest_eval.py", "--data-dir", "/nonexistent", "--post", "knn"]), \
+                mock.patch("sys.stderr"):
+            with self.assertRaises(SystemExit) as e:
+                he.main()
+        self.assertEqual(e.exception.code, 2)
+
+
 class SplitRuleTests(unittest.TestCase):
     def test_first_frame_per_camera_goes_to_gallery(self):
         train = rows([("b", "1", "1"), ("a", "1", "1"), ("c", "1", "2"), ("z", "2", "1")])
