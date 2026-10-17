@@ -24,6 +24,8 @@ uv pip install --index-url https://download.pytorch.org/whl/cpu \
 
 ## Честная валидация новой модели (honest_eval)
 
+Что меряем, главные цифры и итог проверки воспроизводимости — `research/HONEST_EVAL.md`.
+
 Одна команда — все галереи и таблица в markdown, метрики считает эталонный
 `research/official_evaluate.py` организаторов:
 
