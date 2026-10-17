@@ -33,6 +33,8 @@ class Settings:
     # даёт +2.17 mAP — замер в research/results.md.
     tta_flip: bool = _b("EMBED_TTA_FLIP", True)
     batch_size: int = _i("BATCH_SIZE", 16)
+    # Ожидаемый sha256 файла весов: при старте сверяется, не совпал — предупреждение в логе (app/weights_check.py).
+    reid_weights_sha256: str = _env("REID_WEIGHTS_SHA256", "")
 
     # поиск и отказ
     search_top_n: int = _i("SEARCH_TOP_N", 10)

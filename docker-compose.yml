@@ -75,6 +75,8 @@ services:
       HF_HUB_OFFLINE: "1"
       HF_HOME: /opt/hfcache
       REID_WEIGHTS: ${REID_WEIGHTS:-/models/siglip2_distill_ensemble_ep28.pt}
+      # Ожидаемый sha256 весов: при старте сверяется и пишется в лог; пусто — только записать.
+      REID_WEIGHTS_SHA256: ${REID_WEIGHTS_SHA256:-}
       # Режим кропа для чекпоинтов, которые не пишут tf_mode в args (студент).
       # Без проброса загрузчик возьмёт timm(base)-кроп и squash-модель
       # потеряет ~2 mAP. См. api/app/models/reid_checkpoint.py.

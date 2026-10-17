@@ -15,7 +15,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from PIL import Image
 
-from . import db
+from . import db, weights_check
 from .config import settings
 from .imaging import ImageError, crop_with_pad, load_image, validate_bbox
 from .models.registry import build_model
@@ -83,6 +83,7 @@ def _validate_runtime_config() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _validate_runtime_config()
+    weights_check.check(settings.embed_model, settings.reid_weights_sha256)
     t0 = time.time()
     log.info("загружаю модель %s ...", settings.embed_model)
     log.info(
