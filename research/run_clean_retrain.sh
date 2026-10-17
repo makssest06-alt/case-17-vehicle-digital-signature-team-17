@@ -37,6 +37,6 @@ train_teacher() {
 }
 
 # Run one teacher at a time so the 4060 memory stays bounded.
-train_teacher siglip1_clean siglip_base /tmp/opencode/siglip1_init.pt 42 squash "--geom-aug --cross-cam"
-train_teacher siglip1_base_clean siglip_base /tmp/opencode/siglip1_init.pt 42 timm ""
-train_teacher clip_clean clip_vitb16 /tmp/opencode/clip_vitb16_init.pt 7 squash "--geom-aug --cross-cam"
+  train_teacher siglip1_clean siglip_base /tmp/opencode/siglip1_init.pt 42 squash "--geom-aug --cross-cam --tf-mode squash"
+  train_teacher siglip1_base_clean siglip_base /tmp/opencode/siglip1_init.pt 42 timm "--tf-mode timm"
+  train_teacher clip_clean clip_vitb16 /tmp/opencode/clip_vitb16_init.pt 7 squash "--geom-aug --cross-cam --tf-mode squash"

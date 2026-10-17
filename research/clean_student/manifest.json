@@ -1,0 +1,33 @@
+{
+  "status": "research_handoff_not_active_service",
+  "clean_train_rows": 8639,
+  "clean_holdout_rows": 907,
+  "holdout_query": 550,
+  "holdout_gallery": 357,
+  "exact_duplicate_pairs_removed": 5,
+  "runtime_student": "clean_student_a25_ep28.pt",
+  "teachers": [
+    "siglip2_clean_retrain_ep28.pt",
+    "siglip1_clean_ep28.pt",
+    "siglip1_base_clean_ep28.pt",
+    "clip_clean_ep28.pt"
+  ],
+  "teacher_weights": [0.364, 0.232, 0.182, 0.222],
+  "student": {
+    "alpha": 25,
+    "backbone": "siglip2_base",
+    "tf_mode": "squash",
+    "tta": false,
+    "mAP10_clean": 0.8613508871934287,
+    "rank1_clean": 0.8305709023941068,
+    "rank5_clean": 0.9337016574585635
+  },
+  "sha256": {
+    "clean_student_a25_ep28.pt": "b2f823aec636f58c6ee95da7729db82d67c24d2d3d7486ebf629b991270d6eb6",
+    "clip_clean_ep28.pt": "a11ca8cd6eca53616712d014d1574ca48cc7028b6f53b2cc3b830d412f7854f9",
+    "siglip1_base_clean_ep28.pt": "36deec65c6fb1f3375b097012c198cedda50d7a15aa64d0e7dc3af2707541076",
+    "siglip1_clean_ep28.pt": "7c201bab224b2e0d348c25218d903132d19555618b8a5802d44f92f4ecdc9e54",
+    "siglip2_clean_retrain_ep28.pt": "82964358a515a40c5ac684265924398cee23b329f4f8fc45b8af1557175225e2"
+  },
+  "note": "Teacher and student files are added through Git LFS; verify hashes after checkout."
+}

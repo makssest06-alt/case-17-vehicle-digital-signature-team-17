@@ -12,3 +12,5 @@ research/*.sh       text eol=lf
 # прямой blob такого размера. head-only weights/reid_current.pt (5 МБ) остаётся
 # прямым blob, как был — существующий артефакт не мигрируется без нужды.
 weights/siglip2_distill_ensemble_ep28.pt filter=lfs diff=lfs merge=lfs -text
+# Clean retrain artifacts are research-only; runtime must use one selected student.
+research/clean_student/models/*.pt filter=lfs diff=lfs merge=lfs -text
