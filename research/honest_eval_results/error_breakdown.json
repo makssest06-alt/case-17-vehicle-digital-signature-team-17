@@ -1,0 +1,249 @@
+{
+  "model_env": {
+    "EMBED_MODEL": "reid:vit_base_patch16_siglip_224.webli",
+    "EMBED_DIM": "512",
+    "INPUT_SIZE": "224",
+    "REID_WEIGHTS": "<repo>/weights/siglip2_distill_ensemble_ep28.pt",
+    "REID_TF_MODE": "squash",
+    "EMBED_TTA_FLIP": "0",
+    "SEARCH_THRESHOLD": "0.8025",
+    "SEARCH_THRESHOLD_STRICT": "0.8465"
+  },
+  "distractors": "test_all",
+  "threshold": 0.8025,
+  "scored_queries": 400,
+  "openset_queries": 146,
+  "errors": 129,
+  "mAP@10": 0.7022,
+  "Rank-1": 0.6775,
+  "errors_by_category": {
+    "ночь": {
+      "n": 29,
+      "share_errors": 0.2248
+    },
+    "блики": {
+      "n": 29,
+      "share_errors": 0.2248
+    },
+    "смена ракурса": {
+      "n": 80,
+      "share_errors": 0.6202
+    },
+    "мелкий bbox": {
+      "n": 4,
+      "share_errors": 0.031
+    },
+    "похожая машина того же цвета": {
+      "n": 113,
+      "share_errors": 0.876
+    },
+    "соседняя машина в рамке": {
+      "n": 3,
+      "share_errors": 0.0233
+    }
+  },
+  "view_change_kinds": {
+    "перед↔зад": {
+      "n": 74,
+      "share_errors": 0.5736
+    },
+    "перед/зад↔бок": {
+      "n": 6,
+      "share_errors": 0.0465
+    }
+  },
+  "aspect_rule_errors": {
+    "n": 44,
+    "share_errors": 0.3411
+  },
+  "other_errors": {
+    "n": 5,
+    "share_errors": 0.0388
+  },
+  "pair_labels": {
+    "labeled": 129,
+    "same_color": 113,
+    "same_color_and_similar_model": 103,
+    "similar_model": 112
+  },
+  "confident_wrong_same_color": 37,
+  "confident_wrong_any": 39,
+  "correct_rank_on_error": {
+    "median": 7,
+    "in_top10": 81,
+    "beyond_50": 15
+  },
+  "subgroups": [
+    {
+      "group": "ночь или сумерки (глазами)",
+      "n": 70,
+      "share_queries": 0.175,
+      "mAP@10": 0.5963,
+      "Rank-1": 0.5857,
+      "errors": 29,
+      "share_errors": 0.2248
+    },
+    {
+      "group": "день (глазами)",
+      "n": 322,
+      "share_queries": 0.805,
+      "mAP@10": 0.7334,
+      "Rank-1": 0.7081,
+      "errors": 94,
+      "share_errors": 0.7287
+    },
+    {
+      "group": "для сравнения: яркость кропа < 70",
+      "n": 59,
+      "share_queries": 0.1475,
+      "mAP@10": 0.7054,
+      "Rank-1": 0.661,
+      "errors": 20,
+      "share_errors": 0.155
+    },
+    {
+      "group": "блики (глазами)",
+      "n": 48,
+      "share_queries": 0.12,
+      "mAP@10": 0.4646,
+      "Rank-1": 0.3958,
+      "errors": 29,
+      "share_errors": 0.2248
+    },
+    {
+      "group": "без бликов (глазами)",
+      "n": 352,
+      "share_queries": 0.88,
+      "mAP@10": 0.7346,
+      "Rank-1": 0.7159,
+      "errors": 100,
+      "share_errors": 0.7752
+    },
+    {
+      "group": "для сравнения: пикселей ярче 235 > 2 %",
+      "n": 225,
+      "share_queries": 0.5625,
+      "mAP@10": 0.6945,
+      "Rank-1": 0.6622,
+      "errors": 76,
+      "share_errors": 0.5891
+    },
+    {
+      "group": "мелкий bbox (< 120 000 пикс.)",
+      "n": 16,
+      "share_queries": 0.04,
+      "mAP@10": 0.8611,
+      "Rank-1": 0.75,
+      "errors": 4,
+      "share_errors": 0.031
+    },
+    {
+      "group": "обычный bbox",
+      "n": 384,
+      "share_queries": 0.96,
+      "mAP@10": 0.6956,
+      "Rank-1": 0.6745,
+      "errors": 125,
+      "share_errors": 0.969
+    },
+    {
+      "group": "ракурс запроса: перед",
+      "n": 139,
+      "share_queries": 0.3475,
+      "mAP@10": 0.6641,
+      "Rank-1": 0.6187,
+      "errors": 53,
+      "share_errors": 0.4109
+    },
+    {
+      "group": "ракурс запроса: зад",
+      "n": 232,
+      "share_queries": 0.58,
+      "mAP@10": 0.7454,
+      "Rank-1": 0.7284,
+      "errors": 63,
+      "share_errors": 0.4884
+    },
+    {
+      "group": "ракурс запроса: бок",
+      "n": 13,
+      "share_queries": 0.0325,
+      "mAP@10": 0.6378,
+      "Rank-1": 0.6154,
+      "errors": 5,
+      "share_errors": 0.0388
+    },
+    {
+      "group": "в галерее есть позитив того же ракурса",
+      "n": 158,
+      "share_queries": 0.395,
+      "mAP@10": 0.7802,
+      "Rank-1": 0.7911,
+      "errors": 33,
+      "share_errors": 0.2558
+    },
+    {
+      "group": "позитивы только другого ракурса",
+      "n": 207,
+      "share_queries": 0.5175,
+      "mAP@10": 0.6721,
+      "Rank-1": 0.6135,
+      "errors": 80,
+      "share_errors": 0.6202
+    },
+    {
+      "group": "— только другого: перед↔зад",
+      "n": 186,
+      "share_queries": 0.465,
+      "mAP@10": 0.6606,
+      "Rank-1": 0.6022,
+      "errors": 74,
+      "share_errors": 0.5736
+    },
+    {
+      "group": "— только другого: перед/зад↔бок",
+      "n": 21,
+      "share_queries": 0.0525,
+      "mAP@10": 0.7738,
+      "Rank-1": 0.7143,
+      "errors": 6,
+      "share_errors": 0.0465
+    },
+    {
+      "group": "цвет запроса: чёрный",
+      "n": 153,
+      "share_queries": 0.3825,
+      "mAP@10": 0.5358,
+      "Rank-1": 0.5033,
+      "errors": 76,
+      "share_errors": 0.5891
+    },
+    {
+      "group": "цвет запроса: белый",
+      "n": 76,
+      "share_queries": 0.19,
+      "mAP@10": 0.778,
+      "Rank-1": 0.7895,
+      "errors": 16,
+      "share_errors": 0.124
+    },
+    {
+      "group": "цвет запроса: серый",
+      "n": 114,
+      "share_queries": 0.285,
+      "mAP@10": 0.7567,
+      "Rank-1": 0.7193,
+      "errors": 32,
+      "share_errors": 0.2481
+    },
+    {
+      "group": "цвет запроса: цветной",
+      "n": 57,
+      "share_queries": 0.1425,
+      "mAP@10": 0.9386,
+      "Rank-1": 0.9123,
+      "errors": 5,
+      "share_errors": 0.0388
+    }
+  ]
+}

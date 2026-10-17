@@ -1,0 +1,23 @@
+{
+  "threads": 4,
+  "mac_ms": {
+    "siglip_b1_forward": 50.943124922923744,
+    "resnet18_448x256_forward": 17.973229056224227,
+    "background_full_query": 24.579624994657934
+  },
+  "gflops": {
+    "siglip_224": 33.999814656,
+    "resnet18_448x256": 8.290566144
+  },
+  "gpu_4060_estimate": {
+    "siglip_ms": 8.27,
+    "with_background_ms": 10.28656928734994,
+    "fps_before": 120.91898428053204,
+    "fps_after": 97.21414128126904,
+    "flops_ratio": 0.24384150995767123
+  },
+  "dba": {
+    "rebuild_10847_s": 0.3257727089803666,
+    "add_one_frame_ms": 8.476854534819722
+  }
+}

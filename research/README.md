@@ -22,6 +22,49 @@ uv pip install --index-url https://download.pytorch.org/whl/cpu \
   torch==2.5.1+cpu torchvision==0.20.1+cpu 'numpy<2' yacs termcolor tabulate scikit-learn pillow opencv-python-headless
 ```
 
+## Честная валидация новой модели (honest_eval)
+
+Что меряем, главные цифры и итог проверки воспроизводимости — `research/HONEST_EVAL.md`.
+
+Одна команда — все галереи и таблица в markdown, метрики считает эталонный
+`research/official_evaluate.py` организаторов:
+
+```bash
+python research/honest_eval.py --data-dir /opt/case17/data --suite --tag maxim_v2 \
+  --env REID_WEIGHTS=/path/to/new_checkpoint.pt --env REID_TF_MODE=squash
+```
+
+- `--data-dir`: `train.csv`, `test_query.csv`, `test_gallery.csv` и кропы
+  `crops/{train,query,gallery}/<image_id>.jpg` (bbox + 10 %, как собирает
+  `scripts/make_kaggle_archive.sh`).
+- Модель строится кодом сервиса (`api/app/models/registry.build_model`) с
+  окружением из `.env.example`; `--env KEY=VAL` переопределяет любой ключ:
+  `REID_WEIGHTS`, `REID_TF_MODE`, `EMBED_TTA_FLIP`, `EMBED_MODEL`, `SEARCH_THRESHOLD`.
+  Готовые векторы можно подать файлом: `--embeddings vec.npz` (`ids`, `emb`).
+- Галереи: `small` (машины фолда), `2.2k` (+ весь тест как чужие машины),
+  `8996` (состав clean-like из `research/GENERALIZATION_RESULTS.md`), `10.8k`
+  (+ тест и кадры обучающих машин). 5 фолдов по 150 машинам holdout, 25 %
+  машин фолда без пары (TNR), режимы `official` и «без почти-дублей».
+- Результат: `research/honest_eval_results/honest_eval_<tag>_suite.md`
+  (+ `.json`, `_folds.csv`). Для текущего студента —
+  `honest_eval_student_suite.md`, для профиля compose без `.env` —
+  `compose_default_check.md`.
+- Время на CPU: первый прогон считает ~11.4 тыс. кропов (студент SigLIP-B ~17
+  кадров/с на 8 ядрах, ~12 мин); дальше векторы берутся из кэша
+  `~/lct-case17/cache/honest_eval` (переменная `HONEST_EVAL_CACHE`), ключ кэша
+  включает sha256 весов и кода `api/app`.
+- `--postprocess raw,full` добавляет старую трансдуктивную постобработку
+  (k-reciprocal на 10.8k — минуты на фолд и 3–4 ГБ памяти); `/v1/search` так не
+  отвечает, это справка.
+- `--source frames --zip dataset.zip` — кроп из полного кадра функциями сервиса
+  (`app/imaging.py`), как отвечает `/v1/embed`.
+
+Порог отказа вне фолда на «чистом» режиме: `python research/calibrate_refusal_folds.py
+--data-dir /opt/case17/data [--env ...]` → `refusal_folds.json`.
+
+Окружение — то же, что ниже, плюс `pandas scikit-learn` (pandas нужен эталону).
+Тесты протокола: `python -m unittest discover -s research/tests`.
+
 ## Пайплайн
 
 ```bash

@@ -169,6 +169,63 @@ def close_pairs(bits: np.ndarray, max_dist: int, chunk: int = 1024):
     return np.concatenate(out) if out else np.zeros((0, 3), "int64")
 
 
+def frame_duplicates(zip_path: Path, train: list, val_ids: set, test_role: dict, pad: float = 0.10) -> dict:
+    """Побайтно одинаковые ПОЛНЫЕ кадры под разными image_id (dataset.zip).
+
+    Хэш кропов этого не видит: один кадр размечен дважды — под две разные
+    машины с разными рамками, кропы разные. Для пары holdout↔обучение
+    считается, какая доля машины holdout попадает в кроп обучающей машины
+    (bbox + pad): модель учится на кропах, значит видит эту долю.
+    Кандидаты — по CRC32 и размеру из оглавления zip, подтверждение — sha256.
+    """
+    import hashlib
+    import zipfile
+
+    zf = zipfile.ZipFile(zip_path)
+    groups = defaultdict(list)
+    for info in zf.infolist():
+        if info.filename.startswith("images/"):
+            groups[(info.CRC, info.file_size)].append(info.filename[len("images/"):-len(".jpg")])
+    rows = {r["image_id"]: r for r in train}
+
+    def where(i):
+        if i in rows:
+            return "holdout" if rows[i]["vehicle_id"] in val_ids else "train1391"
+        return test_role.get(i, "unknown")
+
+    def crop_box(r):
+        x, y, w, h = (int(float(r[k])) for k in ("x", "y", "w", "h"))
+        px, py = round(w * pad), round(h * pad)
+        return x - px, y - py, x + w + px, y + h + py
+
+    def share_inside(r_obj, r_crop):
+        x, y, w, h = (int(float(r_obj[k])) for k in ("x", "y", "w", "h"))
+        c0, c1, c2, c3 = crop_box(r_crop)
+        ix = max(0, min(x + w, c2) - max(x, c0))
+        iy = max(0, min(y + h, c3) - max(y, c1))
+        return ix * iy / (w * h)
+
+    kinds, pairs, holdout_frames = Counter(), [], set()
+    for ids in groups.values():
+        if len(ids) < 2:
+            continue
+        if len({hashlib.sha256(zf.read(f"images/{i}.jpg")).hexdigest() for i in ids}) != 1:
+            continue                                   # совпал только CRC
+        for x in range(len(ids)):
+            for y in range(x + 1, len(ids)):
+                a, b = ids[x], ids[y]
+                kind = "↔".join(sorted((where(a), where(b))))
+                kinds[kind] += 1
+                rec = {"kind": kind, "a": a, "b": b}
+                if {where(a), where(b)} == {"holdout", "train1391"}:
+                    h, t = (a, b) if where(a) == "holdout" else (b, a)
+                    holdout_frames.add(h)
+                    rec.update(holdout_vid=rows[h]["vehicle_id"], train_vid=rows[t]["vehicle_id"],
+                               holdout_share_in_train_crop=round(share_inside(rows[h], rows[t]), 3))
+                pairs.append(rec)
+    return {"groups_by_kind": dict(kinds), "pairs": pairs, "holdout_frames": sorted(holdout_frames)}
+
+
 def pair_sheet(examples: list, paths: dict, out: Path, limit: int = 40) -> None:
     """Подозрительные пары бок о бок — для проверки глазами (в кэш, не в репозиторий)."""
     from PIL import ImageDraw
@@ -201,6 +258,8 @@ def main() -> int:
     ap.add_argument("--weights", type=Path, default=STUDENT)
     ap.add_argument("--near-dup-cos", type=float, default=0.95,
                     help="косинус студента, выше которого кадры одной машины считаем почти-дублями")
+    ap.add_argument("--zip", type=Path, default=None,
+                    help="dataset.zip организаторов: проверить дубли ПОЛНЫХ кадров")
     a = ap.parse_args()
     d = a.data_dir
     report = {}
@@ -264,6 +323,15 @@ def main() -> int:
             for y in range(x + 1, len(ks)):
                 exact[pair_kind(ks[x], ks[y])] += 1
     report["exact_file_duplicates"] = dict(exact)
+    if a.zip:
+        test_role = {r["image_id"]: "test_query" for r in q_rows}
+        test_role.update({r["image_id"]: "test_gallery" for r in g_rows})
+        fd = frame_duplicates(a.zip, train, val_ids, test_role)
+        report["exact_full_frame_duplicates"] = fd
+        # Кадры holdout, побайтно совпадающие с кадром обучающей машины:
+        # research/honest_eval.py исключает их по умолчанию.
+        (a.out_dir / "holdout_frame_dups.txt").parent.mkdir(parents=True, exist_ok=True)
+        (a.out_dir / "holdout_frame_dups.txt").write_text("\n".join(fd["holdout_frames"]) + "\n")
 
     hash_tables, close = {}, {}
     for name, bits in (("phash", ph), ("dhash", dh)):
