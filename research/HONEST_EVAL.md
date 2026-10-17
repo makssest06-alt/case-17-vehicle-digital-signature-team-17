@@ -50,6 +50,8 @@ python research/honest_eval.py --data-dir <данные> --suite --tag <имя> 
 | постобработка по одному запросу на больших галереях: штраф за ту же камеру по фону, DBA, kr справочно | `python research/bigallery_pp.py --data-dir <данные> --env REID_WEIGHTS=<веса> --tag <имя> [--with-kr]`, затем `--report` | `bigallery_pp_<имя>.md` |
 | порог отказа от размера галереи для любого скора | `python research/threshold_vs_gallery.py --data-dir <данные> --env REID_WEIGHTS=<веса> --tag <имя> [--score dba1 \| --score-fn файл.py:функция]` | `threshold_vs_gallery_<имя>.md`, `.png` |
 | стоимость фона и DBA (Мак, оценка для 4060) | `python research/bench_bigallery_pp.py --zip dataset.zip --data-dir <данные>` | `bench_bigallery_pp.json` |
+| дешёвый фон для штрафа (пиксели кадра вместо resnet18), «та же камера» и DBA + штраф | `python research/cheap_bg.py --zip dataset.zip --data-dir <данные> --env REID_WEIGHTS=<веса> --tag <имя>`, затем `--report` | `cheap_bg_<имя>.md` |
+| DBA галереи для сервиса | `from dba import dba, DBAGallery` (`research/dba.py`, только numpy) | — |
 | пакет для презентации (4 слайда, числа из файлов) | `python research/honest_eval_slides.py` | `slides.md`, `gallery_size_map.png`, `score_scale.png` |
 
 ### Промер прод-модели перед сменой порога
@@ -97,10 +99,46 @@ python research/honest_eval.py --data-dir <данные> --suite --post raw,knn 
   Перебирать k и α на этих же 150 машинах — подбор в выборке; выбранную точку
   проверять отдельно (другой seed фолдов, `--seed`).
 
+### Как Андрею встроить DBA в сервис (`research/dba.py`)
+
+```python
+from dba import dba, DBAGallery            # только numpy
+g2 = dba(gallery_vecs, k=1, weights="cos")  # (N, D) -> новые (N, D), L2; вход не меняется
+```
+
+`g'_i = L2(g_i + Σ max(cos, 0)·g_j)` по k ближайшим другим кадрам галереи,
+запрос не меняется, скор — `q · g'`. Мерилось с k=1, weights="cos": +0.05–0.06
+mAP@10 на 9.0k / 10.8k / 8996 (`bigallery_pp_a10.md`); k ≥ 4 прироста не даёт,
+"uniform" на больших галереях не мерили. `research/` в образ не попадает
+(`api/Dockerfile` копирует `app` и `scripts`), поэтому файл переносится в
+`api/app/` целиком. Код сервиса я не трогал. Ниже — что в нём поменять.
+
+- **Где искать.** Сейчас `/v1/search` ищет в pgvector (`db.search`, `ORDER BY
+  embedding <=> q`). Индекс в памяти `api/app/gallery_index.GalleryIndex` уже
+  написан, но ни в одной ветке не подключён. Проще всего подключить его и
+  считать DBA там: в базе остаются исходные векторы. Если хранить g' в базе
+  вместо них, следующая пересборка усреднит уже усреднённое.
+- **При старте:** `index.rebuild(db.fetch_all())`, внутри `rebuild` после
+  нормировки — `self._vecs = dba(vecs / norms, k=1)`. Поиск — `index.search(q,
+  n)` вместо `db.search`. Стоимость — kNN всей галереи на CPU Мака: `dba()` на
+  10.8k кадрах — 0.3 с, на 2.2k — 29 мс, на 750 — 3.5 мс.
+- **При добавлении кадра через `POST /v1/gallery`** (и `bulk-import`, `DELETE
+  /v1/gallery/{id}`) — простой путь: `index.mark_dirty()` после записи в базу и
+  `rebuild` перед следующим поиском. Если пересборка на каждую запись станет
+  дорогой, есть `DBAGallery(vecs, k=1)`. Его `add(new)` — соседи нового кадра
+  одним умножением N×D, 9 мс на кадр при 10.8k (вместе с пересчётом g' всех
+  строк). Он возвращает строки, у которых поменялся g', — обновить их в
+  `_vecs`. После `DELETE` — `remove(rows)`, 11 мс. Итог совпадает с `dba()` на
+  той же галерее (`research/tests/test_dba.py`).
+- **Порог.** `confidence` становится `q · g'`, шкала скора сдвигается.
+  Порог отказа пересчитать на DBA-скорах: `python
+  research/threshold_vs_gallery.py ... --score dba1`. Со штрафом за ту же камеру
+  — по `cheap_bg_a10.md`.
+
 Окружение — `api/requirements.txt` + `pandas matplotlib scikit-learn`; первый
 прогон на CPU считает ~11.4 тыс. кропов (~12 мин на 8 ядрах), дальше векторы
 из кэша. Тесты протокола: `python -m unittest discover -s research/tests`
-(21 тест). Подробности флагов — `research/README.md`, раздел «Честная валидация».
+(43 теста). Подробности флагов — `research/README.md`, раздел «Честная валидация».
 
 ## Главные цифры (студент из `main`)
 
@@ -165,6 +203,13 @@ python research/honest_eval.py --data-dir <данные> --suite --post raw,knn 
   меняет, но убирает ответ «та же машина с той же камеры» у запросов без пары (139 → 31 из
   146) и вместе с DBA поднимает F1 отказа 0.38 → 0.50–0.52; порог thr(N) проигрывает z100
   (`threshold_vs_gallery_a10.md`).
+- **Дешёвый фон для штрафа** (`cheap_bg_a10.md`): вместо resnet18 (18+ мс CPU) — пиксели
+  уже декодированного кадра 128×72 без машины, градиенты 64×36 + гистограммы цвета по зонам,
+  1.1 мс CPU на запрос. «Та же камера» не хуже resnet18 (точность / полнота 0.92 / 0.30 против
+  0.93 / 0.29), поверх DBA k=1 F1 +0.129 / +0.118 и TNR +0.080 / +0.091 на 9.0k / 10.8k
+  (resnet18: +0.108 / +0.095 и +0.064 / +0.075), ≈ 106 FPS при b1 по оценке для 4060. Порог
+  отказа для 8996 теперь берётся с того же фолда 9.0k: в 8996 без пары 7 запросов, у
+  большинства фолдов TNR не определён, и прежний выбор давал порог ∞ (F1 0.23 вместо 0.44 у raw).
 
 ## Воспроизводимость (`scripts/check_reproducibility.sh`)
 
