@@ -138,17 +138,22 @@ def slides(pts: list) -> str:
     sc = load("score_contract.json")
     leak = load("leak_audit.json")
     err = load("error_breakdown.json")
-    ref = load("refusal_folds.json")["modes"]["nodup"]
-    roc = load("refusal_pr_roc.json")
+    ref = load("refusal_folds_a10.json")["modes"]["nodup"]           # прод-модель a10
+    ref_old = load("refusal_folds_student_rk.json")["modes"]["nodup"]  # студент из main, те же точки
+    roc = load("refusal_pr_roc.json")                                  # a10, старый — серой линией
+    prod = load("honest_eval_a10_suite.json")["suite"]
+    grid = load("knn_grid_a10.json")["rows"]["raw"]
     sub = {g["group"]: g for g in err["subgroups"]}
     means = lambda c: {k: v["mean"] for k, v in c.items()}           # среднее по фолдам
     svc_off = means(sc["modes"]["official"]["contracts"]["service (raw, 0.8025)"])
     svc_nod = means(sc["modes"]["nodup"]["contracts"]["service (raw, 0.8025)"])
     mixed = means(sc["modes"]["nodup"]["contracts"]["mixed (CSLS, 0.8025)"])
     art = means(sc["modes"]["nodup"]["contracts"]["artifacts (CSLS, 10-й процентиль)"])
-    cur = ref["current"]["сбалансированный 0.8025"]
-    t6, t7 = ref["targets"]["recall>=0.6"], ref["targets"]["recall>=0.7"]
-    p71, p80 = roc["points"]["0.71"], roc["points"]["0.8025"]
+    cur, cur_old = ref["current"]["сбалансированный 0.8025"], ref_old["current"]["сбалансированный 0.8025"]
+    t65, t7 = ref["targets"]["recall>=0.65"], ref["targets"]["recall>=0.7"]
+    work, work_old = ref["current"]["рабочая точка 0.70"], ref_old["current"]["рабочая точка 0.70"]
+    p70, p80 = roc["points"]["0.7"], roc["points"]["0.8025"]
+    p10 = lambda key, v="raw": prod[key]["metrics"][v]["official"]["mAP@10"]
     old = st["old_protocol"]
     ec = err["errors_by_category"]
     n_f = err["errors"]
@@ -163,7 +168,8 @@ def slides(pts: list) -> str:
     return "\n".join([
         "# Слайды: честная валидация", "",
         "Числа подставлены из файлов `research/honest_eval_results/` скриптом "
-        "`research/honest_eval_slides.py`; модель — студент из `main`, сырой косинус, если не сказано иначе.", "",
+        "`research/honest_eval_slides.py`; слайды 1–3 — студент из `main` (его мерили эксперты), слайд 4 — "
+        "прод-модель a10; сырой косинус, если не сказано иначе.", "",
         "## 1. Честная валидация", "",
         f"- Метрики считает эталон организаторов без правок: junk — та же машина с той же камеры, "
         f"AP@10 нормирован на min(позитивов, 10).",
@@ -211,19 +217,26 @@ def slides(pts: list) -> str:
         "выше порога 0.8025.", "",
         "Картинки (номера закрыты): `honest_eval_results/error_examples/fail_1_twin.png`, "
         "`fail_2_front_rear.png`, `fail_4_night.png`, `fail_5_glare.png`", "",
-        "## 4. Рабочая точка отказа", "",
-        f"- Сейчас 0.8025: recall {f3(cur['recall']['mean'])}, TNR {f3(cur['TNR']['mean'])} (2.2k без почти-дублей, "
-        f"среднее {cur['recall']['n']} фолдов).",
-        f"- Порог, выбранный на одном фолде и проверенный на остальных: recall ≥ 0.6 → "
-        f"{f3(t6['threshold']['mean'])} ± {f3(t6['threshold']['std'])} (TNR {f3(t6['TNR']['mean'])}); "
-        f"recall ≥ 0.7 → {f3(t7['threshold']['mean'])} ± {f3(t7['threshold']['std'])} (TNR {f3(t7['TNR']['mean'])}).",
-        f"- Выбранная точка 0.71, между ними: recall {f2(p71['recall'])}, TNR {f2(p71['TNR'])}, precision "
-        f"{f2(p71['precision'])}. По тем же запросам (все фолды вместе) у 0.8025 recall {f2(p80['recall'])}, "
-        f"TNR {f2(p80['TNR'])}: найденных машин в {p71['recall'] / p80['recall']:.1f} раза больше ценой "
-        f"{f2(p80['TNR'] - p71['TNR'])} TNR.",
-        "- Порог привязан к модели: для прод-модели a10 точку пересчитать той же командой "
-        "(`scripts/prod_model_check.sh`, a10 ещё не промерен).", "",
-        "Картинка: `honest_eval_results/refusal_pr_roc.png`", ""])
+        "## 4. Рабочая точка отказа (прод-модель a10)", "",
+        f"- a10 по ранжированию на уровне старого студента: mAP@10 raw 2.2k {f3(p10('2.2k (+ весь тест)')['mean'])}, "
+        f"10.8k {f3(p10('10.8k (+ тест и обучающие)')['mean'])} (у старого {f3(big['raw']['official']['mAP@10']['mean'])} "
+        f"и {f3(last['map'])}). Сейчас 0.8025: recall {f3(cur['recall']['mean'])}, TNR {f3(cur['TNR']['mean'])} "
+        f"(2.2k без почти-дублей, среднее {cur['recall']['n']} фолдов; у старого {f3(cur_old['recall']['mean'])} / "
+        f"{f3(cur_old['TNR']['mean'])}).",
+        f"- Порог вне фолда (выбран на одном фолде, проверен на остальных): recall ≥ 0.65 → "
+        f"{f3(t65['threshold']['mean'])} ± {f3(t65['threshold']['std'])} (TNR {f3(t65['TNR']['mean'])}); "
+        f"recall ≥ 0.7 → {f3(t7['threshold']['mean'])} ± {f3(t7['threshold']['std'])} (TNR {f3(t7['TNR']['mean'])}). "
+        "Рабочая точка — 0.70: в полосе recall 0.65–0.70 у неё выше TNR.",
+        f"- На 0.70: recall {f3(work['recall']['mean'])}, TNR {f3(work['TNR']['mean'])} (у старого студента на том же "
+        f"пороге {f3(work_old['recall']['mean'])} / {f3(work_old['TNR']['mean'])}). По всем фолдам вместе против "
+        f"0.8025: recall {f2(p70['recall'])} против {f2(p80['recall'])}, в {p70['recall'] / p80['recall']:.1f} раза "
+        f"больше найденных машин ценой {f2(p80['TNR'] - p70['TNR'])} TNR.",
+        f"- Порог зависит от размера галереи: на 10.8k тот же 0.70 даёт TNR {f3(grid['10.8k']['TNR'])} "
+        f"(`knn_grid_a10.md`, строка raw), 0.8025 — "
+        f"{f3(prod['10.8k (+ тест и обучающие)']['metrics']['raw']['nodup']['TNR']['mean'])}. Для прода порог "
+        "проверять на галерее его размера.", "",
+        "Картинка: `honest_eval_results/refusal_pr_roc.png` (a10, старый студент — серой линией); таблица — "
+        "`honest_eval_results/prod_a10.md`", ""])
 
 
 def main() -> int:

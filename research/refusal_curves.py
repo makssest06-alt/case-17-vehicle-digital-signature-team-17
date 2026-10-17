@@ -5,9 +5,13 @@
 семантика эталона, TP = принят И верхний кандидат верный, TNR — по запросам
 без пары. ROC: по горизонтали доля принятых запросов без пары (1 − TNR), по
 вертикали recall. Кривые и точки посчитаны по всем фолдам сразу; средние по
-фолдам — в honest_eval_results/refusal_folds.json.
+фолдам — в honest_eval_results/refusal_folds*.json.
 
+    # студент из main, точки 0.8025 / 0.71 / 0.874
     python research/refusal_curves.py --data-dir /opt/case17/data
+    # другая модель, свои точки, старый студент серой линией
+    python research/refusal_curves.py --data-dir <данные> --env REID_WEIGHTS=<веса> --label "a10" \\
+        --point "0.8025=порог 0.8025 (сейчас)" --point "0.70=порог 0.70" --baseline-label "старый студент (main)"
 """
 import argparse
 import json
@@ -26,12 +30,11 @@ import honest_eval as he  # noqa: E402
 import service_embeddings as se  # noqa: E402
 
 SURFACE, INK, INK2, MUTED, GRID = "#fcfcfb", "#0b0b0b", "#52514e", "#898781", "#e1e0d9"
-CURVE, NOW = "#2a78d6", "#eb6834"
+CURVE, NOW, BASE = "#2a78d6", "#eb6834", "#b9b8b1"
 FONT = "PT Sans"
-# порог, подпись, цвет, маркер, сдвиг подписи на PR и на ROC (точки экрана)
-POINTS = ((0.8025, "порог 0.8025 (сервис)", NOW, "o", (-40, -22), (30, 8)),
-          (0.71, "порог 0.71", INK, "s", (-20, 26), (14, -10)),
-          (0.874, "порог 0.874 (строгий)", MUTED, "D", (12, 30), (14, 4)))
+DEFAULT_POINTS = ("0.8025=порог 0.8025 (сервис)", "0.71=порог 0.71", "0.874=порог 0.874 (строгий)")
+# цвет, маркер и сдвиг подписи на PR и на ROC (точки экрана) — по порядку точек
+STYLE = ((NOW, "o", (-40, -22), (30, 8)), (INK, "s", (-20, 26), (14, -10)), (MUTED, "D", (12, 30), (14, 4)))
 
 
 def curve(rec: dict) -> list:
@@ -44,11 +47,30 @@ def area(x, y) -> float:
     return float(np.trapezoid(np.asarray(y)[order], np.asarray(x)[order]))
 
 
+def records(a) -> dict:
+    D = he.Data(a)
+    recs = crf.fold_records(D, a.distractors, "nodup")
+    crf.self_check(recs, 0.8025)
+    return crf.merge(recs), len(recs)
+
+
+def arrays(rec: dict) -> tuple:
+    pts = curve(rec)
+    r, p, t = (np.array([x[k] for x in pts], dtype="float64") for k in ("recall", "precision", "TNR"))
+    return r, p, 1 - t
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data-dir", type=Path, required=True)
     ap.add_argument("--distractors", default="test_all", choices=tuple(he.DISTRACTORS))
     ap.add_argument("--out", type=Path, default=HERE / "honest_eval_results" / "refusal_pr_roc.png")
+    ap.add_argument("--label", default="Студент из main", help="как назвать модель в заголовке")
+    ap.add_argument("--point", action="append", default=None, metavar="ПОРОГ=ПОДПИСЬ",
+                    help=f"точка на кривых, до трёх; по умолчанию {DEFAULT_POINTS}")
+    ap.add_argument("--baseline-label", default=None,
+                    help="нарисовать вторую модель серой линией (окружение — профиль + --baseline-env)")
+    ap.add_argument("--baseline-env", action="append", default=[], help="KEY=VAL для серой модели")
     ap.add_argument("--holdout", type=Path, default=HERE / "val_ids.txt")
     ap.add_argument("--exclude-frames", type=Path, default=HERE / "honest_eval_results" / "holdout_frame_dups.txt")
     ap.add_argument("--folds", type=int, default=5)
@@ -64,29 +86,38 @@ def main() -> int:
     ap.add_argument("--one-query-per-camera", action="store_true")
     ap.add_argument("--cache-dir", type=Path, default=se.DEFAULT_CACHE)
     a = ap.parse_args()
+    specs = []
+    for kv in a.point or DEFAULT_POINTS:
+        thr, _, label = kv.partition("=")
+        specs.append((float(thr), label or f"порог {thr}"))
+    if len(specs) > len(STYLE):
+        ap.error(f"не больше {len(STYLE)} точек")
 
-    D = he.Data(a)
-    recs = crf.fold_records(D, a.distractors, "nodup")
-    crf.self_check(recs, 0.8025)
-    rec = crf.merge(recs)
-    pts = curve(rec)
-    rec_, prec, tnr = (np.array([p[k] for p in pts], dtype="float64") for k in ("recall", "precision", "TNR"))
-    fpr = 1 - tnr
-    roc_auc = area(fpr, rec_)
-    pr_auc = area(rec_[1:], prec[1:])           # без точки «ничего не принято»: precision там не определён
-    marks = {t: crf.metrics(rec, t) for t, *_ in POINTS}
+    rec, n_folds = records(a)
+    rec_, prec, fpr = arrays(rec)
+    roc_auc, pr_auc = area(fpr, rec_), area(rec_[1:], prec[1:])   # PR без точки «ничего не принято»
+    base = None
+    if a.baseline_label:
+        b = argparse.Namespace(**{**vars(a), "env": a.baseline_env})
+        brec, _ = records(b)
+        br, bp, bf = arrays(brec)
+        base = {"label": a.baseline_label, "r": br, "p": bp, "f": bf,
+                "ROC_area": area(bf, br), "PR_area": area(br[1:], bp[1:])}
+    marks = {t: crf.metrics(rec, t) for t, _ in specs}
     n_pos, n_neg = int(rec["has_match"].sum()), int((~rec["has_match"]).sum())
 
     fig = plt.figure(figsize=(16, 9), dpi=100, facecolor=SURFACE)
     fig.text(0.04, 0.94, "Порог отказа: что даёт каждая точка", fontsize=32, color=INK, family=FONT,
              weight="bold", va="top")
-    fig.text(0.04, 0.865, f"Студент из main, галерея 2.2k, без почти-дублей, 5 фолдов вместе: {n_pos} запросов "
-             f"с парой, {n_neg} без пары.\nRecall: запрос принят и первый кандидат верный, как в эталоне "
+    tail = f" Серая линия: {base['label']}." if base else ""
+    fig.text(0.04, 0.865, f"{a.label}, галерея 2.2k, без почти-дублей, {n_folds} фолдов вместе: {n_pos} запросов "
+             f"с парой, {n_neg} без пары.{tail}\nRecall: запрос принят и первый кандидат верный, как в эталоне "
              "организаторов.", fontsize=17, color=INK2, family=FONT, va="top", linespacing=1.4)
-    panels = (("PR: точность против полноты", rec_[1:], prec[1:], "Recall", "Precision", f"площадь {pr_auc:.2f}"),
+    panels = (("PR: точность против полноты", rec_[1:], prec[1:], "Recall", "Precision", pr_auc,
+               (base["r"][1:], base["p"][1:], base["PR_area"]) if base else None),
               ("ROC: полнота против ложных принятий", fpr, rec_, "Принято запросов без пары (1 − TNR)",
-               "Recall", f"площадь {roc_auc:.2f}"))
-    for k, (title, x, y, xl, yl, auc) in enumerate(panels):
+               "Recall", roc_auc, (base["f"], base["r"], base["ROC_area"]) if base else None))
+    for k, (title, x, y, xl, yl, auc, b) in enumerate(panels):
         ax = fig.add_axes([0.07 + k * 0.48, 0.12, 0.4, 0.57])
         ax.set_facecolor(SURFACE)
         ax.grid(color=GRID, linewidth=1)
@@ -100,15 +131,20 @@ def main() -> int:
             lab.set_family(FONT)
         if k == 1:
             ax.plot([0, 1], [0, 1], color=MUTED, lw=1.5, ls=(0, (4, 4)))
-        ax.plot(x, y, color=CURVE, lw=3.5, drawstyle="steps-post" if k == 1 else "default")
+        if b:
+            ax.plot(b[0], b[1], color=BASE, lw=3, drawstyle="steps-post" if k == 1 else "default", zorder=2)
+        ax.plot(x, y, color=CURVE, lw=3.5, drawstyle="steps-post" if k == 1 else "default", zorder=3)
         ax.set_xlim(0, 1.0)
         ax.set_ylim(0, 1.02)
         ax.set_xlabel(xl, fontsize=19, color=INK2, family=FONT, labelpad=10)
         ax.set_ylabel(yl, fontsize=19, color=INK2, family=FONT, labelpad=10)
         ax.set_title(title, fontsize=22, color=INK, family=FONT, weight="bold", loc="left", pad=14)
-        ax.text(0.98, 0.04, auc, transform=ax.transAxes, fontsize=17, color=CURVE, family=FONT,
-                ha="right", va="bottom")
-        for t, label, color, marker, off_pr, off_roc in POINTS:
+        ax.text(0.98, 0.1 if b else 0.04, f"площадь {auc:.2f}", transform=ax.transAxes, fontsize=17, color=CURVE,
+                family=FONT, ha="right", va="bottom")
+        if b:
+            ax.text(0.98, 0.03, f"серая: {b[2]:.2f}", transform=ax.transAxes, fontsize=17, color=INK2,
+                    family=FONT, ha="right", va="bottom")
+        for (t, label), (color, marker, off_pr, off_roc) in zip(specs, STYLE):
             m = marks[t]
             px, py = (m["recall"], m["precision"]) if k == 0 else (1 - m["TNR"], m["recall"])
             ax.scatter([px], [py], s=230, color=color, marker=marker, zorder=5, edgecolor=SURFACE, linewidth=2)
@@ -121,10 +157,14 @@ def main() -> int:
     a.out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(a.out, dpi=100, facecolor=SURFACE)
     plt.close(fig)
-    summary = {"mode": "nodup", "distractors": a.distractors, "pooled_folds": len(recs), "queries_with_pair": n_pos,
-               "queries_without_pair": n_neg, "PR_area": round(pr_auc, 4), "ROC_area": round(roc_auc, 4),
+    summary = {"model": a.label, "mode": "nodup", "distractors": a.distractors, "pooled_folds": n_folds,
+               "queries_with_pair": n_pos, "queries_without_pair": n_neg,
+               "PR_area": round(pr_auc, 4), "ROC_area": round(roc_auc, 4),
                "points": {str(t): {k: (round(v, 4) if isinstance(v, float) else v) for k, v in marks[t].items()}
-                          for t, *_ in POINTS}}
+                          for t, _ in specs}}
+    if base:
+        summary["baseline"] = {"label": base["label"], "PR_area": round(base["PR_area"], 4),
+                               "ROC_area": round(base["ROC_area"], 4)}
     a.out.with_suffix(".json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     print(f"-> {a.out} ({a.out.stat().st_size / 1e6:.2f} МБ)")
