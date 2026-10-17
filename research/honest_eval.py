@@ -563,7 +563,8 @@ def main() -> int:
     threshold = a.threshold if a.threshold is not None else float(D.env.get("SEARCH_THRESHOLD", "nan"))
     variants = [v.strip() for v in a.postprocess.split(",") if v.strip()]
     params = pp_params(a.pp_params)
-    report = {"tag": a.tag, "env": {k: v.replace(str(ROOT), "<repo>") for k, v in D.env.items()},
+    report = {"tag": a.tag, "env": {k: v.replace(str(ROOT), "<repo>").replace(str(Path.home()), "~")
+                                    for k, v in D.env.items()},
               "profile": a.profile, "compose_ref": a.compose_ref, "source": a.source,
               "threshold": threshold, "params": params,
               "holdout_vehicles": len(D.hold), "gallery_frames": len(D.gal), "query_frames": len(D.qry),

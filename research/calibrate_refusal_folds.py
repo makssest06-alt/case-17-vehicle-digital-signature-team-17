@@ -145,7 +145,8 @@ def main() -> int:
 
     D = he.Data(a)
     report = {"distractors": a.distractors, "folds": a.folds, "openset_frac": a.openset_frac,
-              "env": {k: v.replace(str(he.ROOT), "<repo>") for k, v in D.env.items()}, "modes": {}}
+              "env": {k: v.replace(str(he.ROOT), "<repo>").replace(str(Path.home()), "~")
+                      for k, v in D.env.items()}, "modes": {}}
     fixed = dict(CURRENT)
     for kv in a.fixed:
         name, _, val = kv.rpartition("=")
