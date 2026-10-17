@@ -76,7 +76,7 @@ for f in docker-compose.yml .env.example api/Dockerfile api/requirements.txt \
          api/app/models/__init__.py api/app/models/base.py api/app/models/registry.py \
          api/app/models/timm_backbone.py api/scripts/make_submission.py \
          web/Dockerfile web/nginx.conf web/html/index.html db/init/01_schema.sh \
-         weights/reid_current.pt; do
+         weights/clean_student_a10_ep28.pt; do
   [ -f "$f" ] || { bad "нет файла: $f"; MISSING=1; }
 done
 [ "$MISSING" -eq 0 ] && ok "все обязательные файлы на месте"
@@ -130,7 +130,7 @@ IMAGE="${IMAGE:-case17-api:local}"
 MODELS_MOUNT="$(cd "$(grep -E '^MODELS_HOST_DIR=' .env | cut -d= -f2-)" && pwd)"
 if docker run --rm --network none \
      -v "$MODELS_MOUNT":/models:ro \
-     -e EMBED_MODEL="$(grep -E '^EMBED_MODEL=' .env | cut -d= -f2 || echo resnet18)" \
+     -e EMBED_MODEL="$(grep -E '^EMBED_MODEL=' .env | cut -d= -f2 || echo reid:vit_base_patch16_siglip_224.webli)" \
      -e REID_WEIGHTS="$(grep -E '^REID_WEIGHTS=' .env | cut -d= -f2-)" \
      "$IMAGE" python -c "
 from app.models.registry import build_model
