@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-"""Gallery-only reciprocal reranking experiment for the Case 17 online API.
+"""Gallery-only neighbour-overlap reranking experiment for the Case 17 online API.
 
 Unlike legacy k-reciprocal code, this script never links one query to another.
 It precomputes each gallery vector's K nearest gallery neighbours and then
@@ -60,31 +60,49 @@ def clean_rows(train: list[dict[str, str]], split: list[dict[str, str]]):
 
 
 def topk_rows(scores: np.ndarray, k: int, self_index: bool = False) -> np.ndarray:
-    """Top k indices per row.  Scores are never materialised for all chunks."""
-    k = min(k + int(self_index), scores.shape[1])
+    """Top k indices per row. Scores are never materialised for all chunks."""
+    if scores.ndim != 2:
+        raise ValueError("scores must be a 2-D array")
+    if k < 1:
+        raise ValueError("k must be at least 1")
+    if scores.shape[1] == 0:
+        raise ValueError("scores must have at least one column")
+    k = min(k, scores.shape[1])
     idx = np.argpartition(-scores, k - 1, axis=1)[:, :k]
     val = np.take_along_axis(scores, idx, axis=1)
     idx = np.take_along_axis(idx, np.argsort(-val, axis=1), axis=1)
-    if self_index:
-        rows = np.arange(scores.shape[0])[:, None]
-        # self appears first for L2-normalised vectors. Remove it robustly.
-        keep = idx != rows
-        return np.array([r[m][: k - 1] for r, m in zip(idx, keep)], dtype=np.int32)
     return idx.astype(np.int32)
 
 
 def gallery_graph(gallery: np.ndarray, k: int, chunk: int = 512) -> np.ndarray:
-    """KNN graph using gallery only; O(G²) time, O(chunk*G) working memory."""
+    """KNN graph using gallery only; O(G²) time, O(chunk*G) working memory.
+
+    The diagonal is masked with global gallery indices before selecting the
+    neighbours.  The graph contains neighbour overlap, not true reciprocity.
+    """
+    if gallery.ndim != 2:
+        raise ValueError("gallery must be a non-empty 2-D array")
+    if len(gallery) == 0:
+        raise ValueError("gallery must be non-empty")
+    if k < 1:
+        raise ValueError("k must be at least 1")
+    if chunk < 1:
+        raise ValueError("chunk must be at least 1")
+    effective_k = min(k, len(gallery) - 1)
+    if effective_k == 0:
+        return np.empty((len(gallery), 0), dtype=np.int32)
     out = []
     gt = gallery.T
     for start in range(0, len(gallery), chunk):
         score = gallery[start:start + chunk] @ gt
-        out.append(topk_rows(score, k, self_index=True))
+        local_rows = np.arange(len(score))
+        score[local_rows, start + local_rows] = -np.inf
+        out.append(topk_rows(score, effective_k))
     return np.vstack(out)
 
 
 def reciprocal_scores(q: np.ndarray, gallery: np.ndarray, graph: np.ndarray, k: int, mix: float) -> np.ndarray:
-    """Online score: raw cosine mixed with weighted reciprocal-neighbour Jaccard.
+    """Online score: raw cosine mixed with weighted neighbour-overlap Jaccard.
 
     Only q, gallery and a graph built from gallery are read. No batch/query
     state is used.  This deliberately returns a full score matrix for fair
@@ -96,9 +114,6 @@ def reciprocal_scores(q: np.ndarray, gallery: np.ndarray, graph: np.ndarray, k: 
     denom_base = float(2 * k)
     for i, neighbours in enumerate(q_neighbours):
         overlap = np.isin(graph, neighbours, assume_unique=False).sum(axis=1)
-        # Mutual membership gets a small bonus but never uses another query.
-        mutual = np.isin(neighbours, np.flatnonzero(raw[i] >= -np.inf), assume_unique=False)
-        del mutual  # documented invariance; do not accidentally add query state.
         jaccard = overlap / np.maximum(denom_base - overlap, 1.0)
         result[i] = mix * raw[i] + (1.0 - mix) * jaccard
     return result
@@ -116,8 +131,8 @@ def map10(scores: np.ndarray, query: list[dict[str, str]], gallery: list[dict[st
         n_pos = int(positive.sum())
         if not n_pos:
             continue
-        order = np.argsort(-scores[int(i)], kind="stable")
-        order = order[~junk[order]][:10]
+        order = np.argsort(-scores[int(i)], kind="stable")[:10]
+        order = order[~junk[order]]
         rel = same[order]
         if rel.any():
             c = np.cumsum(rel)
