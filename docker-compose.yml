@@ -54,16 +54,19 @@ services:
       # api/app/config.py (одно место); пустая переменная = значение оттуда.
       # Строгую точку тоже пробрасываем: иначе переключатель в вебе
       # показывает не тот порог, что стоит в .env.
-      # Production refusal/postprocess: DBA + правило Андрея (bbox OR фон) + z100.
-      # Значения соответствуют REFUSAL_PRESETS в api/app/config.py.
-      REFUSAL_SCORE: ${REFUSAL_SCORE:-z100}
-      SEARCH_THRESHOLD: ${SEARCH_THRESHOLD:-4.1592}
-      SEARCH_THRESHOLD_STRICT: ${SEARCH_THRESHOLD_STRICT:-7.3031}
-      PP_DBA_K: ${PP_DBA_K:-1}
-      PP_CAMERA_PENALTY: ${PP_CAMERA_PENALTY:-on}
+      # Режим отказа и постобработка: production-значения — только в api/app/config.py
+      # (одно место); пустая переменная = значение оттуда (docs/refusal.md).
+      REFUSAL_SCORE: ${REFUSAL_SCORE:-}
+      SEARCH_THRESHOLD: ${SEARCH_THRESHOLD:-}
+      SEARCH_THRESHOLD_STRICT: ${SEARCH_THRESHOLD_STRICT:-}
+      PP_DBA_K: ${PP_DBA_K:-}
+      PP_CAMERA_PENALTY: ${PP_CAMERA_PENALTY:-}
       PP_CAMERA_TAU: ${PP_CAMERA_TAU:-}
       PP_CAMERA_TOPK: ${PP_CAMERA_TOPK:-}
-      PP_DEDUP: ${PP_DEDUP:-both}
+      PP_DEDUP: ${PP_DEDUP:-}
+      PP_DEDUP_RANK: ${PP_DEDUP_RANK:-}
+      PP_DEDUP_REFUSAL: ${PP_DEDUP_REFUSAL:-}
+      PP_DEDUP_SIM_ANY: ${PP_DEDUP_SIM_ANY:-}
       PP_DEDUP_SIM: ${PP_DEDUP_SIM:-}
       PP_DEDUP_IOU: ${PP_DEDUP_IOU:-}
       PP_DEDUP_CENTER: ${PP_DEDUP_CENTER:-}

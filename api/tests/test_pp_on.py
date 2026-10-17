@@ -32,8 +32,8 @@ def cfg(**kw):
     # Эти тесты явно выбирают отдельный PP-сценарий. Не наследуем production
     # default `both`, иначе проверка DBA/camera/bbox по отдельности смешивает
     # сразу два правила.
-    base = {"pp_dba_k": 0, "pp_camera_penalty": "off", "pp_dedup": "off",
-            "refusal_score": "raw", "search_threshold": 0.0}
+    base = {"pp_dba_k": 0, "pp_camera_penalty": "off", "pp_dedup": "off", "pp_dedup_rank": "",
+            "pp_dedup_refusal": "", "refusal_score": "raw", "search_threshold": 0.0}
     return dataclasses.replace(Settings(), **{**base, **kw})
 
 

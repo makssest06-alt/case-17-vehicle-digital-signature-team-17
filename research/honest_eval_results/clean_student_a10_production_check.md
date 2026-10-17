@@ -41,6 +41,6 @@ train↔holdout duplicate-пар, 550 query / 357 gallery, raw cosine, junk по
 - deployment/no-camera: `0.87435`, recall `0.8791`, TNR `1.000`;
 - cross-camera: `0.66986`, recall `0.7048`, TNR `0.8942`.
 
-Production-профиль: `DBA k=1 + dedup both (bbox OR background) + z100`;
-пороги `4.1592/7.3031`. Raw `0.8025/0.8465` и query-expansion/CSLS в сервис
+Production-профиль: ранжирование DBA k=1 + штраф по фону, отказ z100 без почти-дублей (фон ИЛИ правило рамок);
+пороги `4.6506/9.6847` (`docs/refusal.md`). Raw `0.8025/0.8465` и query-expansion/CSLS в сервис
 не включаются.

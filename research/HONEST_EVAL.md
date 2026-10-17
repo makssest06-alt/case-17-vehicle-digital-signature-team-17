@@ -52,6 +52,7 @@ python research/honest_eval.py --data-dir <данные> --suite --tag <имя> 
 | стоимость фона и DBA (Мак, оценка для 4060) | `python research/bench_bigallery_pp.py --zip dataset.zip --data-dir <данные>` | `bench_bigallery_pp.json` |
 | дешёвый фон для штрафа (пиксели кадра вместо resnet18), «та же камера» и DBA + штраф | `python research/cheap_bg.py --zip dataset.zip --data-dir <данные> --env REID_WEIGHTS=<веса> --tag <имя>`, затем `--report` | `cheap_bg_<имя>.md` |
 | DBA галереи для сервиса | `from dba import dba, DBAGallery` (`research/dba.py` → код сервиса `api/app/pp/dba.py`) | — |
+| **галереи 361 / 1111 как закрытый тест** (протокол Андрея): ранжирование, отказ, пресеты порога, docs/refusal.md | `python research/closed_gallery.py --data-dir <данные> --env REID_WEIGHTS=<веса> --tag <имя> --zip dataset.zip` | `closed_gallery_<имя>.md`, `docs/refusal.md` |
 | правило Андрея (почти-дубль = сходство + рамка) против штрафа по фону, их OR / AND | `python research/dedup_compare.py --data-dir <данные> --env REID_WEIGHTS=<веса> --tag <имя> --zip dataset.zip` | `dedup_compare_<имя>.md` |
 | режим отказа: оценка, порог, F1/TNR/PR-AUC/mINP по размерам галереи, пресеты порога | `python research/refusal_mode.py --data-dir <данные> --env REID_WEIGHTS=<веса> --tag <имя>` | `refusal_mode_<имя>.md`, `docs/refusal.md` |
 | пакет для презентации (4 слайда, числа из файлов) | `python research/honest_eval_slides.py` | `slides.md`, `gallery_size_map.png`, `score_scale.png` |
@@ -199,7 +200,8 @@ mAP@10 на 9.0k / 10.8k / 8996 (`bigallery_pp_a10.md`); k ≥ 4 прирост�
   z100 = (s1 − mean(s2..s100)) / std(s2..s100) держит его от 2.2k (0.80 → 0.82) ценой F1
   на больших галереях. Решение сервиса остаётся на сыром косинусе 0.70, z100 — запасная
   оценка для галерей от ~9 тыс. кадров.
-- **Постобработка по одному запросу** (`bigallery_pp_a10.md`): DBA k=1 по галерее даёт
+- **Галереи 361 / 1111 как закрытый тест** (`closed_gallery_a10.md`, протокол Андрея — по ним и решаем): DBA k=1 даёт +0.021 / +0.009 mAP@10 (на 2.2k +0.060 — завышено пачками почти-дублей тестовых запросов). Итог: ранжирование DBA k=1 + фон (mAP@10 0.8855 / 0.7511), отказ z100 без почти-дублей «фон ИЛИ рамка», порог 4.6506: F1 / TNR 0.834 / 0.726 и 0.683 / 0.715. Без фона (запасной): 0.825 / 0.723 и 0.687 / 0.740.
+- **Постобработка по одному запросу** (`bigallery_pp_a10.md`; галереи с кадрами обучающих машин — **приросты завышены**): DBA k=1 по галерее даёт
   +0.05–0.06 mAP@10 на 9.0k / 10.8k / 8996 и в режиме без почти-дублей (соседи без
   почти-дублей запроса), на запрос — 0 мс; штраф за ту же камеру по фону mAP@10 не
   меняет, но убирает ответ «та же машина с той же камеры» у запросов без пары (139 → 31 из
