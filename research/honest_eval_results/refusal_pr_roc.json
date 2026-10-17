@@ -1,0 +1,47 @@
+{
+  "mode": "nodup",
+  "distractors": "test_all",
+  "pooled_folds": 5,
+  "queries_with_pair": 400,
+  "queries_without_pair": 146,
+  "PR_area": 0.6856,
+  "ROC_area": 0.7384,
+  "points": {
+    "0.8025": {
+      "threshold": 0.8025,
+      "precision": 0.6798,
+      "recall": 0.3352,
+      "F1": 0.449,
+      "TNR": 0.8767,
+      "accepted_share": 0.326,
+      "TP": 121,
+      "FP": 57,
+      "FN": 240,
+      "TN": 128
+    },
+    "0.71": {
+      "threshold": 0.71,
+      "precision": 0.6577,
+      "recall": 0.6518,
+      "F1": 0.6547,
+      "TNR": 0.6575,
+      "accepted_share": 0.6099,
+      "TP": 219,
+      "FP": 114,
+      "FN": 117,
+      "TN": 96
+    },
+    "0.874": {
+      "threshold": 0.874,
+      "precision": 0.7647,
+      "recall": 0.0997,
+      "F1": 0.1765,
+      "TNR": 0.9795,
+      "accepted_share": 0.0934,
+      "TP": 39,
+      "FP": 12,
+      "FN": 352,
+      "TN": 143
+    }
+  }
+}
