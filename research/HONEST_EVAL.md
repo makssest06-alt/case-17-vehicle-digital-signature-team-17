@@ -47,6 +47,9 @@ python research/honest_eval.py --data-dir <данные> --suite --tag <имя> 
 | картинки ошибок (номера закрыты) | `python research/error_examples.py --data-dir <данные>` | `error_examples/*.png` |
 | аудит утечек | `python research/audit_leaks.py --data-dir <данные> --zip dataset.zip` | `leak_audit.md` |
 | порог под F1 ТЗ и устойчивость оценок к размеру галереи | `python research/refusal_score.py --data-dir <данные> --env REID_WEIGHTS=<веса> --tag <имя>` | `refusal_score_<имя>.md`, `.png` |
+| постобработка по одному запросу на больших галереях: штраф за ту же камеру по фону, DBA, kr справочно | `python research/bigallery_pp.py --data-dir <данные> --env REID_WEIGHTS=<веса> --tag <имя> [--with-kr]`, затем `--report` | `bigallery_pp_<имя>.md` |
+| порог отказа от размера галереи для любого скора | `python research/threshold_vs_gallery.py --data-dir <данные> --env REID_WEIGHTS=<веса> --tag <имя> [--score dba1 \| --score-fn файл.py:функция]` | `threshold_vs_gallery_<имя>.md`, `.png` |
+| стоимость фона и DBA (Мак, оценка для 4060) | `python research/bench_bigallery_pp.py --zip dataset.zip --data-dir <данные>` | `bench_bigallery_pp.json` |
 | пакет для презентации (4 слайда, числа из файлов) | `python research/honest_eval_slides.py` | `slides.md`, `gallery_size_map.png`, `score_scale.png` |
 
 ### Промер прод-модели перед сменой порога
@@ -156,6 +159,12 @@ python research/honest_eval.py --data-dir <данные> --suite --post raw,knn 
   z100 = (s1 − mean(s2..s100)) / std(s2..s100) держит его от 2.2k (0.80 → 0.82) ценой F1
   на больших галереях. Решение сервиса остаётся на сыром косинусе 0.70, z100 — запасная
   оценка для галерей от ~9 тыс. кадров.
+- **Постобработка по одному запросу** (`bigallery_pp_a10.md`): DBA k=1 по галерее даёт
+  +0.05–0.06 mAP@10 на 9.0k / 10.8k / 8996 и в режиме без почти-дублей (соседи без
+  почти-дублей запроса), на запрос — 0 мс; штраф за ту же камеру по фону mAP@10 не
+  меняет, но убирает ответ «та же машина с той же камеры» у запросов без пары (139 → 31 из
+  146) и вместе с DBA поднимает F1 отказа 0.38 → 0.50–0.52; порог thr(N) проигрывает z100
+  (`threshold_vs_gallery_a10.md`).
 
 ## Воспроизводимость (`scripts/check_reproducibility.sh`)
 
