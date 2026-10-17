@@ -56,7 +56,7 @@ def _validate_runtime_config() -> None:
         )
 
     if settings.embed_model.startswith("reid:"):
-        weights = Path(os.getenv("REID_WEIGHTS", "/models/reid_current.pt"))
+        weights = Path(os.getenv("REID_WEIGHTS", "/models/clean_student_a10_ep28.pt"))
         if not weights.is_file():
             errors.append(f"файл REID_WEIGHTS не найден: {weights}")
         else:

@@ -20,12 +20,14 @@ class Settings:
     db_dsn: str = os.getenv("DB_DSN", "postgresql://case17:case17@db:5432/case17")
 
     # модель
-    embed_model: str = os.getenv("EMBED_MODEL", "resnet18")
+    # Production по умолчанию — clean student alpha=10.  Явный EMBED_MODEL
+    # по-прежнему позволяет запускать диагностические профили.
+    embed_model: str = os.getenv("EMBED_MODEL", "reid:vit_base_patch16_siglip_224.webli")
     embed_dim: int = _i("EMBED_DIM", 512)
     input_size: int = _i("INPUT_SIZE", 224)
     # Усреднение оригинала и отражения (test-time augmentation): вдвое дороже,
     # даёт +2.17 mAP — замер в research/results.md.
-    tta_flip: bool = _b("EMBED_TTA_FLIP", True)
+    tta_flip: bool = _b("EMBED_TTA_FLIP", False)
     batch_size: int = _i("BATCH_SIZE", 16)
 
     # поиск и отказ

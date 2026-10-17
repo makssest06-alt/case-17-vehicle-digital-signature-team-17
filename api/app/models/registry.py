@@ -27,7 +27,7 @@ def build_model(name: str, input_size: int = 224) -> EmbeddingModel:
     if key.startswith("reid:"):
         from .reid_checkpoint import ReidCheckpointModel
 
-        weights = os.getenv("REID_WEIGHTS", "/models/reid_current.pt")
+        weights = os.getenv("REID_WEIGHTS", "/models/clean_student_a10_ep28.pt")
         return ReidCheckpointModel(key.split(":", 1)[1], weights, input_size)
 
     if key.startswith("timm:"):

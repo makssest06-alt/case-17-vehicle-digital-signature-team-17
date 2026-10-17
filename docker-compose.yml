@@ -61,7 +61,7 @@ services:
       OMP_NUM_THREADS: "2"
       HF_HUB_OFFLINE: "1"
       HF_HOME: /opt/hfcache
-      REID_WEIGHTS: ${REID_WEIGHTS:-/models/siglip2_distill_ensemble_ep28.pt}
+      REID_WEIGHTS: ${REID_WEIGHTS:-/models/clean_student_a10_ep28.pt}
       # Режим кропа для чекпоинтов, которые не пишут tf_mode в args (студент).
       # Без проброса загрузчик возьмёт timm(base)-кроп и squash-модель
       # потеряет ~2 mAP. См. api/app/models/reid_checkpoint.py.

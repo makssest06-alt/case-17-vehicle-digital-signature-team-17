@@ -23,7 +23,7 @@ set -euo pipefail
 
 APP="$(cd "$(dirname "$0")/.." && pwd)"
 MODELS=/opt/case17/models
-NAME=reid_current.pt
+NAME=clean_student_a10_ep28.pt
 REIMPORT=1
 DRY=0
 CKPT=""

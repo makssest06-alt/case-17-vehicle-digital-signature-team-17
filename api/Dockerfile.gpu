@@ -1,7 +1,7 @@
 # GPU-вариант образа. Код тот же, отличается база и onnxruntime.
 FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 
-ARG EMBED_MODEL=resnet18
+ARG EMBED_MODEL=reid:vit_base_patch16_siglip_224.webli
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
