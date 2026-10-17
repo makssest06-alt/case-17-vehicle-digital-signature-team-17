@@ -1,0 +1,53 @@
+{
+  "model": "Прод-модель a10",
+  "mode": "nodup",
+  "distractors": "test_all",
+  "pooled_folds": 5,
+  "queries_with_pair": 400,
+  "queries_without_pair": 146,
+  "PR_area": 0.6706,
+  "ROC_area": 0.7456,
+  "points": {
+    "0.8025": {
+      "threshold": 0.8025,
+      "precision": 0.7024,
+      "recall": 0.3224,
+      "F1": 0.4419,
+      "TNR": 0.8904,
+      "accepted_share": 0.3077,
+      "TP": 118,
+      "FP": 50,
+      "FN": 248,
+      "TN": 130
+    },
+    "0.7": {
+      "threshold": 0.7,
+      "precision": 0.6488,
+      "recall": 0.6728,
+      "F1": 0.6606,
+      "TNR": 0.7123,
+      "accepted_share": 0.6154,
+      "TP": 218,
+      "FP": 118,
+      "FN": 106,
+      "TN": 104
+    },
+    "0.874": {
+      "threshold": 0.874,
+      "precision": 0.7778,
+      "recall": 0.1074,
+      "F1": 0.1888,
+      "TNR": 0.9795,
+      "accepted_share": 0.0989,
+      "TP": 42,
+      "FP": 12,
+      "FN": 349,
+      "TN": 143
+    }
+  },
+  "baseline": {
+    "label": "старый студент (main)",
+    "PR_area": 0.6856,
+    "ROC_area": 0.7384
+  }
+}

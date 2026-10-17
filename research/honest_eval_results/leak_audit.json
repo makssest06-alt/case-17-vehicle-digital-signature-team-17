@@ -53,6 +53,93 @@
     "holdout_query∩holdout_gallery": 0
   },
   "exact_file_duplicates": {},
+  "exact_full_frame_duplicates": {
+    "groups_by_kind": {
+      "train1391↔train1391": 4,
+      "holdout↔train1391": 5,
+      "test_gallery↔test_query": 1,
+      "test_gallery↔train1391": 1
+    },
+    "pairs": [
+      {
+        "kind": "train1391↔train1391",
+        "a": "0fed09a1fc044696832778ed10534131",
+        "b": "a39cfa2e577248ed88bd4a5bc355890e"
+      },
+      {
+        "kind": "holdout↔train1391",
+        "a": "1b4ab30599ea41178b775b81f5f6265c",
+        "b": "502870478e7b4ecdb8e068d07e1156dd",
+        "holdout_vid": "904",
+        "train_vid": "555",
+        "holdout_share_in_train_crop": 0.212
+      },
+      {
+        "kind": "holdout↔train1391",
+        "a": "25fe4ed7ba5b433b9ae84795ea909729",
+        "b": "d0ab089f96254e589345c8469d982a7a",
+        "holdout_vid": "1176",
+        "train_vid": "887",
+        "holdout_share_in_train_crop": 0.141
+      },
+      {
+        "kind": "holdout↔train1391",
+        "a": "32bc324bbfb445fe8761dde16ba7759c",
+        "b": "ba950758834d4f26b7df5dd4832b6797",
+        "holdout_vid": "688",
+        "train_vid": "817",
+        "holdout_share_in_train_crop": 0.204
+      },
+      {
+        "kind": "holdout↔train1391",
+        "a": "4b90daade9334addb76bf838887e1430",
+        "b": "6394c5b6fb4749d285faf3d8a8b6d6b4",
+        "holdout_vid": "904",
+        "train_vid": "555",
+        "holdout_share_in_train_crop": 0.212
+      },
+      {
+        "kind": "holdout↔train1391",
+        "a": "64a9bec33f0e4b21b1f9a0c8f8504741",
+        "b": "6d813a171e564ec4a47e9e034c95846e",
+        "holdout_vid": "904",
+        "train_vid": "555",
+        "holdout_share_in_train_crop": 0.104
+      },
+      {
+        "kind": "train1391↔train1391",
+        "a": "84dabe36f1314d0fa54d4c854c844664",
+        "b": "8f531ff8c8ea4805a085b21bca63d41f"
+      },
+      {
+        "kind": "test_gallery↔test_query",
+        "a": "8d4f78a13e3e4f569761273ba212d220",
+        "b": "8dfe01febd46475ab5aef97033716ce1"
+      },
+      {
+        "kind": "test_gallery↔train1391",
+        "a": "8f5f7f037b824441b1b29e7906ef2e12",
+        "b": "f3fddb55448a46778b5d807642cceb71"
+      },
+      {
+        "kind": "train1391↔train1391",
+        "a": "aab87e0ce41b44d3bbbc800c6afb228f",
+        "b": "e9f66f92006248b486e7e75bd714a05d"
+      },
+      {
+        "kind": "train1391↔train1391",
+        "a": "b7f109546f3e447fb87515f35d202127",
+        "b": "cb659b378e8d42d6b6287a7264298db3"
+      }
+    ],
+    "holdout_frames": [
+      "1b4ab30599ea41178b775b81f5f6265c",
+      "25fe4ed7ba5b433b9ae84795ea909729",
+      "4b90daade9334addb76bf838887e1430",
+      "64a9bec33f0e4b21b1f9a0c8f8504741",
+      "ba950758834d4f26b7df5dd4832b6797"
+    ]
+  },
   "perceptual_hash_pairs": {
     "phash": {
       "hamming<=0": {

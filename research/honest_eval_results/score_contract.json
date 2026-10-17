@@ -1,0 +1,289 @@
+{
+  "distractors": "test_all",
+  "params": {
+    "qq_k": 3,
+    "qq_alpha": 3.0,
+    "csls_k": 5,
+    "rerank_k1": 10,
+    "rerank_k2": 6,
+    "rerank_lambda": 0.7
+  },
+  "modes": {
+    "official": {
+      "contracts": {
+        "service (raw, 0.8025)": {
+          "threshold": {
+            "mean": 0.8025,
+            "std": 0.0,
+            "min": 0.8025,
+            "max": 0.8025
+          },
+          "recall": {
+            "mean": 0.9317,
+            "std": 0.0403,
+            "min": 0.875,
+            "max": 0.9762
+          },
+          "TNR": {
+            "mean": 0.8766,
+            "std": 0.069,
+            "min": 0.7879,
+            "max": 0.9688
+          },
+          "F1": {
+            "mean": 0.9384,
+            "std": 0.0284,
+            "min": 0.9045,
+            "max": 0.9762
+          },
+          "precision": {
+            "mean": 0.9462,
+            "std": 0.0297,
+            "min": 0.9103,
+            "max": 0.9762
+          },
+          "accepted_share": {
+            "mean": 0.7165,
+            "std": 0.0292,
+            "min": 0.6729,
+            "max": 0.75
+          }
+        },
+        "artifacts (CSLS, 10-й процентиль)": {
+          "threshold": {
+            "mean": 0.0755,
+            "std": 0.0205,
+            "min": 0.0473,
+            "max": 0.0997
+          },
+          "recall": {
+            "mean": 0.9669,
+            "std": 0.02,
+            "min": 0.939,
+            "max": 0.987
+          },
+          "TNR": {
+            "mean": 0.3024,
+            "std": 0.051,
+            "min": 0.2188,
+            "max": 0.3571
+          },
+          "F1": {
+            "mean": 0.8544,
+            "std": 0.0169,
+            "min": 0.8235,
+            "max": 0.8736
+          },
+          "precision": {
+            "mean": 0.7655,
+            "std": 0.0192,
+            "min": 0.7333,
+            "max": 0.7917
+          },
+          "accepted_share": {
+            "mean": 0.8956,
+            "std": 0.0018,
+            "min": 0.8929,
+            "max": 0.8974
+          }
+        },
+        "mixed (CSLS, 0.8025)": {
+          "threshold": {
+            "mean": 0.8025,
+            "std": 0.0,
+            "min": 0.8025,
+            "max": 0.8025
+          },
+          "recall": {
+            "mean": 0.0,
+            "std": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "TNR": {
+            "mean": 1.0,
+            "std": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "F1": {
+            "mean": 0.0,
+            "std": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "precision": {
+            "mean": 0.0,
+            "std": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "accepted_share": {
+            "mean": 0.0,
+            "std": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          }
+        }
+      },
+      "score_percentiles": {
+        "raw": {
+          "1": 0.4402,
+          "10": 0.5811,
+          "50": 0.9344,
+          "90": 0.9901,
+          "99": 0.9967
+        },
+        "csls": {
+          "1": 0.003,
+          "10": 0.0646,
+          "50": 0.1789,
+          "90": 0.326,
+          "99": 0.4785
+        }
+      }
+    },
+    "nodup": {
+      "contracts": {
+        "service (raw, 0.8025)": {
+          "threshold": {
+            "mean": 0.8025,
+            "std": 0.0,
+            "min": 0.8025,
+            "max": 0.8025
+          },
+          "recall": {
+            "mean": 0.3398,
+            "std": 0.0913,
+            "min": 0.2571,
+            "max": 0.5156
+          },
+          "TNR": {
+            "mean": 0.8766,
+            "std": 0.069,
+            "min": 0.7879,
+            "max": 0.9688
+          },
+          "F1": {
+            "mean": 0.4457,
+            "std": 0.0673,
+            "min": 0.3636,
+            "max": 0.569
+          },
+          "precision": {
+            "mean": 0.6908,
+            "std": 0.081,
+            "min": 0.6207,
+            "max": 0.8462
+          },
+          "accepted_share": {
+            "mean": 0.3274,
+            "std": 0.0899,
+            "min": 0.243,
+            "max": 0.5
+          }
+        },
+        "artifacts (CSLS, 10-й процентиль)": {
+          "threshold": {
+            "mean": 0.0541,
+            "std": 0.0199,
+            "min": 0.0159,
+            "max": 0.0712
+          },
+          "recall": {
+            "mean": 0.9264,
+            "std": 0.0442,
+            "min": 0.8621,
+            "max": 0.9833
+          },
+          "TNR": {
+            "mean": 0.2344,
+            "std": 0.0862,
+            "min": 0.125,
+            "max": 0.3571
+          },
+          "F1": {
+            "mean": 0.7327,
+            "std": 0.0719,
+            "min": 0.6135,
+            "max": 0.8362
+          },
+          "precision": {
+            "mean": 0.6087,
+            "std": 0.0837,
+            "min": 0.4762,
+            "max": 0.74
+          },
+          "accepted_share": {
+            "mean": 0.8956,
+            "std": 0.0018,
+            "min": 0.8929,
+            "max": 0.8974
+          }
+        },
+        "mixed (CSLS, 0.8025)": {
+          "threshold": {
+            "mean": 0.8025,
+            "std": 0.0,
+            "min": 0.8025,
+            "max": 0.8025
+          },
+          "recall": {
+            "mean": 0.0,
+            "std": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "TNR": {
+            "mean": 1.0,
+            "std": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "F1": {
+            "mean": 0.0,
+            "std": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "precision": {
+            "mean": 0.0,
+            "std": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "accepted_share": {
+            "mean": 0.0,
+            "std": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          }
+        }
+      },
+      "score_percentiles": {
+        "raw": {
+          "1": 0.4402,
+          "10": 0.5638,
+          "50": 0.7438,
+          "90": 0.8676,
+          "99": 0.9383
+        },
+        "csls": {
+          "1": -0.0072,
+          "10": 0.0485,
+          "50": 0.1505,
+          "90": 0.28,
+          "99": 0.3357
+        }
+      }
+    }
+  },
+  "submitted_test_artifacts": {
+    "queries": 1110,
+    "service_raw_ge_0.8025": 1017,
+    "artifacts_csls_ge_q10": 999,
+    "q10": 0.094672,
+    "mixed_csls_ge_0.8025": 0,
+    "csls_top1_max": 0.5057
+  }
+}

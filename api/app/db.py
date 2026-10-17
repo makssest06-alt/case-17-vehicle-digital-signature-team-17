@@ -191,3 +191,112 @@ def delete_one(item_id: int) -> bool:
         deleted = cur.rowcount
         conn.commit()
         return deleted > 0
+
+
+# ---------------------------------------------------------------------------
+# Постобработка (api/app/pp/state.py). Вызывается только при включённых флагах
+# PP_*: без них схема и запросы — как выше.
+# ---------------------------------------------------------------------------
+
+PP_COLUMNS = ("embedding", "embedding_dba")
+
+
+def ensure_pp_schema(dim: int, bg_dim: int) -> None:
+    """Обратно совместимо: только новые колонки с NULL и индекс по ним."""
+    with pool().connection() as conn, conn.cursor() as cur:
+        cur.execute(f"ALTER TABLE gallery ADD COLUMN IF NOT EXISTS embedding_dba VECTOR({dim})")
+        cur.execute(f"ALTER TABLE gallery ADD COLUMN IF NOT EXISTS bg VECTOR({bg_dim})")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS gallery_embedding_dba_idx "
+            "ON gallery USING hnsw (embedding_dba vector_cosine_ops)"
+        )
+        conn.commit()
+
+
+def fetch_pp(with_bg: bool) -> List[Dict[str, Any]]:
+    cols = "id, embedding, embedding_dba" + (", bg" if with_bg else "")
+    with pool().connection() as conn, conn.cursor() as cur:
+        cur.execute(f"SELECT {cols} FROM gallery ORDER BY id")
+        return [
+            {
+                "id": int(r[0]),
+                "embedding": np.asarray(r[1], dtype="float32"),
+                "embedding_dba": None if r[2] is None else np.asarray(r[2], dtype="float32"),
+                "bg": None if not with_bg or r[3] is None else np.asarray(r[3], dtype="float32"),
+            }
+            for r in cur.fetchall()
+        ]
+
+
+def _update_dba(cur, pairs) -> None:
+    if pairs:
+        cur.executemany(
+            "UPDATE gallery SET embedding_dba = %s WHERE id = %s",
+            [(np.asarray(v, dtype="float32"), int(i)) for i, v in pairs],
+        )
+
+
+def update_dba(pairs) -> None:
+    """pairs: [(id, g')]."""
+    with pool().connection() as conn, conn.cursor() as cur:
+        _update_dba(cur, pairs)
+        conn.commit()
+
+
+def insert_pp(rows, dba_updates) -> List[int]:
+    """rows: (vehicle_id, image_path, bbox, embedding, embedding_dba | None, bg | None).
+    Новые кадры и обновлённые g' соседей — одной транзакцией."""
+    ids = []
+    with pool().connection() as conn, conn.cursor() as cur:
+        for vehicle_id, image_path, bbox, vec, dba_vec, bg in rows:
+            cur.execute(
+                "INSERT INTO gallery (vehicle_id, image_path, bbox, embedding, embedding_dba, bg) "
+                "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+                (vehicle_id, image_path, list(map(int, bbox)), vec,
+                 None if dba_vec is None else np.asarray(dba_vec, dtype="float32"),
+                 None if bg is None else np.asarray(bg, dtype="float32")),
+            )
+            ids.append(int(cur.fetchone()[0]))
+        _update_dba(cur, dba_updates)
+        conn.commit()
+    return ids
+
+
+def search_pp(vec: np.ndarray, k: int, column: str, ef_search: int) -> List[Dict[str, Any]]:
+    """k ближайших по колонке column; confidence — косинус без округления.
+    SET LOCAL hnsw.ef_search — в транзакции этого поиска: по умолчанию (40) HNSW
+    отдаёт не больше ~40 строк, а штрафу и z100 нужен top-100. Вызывающий передаёт
+    max(100, PP_CAMERA_TOPK)."""
+    if column not in PP_COLUMNS:
+        raise ValueError(f"колонка поиска: одна из {PP_COLUMNS}")
+    ef = int(ef_search)
+    if not 1 <= ef <= 1000:
+        raise ValueError(f"hnsw.ef_search должен быть от 1 до 1000, получено {ef}")
+    with pool().connection() as conn, conn.cursor() as cur:
+        cur.execute(f"SET LOCAL hnsw.ef_search = {ef}")
+        cur.execute(
+            f"""
+            SELECT id, vehicle_id, image_path, bbox, 1 - ({column} <=> %s) AS confidence
+            FROM gallery
+            WHERE {column} IS NOT NULL
+            ORDER BY {column} <=> %s
+            LIMIT %s
+            """,
+            (vec, vec, int(k)),
+        )
+        rows = cur.fetchall()
+        conn.commit()
+    return [
+        {"id": r[0], "vehicle_id": r[1], "image_path": r[2], "bbox": list(r[3]), "confidence": float(r[4])}
+        for r in rows
+    ]
+
+
+def delete_pp(item_id: int, dba_updates) -> bool:
+    """Удаление кадра и обновлённые g' его бывших соседей — одной транзакцией."""
+    with pool().connection() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM gallery WHERE id = %s", (item_id,))
+        deleted = cur.rowcount
+        _update_dba(cur, dba_updates)
+        conn.commit()
+        return deleted > 0

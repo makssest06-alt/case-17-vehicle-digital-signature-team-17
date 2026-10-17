@@ -50,11 +50,24 @@ services:
       INPUT_SIZE: ${INPUT_SIZE:-224}
       EMBED_TTA_FLIP: ${EMBED_TTA_FLIP:-0}
       SEARCH_TOP_N: ${SEARCH_TOP_N:-10}
-      SEARCH_THRESHOLD: ${SEARCH_THRESHOLD:-0.8025}
-      # Строгая точка режима отказа. Без проброса контейнер берёт
-      # значение по умолчанию из config.py, и переключатель в вебе
+      # Режим отказа: формула оценки и порог. Числа по умолчанию — только в
+      # api/app/config.py (одно место); пустая переменная = значение оттуда.
+      # Строгую точку тоже пробрасываем: иначе переключатель в вебе
       # показывает не тот порог, что стоит в .env.
-      SEARCH_THRESHOLD_STRICT: ${SEARCH_THRESHOLD_STRICT:-0.8465}
+      REFUSAL_SCORE: ${REFUSAL_SCORE:-}
+      SEARCH_THRESHOLD: ${SEARCH_THRESHOLD:-}
+      SEARCH_THRESHOLD_STRICT: ${SEARCH_THRESHOLD_STRICT:-}
+      # Постобработка (api/app/pp/state.py): по умолчанию выключена,
+      # ответы /v1/search как без неё.
+      PP_DBA_K: ${PP_DBA_K:-}
+      PP_CAMERA_PENALTY: ${PP_CAMERA_PENALTY:-}
+      PP_CAMERA_TAU: ${PP_CAMERA_TAU:-}
+      PP_CAMERA_TOPK: ${PP_CAMERA_TOPK:-}
+      PP_DEDUP: ${PP_DEDUP:-}
+      PP_DEDUP_SIM: ${PP_DEDUP_SIM:-}
+      PP_DEDUP_IOU: ${PP_DEDUP_IOU:-}
+      PP_DEDUP_CENTER: ${PP_DEDUP_CENTER:-}
+      PP_DEDUP_SIZE: ${PP_DEDUP_SIZE:-}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-20}
       DATA_DIR: /data
       ARTIFACTS_DIR: /artifacts

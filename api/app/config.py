@@ -3,12 +3,18 @@ import os
 from dataclasses import dataclass
 
 
+def _env(name: str, default: str) -> str:
+    """Пустая переменная — как незаданная: compose пробрасывает ${X:-} без своего числа."""
+    value = os.getenv(name, "")
+    return value if value.strip() else default
+
+
 def _i(name: str, default: int) -> int:
-    return int(os.getenv(name, str(default)))
+    return int(_env(name, str(default)))
 
 
 def _f(name: str, default: float) -> float:
-    return float(os.getenv(name, str(default)))
+    return float(_env(name, str(default)))
 
 
 def _b(name: str, default: bool) -> bool:
@@ -32,6 +38,15 @@ class Settings:
 
     # поиск и отказ
     search_top_n: int = _i("SEARCH_TOP_N", 10)
+
+    # ---- режим отказа: формула оценки и порог — ЗДЕСЬ, одно место (docs/refusal.md) ----
+    # Сервис отказывает, если оценка лучшего кандидата меньше SEARCH_THRESHOLD.
+    #   raw   — косинус лучшего кандидата (с постобработкой — после неё);
+    #   z100  — (s1 − mean(s2..s100)) / std(s2..s100): насколько лучший выделяется
+    #           среди ста ближайших; меньше зависит от размера галереи.
+    # После выбора постобработки меняется одно число — SEARCH_THRESHOLD (и STRICT
+    # для строгого режима); посчитанные значения — REFUSAL_PRESETS ниже.
+    refusal_score: str = _env("REFUSAL_SCORE", "raw")
     # Две рабочие точки, обе посчитаны на распределении, в котором работает
     # сервис (галерея не фильтруется по камере: camera_id на вход не подаётся).
     #   сбалансированная — максимум индекса Юдена, обе ошибки равноценны;
@@ -43,6 +58,19 @@ class Settings:
     search_threshold_strict: float = _f("SEARCH_THRESHOLD_STRICT", 0.8465)
     search_margin: float = _f("SEARCH_MARGIN", 0.0)
 
+    # ---- постобработка: по умолчанию выключена, ответы как без неё (api/app/pp/state.py) ----
+    pp_dba_k: int = _i("PP_DBA_K", 0)                                   # 0 — выкл; 1 — DBA по 1 соседу
+    pp_camera_penalty: str = _env("PP_CAMERA_PENALTY", "off").strip().lower()   # off | store | on
+    pp_camera_tau: float = _f("PP_CAMERA_TAU", 0.68127)   # косинус фона > τ — «та же камера» (cheap_bg_a10.md)
+    pp_camera_topk: int = _i("PP_CAMERA_TOPK", 100)       # сколько кандидатов из базы проверять на камеру
+    # Исключение почти-дублей из ранжирования и оценки отказа: off | bbox (правило Андрея: сходство + рамка)
+    # | bg (штраф по фону, = PP_CAMERA_PENALTY=on) | both (OR). Пороги правила — dedup_compare_a10.md.
+    pp_dedup: str = _env("PP_DEDUP", "off").strip().lower()
+    pp_dedup_sim: float = _f("PP_DEDUP_SIM", 0.84)         # сырой косинус ≥
+    pp_dedup_iou: float = _f("PP_DEDUP_IOU", 0.6)          # IoU рамок в координатах кадра ≥
+    pp_dedup_center: float = _f("PP_DEDUP_CENTER", 0.3)    # сдвиг центра в долях среднего размера рамки ≤
+    pp_dedup_size: float = _f("PP_DEDUP_SIZE", float("inf"))   # |log| отношения сторон ≤ (inf — не проверять)
+
     # загрузка файлов
     max_upload_mb: int = _i("MAX_UPLOAD_MB", 20)
     bbox_pad: float = _f("BBOX_PAD", 0.10)
@@ -53,6 +81,32 @@ class Settings:
     @property
     def max_upload_bytes(self) -> int:
         return self.max_upload_mb * 1024 * 1024
+
+
+# Посчитанные пороги по (PP_DBA_K, исключение почти-дублей, формула). Источник — research, команды в
+# docs/refusal.md; значения переносятся в SEARCH_THRESHOLD вручную, сервис их не
+# подставляет сам: так включённая постобработка без нового порога видна в логе.
+REFUSAL_PRESETS = {
+    # (PP_DBA_K, PP_DEDUP или bg при PP_CAMERA_PENALTY=on, REFUSAL_SCORE): {...}
+    (0, "off", "raw"): {"balanced": 0.8025, "strict": 0.8465,
+                        "note": "текущий: 2.2k без почти-дублей, Юден / TNR ≥ 0.98 (Глеб)"},
+    # research/refusal_mode.py --tag a10, протокол «как сервис» (docs/refusal.md); итог —
+    # (1, "both", "z100"), предварительно (OR фона и рамки; без запаса по FPS — (1, "bbox", "z100")): финал после решения Андрея
+    (0, "off", "z100"): {"balanced": 7.9692, "strict": 12.3831,
+                        "note": "предварительно: без постобработки, z100, F1 при TNR ≥ 0.70 по сетке N 361–10847, как сервис (refusal_mode_a10.md)"},
+    (1, "bg", "raw"): {"balanced": 0.795, "strict": 0.9241,
+                        "note": "предварительно: DBA k=1 + штраф за ту же камеру, raw, F1 при TNR ≥ 0.70 по сетке N 361–10847, как сервис (refusal_mode_a10.md)"},
+    (1, "bg", "z100"): {"balanced": 4.3501, "strict": 8.5203,
+                        "note": "предварительно: DBA k=1 + штраф за ту же камеру, z100, F1 при TNR ≥ 0.70 по сетке N 361–10847, как сервис (refusal_mode_a10.md)"},
+    (1, "bbox", "raw"): {"balanced": 0.7956, "strict": 0.9187,
+                        "note": "предварительно: DBA k=1 + правило Андрея (сходство + рамка), raw, F1 при TNR ≥ 0.70 по сетке N 361–10847, как сервис (refusal_mode_a10.md)"},
+    (1, "bbox", "z100"): {"balanced": 4.2205, "strict": 7.7893,
+                        "note": "предварительно: DBA k=1 + правило Андрея (сходство + рамка), z100, F1 при TNR ≥ 0.70 по сетке N 361–10847, как сервис (refusal_mode_a10.md)"},
+    (1, "both", "raw"): {"balanced": 0.7866, "strict": 0.9152,
+                        "note": "предварительно: DBA k=1 + оба (OR), raw, F1 при TNR ≥ 0.70 по сетке N 361–10847, как сервис (refusal_mode_a10.md)"},
+    (1, "both", "z100"): {"balanced": 4.1592, "strict": 7.3031,
+                        "note": "предварительно: DBA k=1 + оба (OR), z100, F1 при TNR ≥ 0.70 по сетке N 361–10847, как сервис (refusal_mode_a10.md)"},
+}
 
 
 settings = Settings()
