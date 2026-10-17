@@ -46,6 +46,7 @@ python research/honest_eval.py --data-dir <данные> --suite --tag <имя> 
 | разбор ошибок по подгруппам | `python research/error_breakdown.py --data-dir <данные>` | `error_breakdown.md` |
 | картинки ошибок (номера закрыты) | `python research/error_examples.py --data-dir <данные>` | `error_examples/*.png` |
 | аудит утечек | `python research/audit_leaks.py --data-dir <данные> --zip dataset.zip` | `leak_audit.md` |
+| пакет для презентации (4 слайда, числа из файлов) | `python research/honest_eval_slides.py` | `slides.md`, `gallery_size_map.png`, `score_scale.png` |
 
 ### Промер прод-модели перед сменой порога
 
