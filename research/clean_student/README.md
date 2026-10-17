@@ -39,11 +39,22 @@ checks are complete.
 
 ## Expanded-gallery stress result
 
-Gallery: 357 cleaned holdout gallery images plus 8635 train-only distractors,
-8996 total. No training uses this gallery. The clean student gets raw cosine
-mAP@10 `0.5492`; fixed k-reciprocal without the old CSLS stage gets `0.7275`.
-The old full CSLS pipeline gets `0.6986`. This confirms the postprocessing stage
-is a separate generalization bottleneck.
+This **source-domain stress proxy** uses 550 queries and 8996 gallery rows:
+**357 cleaned holdout gallery rows + 8639 clean-training rows**. The
+clean-training rows were used during training and have vehicle IDs disjoint
+from holdout queries; this is not organizer data. Exactly 7 queries are
+excluded from ranking (543 scored). The clean student gets raw cosine mAP@10
+`0.5492`; fixed k-reciprocal without the old CSLS stage gets `0.7275`. The old
+full CSLS pipeline gets `0.6986`. This confirms the postprocessing stage is a
+separate generalization bottleneck.
+
+For **alpha=25**, the diagnostic postprocessing values are raw `0.5492`,
+k-reciprocal `0.7275`, and full CSLS `0.6986`. The selected **alpha=10** has
+raw `0.5585`, k-reciprocal `0.7375`, and full CSLS `0.6943`. Diagnostic tables
+remove junk from the full score matrix before top-k, per
+`research/ablate_postprocess.py`. The official CSV evaluator receives exactly
+top-10 IDs and removes junk without backfilling; it does not rerank the full
+gallery and refill top-10.
 
 ## Provenance
 

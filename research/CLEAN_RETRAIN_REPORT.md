@@ -64,9 +64,14 @@ teacher. It remains one 512D SigLIP2 student at runtime.
 
 ## Expanded-gallery stress test
 
-The proxy contains 550 clean queries and 8996 gallery objects: cleaned holdout
-gallery plus 8635 train-only distractors. This is not the hidden organizer test,
-but it tests gallery-size/domain shift without training on test.
+The **source-domain stress proxy** contains 550 clean queries and 8996 gallery
+objects: **357 cleaned holdout gallery rows + 8639 clean-training rows**. The
+clean-training rows were used during training but have vehicle IDs disjoint
+from holdout queries, so they act as negative source-domain distractors. This
+is not organizer data or the hidden organizer test and cannot measure transfer
+to its separate dataset; it only tests gallery-size sensitivity in the source
+domain. Exactly 7 queries have no valid positive after the junk/camera rule and
+are excluded from ranking metrics (543 scored).
 
 The old full pipeline is unstable here. For alpha=10:
 
@@ -76,10 +81,18 @@ The old full pipeline is unstable here. For alpha=10:
 - k-reciprocal: **`0.7375`**;
 - old full CSLS pipeline: `0.6943`.
 
+The diagnostic postprocessing tables above remove junk from the full score
+matrix before selecting top-k, as implemented by `research/ablate_postprocess.py`.
+The official CSV evaluator instead receives exactly the submitted top-10 IDs
+and removes junk from those IDs without backfilling; these protocols must not
+be conflated.
+
 For alpha=25, the corresponding raw/k-reciprocal values are `0.5492/0.7275`.
-Therefore the next production ranking experiment should test k-reciprocal without
-the old final CSLS stage, subject to streaming-protocol review. Query expansion
-remains prohibited for the final service because it uses other queries.
+The k-reciprocal result is a research diagnostic: this implementation joins
+query/gallery neighborhoods and is not automatically compliant with the
+streaming final protocol. Query expansion remains prohibited for the final
+service because it uses other queries. Any production reranker must be explicitly
+per-query and gallery-only.
 
 ## Why student can exceed teacher
 

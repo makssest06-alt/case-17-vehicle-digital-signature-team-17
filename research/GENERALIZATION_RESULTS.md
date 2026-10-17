@@ -44,15 +44,22 @@ The last number is the old research pipeline, not a compliant production result:
 it includes query-query expansion and joint reranking. It cannot be used as
 evidence that the online service will achieve the same score.
 
-## Clean-like expanded gallery proxy
+## Expanded-gallery stress proxy
 
-To approximate the organizer's larger clean sample without training on test:
+This does **not** reproduce the organizer's separate hidden clean dataset. It is
+a **source-domain stress proxy** built from available data:
 
 - remove the five exact train↔holdout duplicate pairs;
 - keep 550 holdout queries;
-- use 361 holdout gallery images plus 8635 train-only images as distractors;
+- use **357 cleaned holdout gallery rows + 8639 clean-training rows**;
 - total gallery: 8996;
 - extract embeddings with the unchanged student, squash 224, no TTA.
+
+The 8639 clean-training rows were used during training, but their vehicle IDs
+are disjoint from all holdout query vehicle IDs, so they are negative
+source-domain distractors rather than positive leakage. This proxy is not
+organizer data and cannot establish transfer to the organizer's different
+dataset.
 
 Results:
 
@@ -64,11 +71,18 @@ Results:
 | k-reciprocal | **0.7187** | **0.7090** | **0.7993** |
 | old full pipeline | 0.7044 | 0.7090 | 0.7716 |
 
-Seven queries have no valid cross-camera positive after adding train distractors
-and are excluded from ranking metrics. The exact score is a proxy, not the hidden
-organizer split, but it reproduces the important behavior: the local score is
-not stable as gallery size/domain changes, and the old full CSLS pipeline is not
-the best robust choice.
+Exactly seven queries have no valid cross-camera positive and are excluded from
+ranking metrics (543 scored). The exact score is a source-domain stress-proxy
+result, not organizer data or the hidden organizer split, and it shows that the
+local score is not stable as gallery size changes. The k-reciprocal row is a
+research diagnostic; the implementation joins query/gallery neighborhoods and
+is not automatically compliant with the streaming final protocol.
+
+The diagnostic postprocessing tables above remove junk from the full score
+matrix before selecting top-k, as implemented by `research/ablate_postprocess.py`.
+The official CSV evaluator instead receives exactly the submitted top-10 IDs
+and removes junk from those IDs without backfilling; these protocols must not
+be conflated.
 
 ## Refusal calibration
 
