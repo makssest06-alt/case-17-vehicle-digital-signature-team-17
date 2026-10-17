@@ -93,7 +93,7 @@ REFUSAL_PRESETS = {
     # research/refusal_mode.py --tag a10, протокол «как сервис» (docs/refusal.md); итог —
     # (1, "both", "z100"), предварительно (OR фона и рамки; без запаса по FPS — (1, "bbox", "z100")): финал после решения Андрея
     (0, "off", "z100"): {"balanced": 7.9692, "strict": 12.3831,
-                        "note": "предварительно: без постобработки, z100, F1 при TNR ≥ 0.70 по сетке N 361–10847, как сервис (refusal_mode_a10.md)"},
+                        "note": "production: DBA k=1 + dedup both + z100, clean gallery stress protocol.",
     (1, "bg", "raw"): {"balanced": 0.795, "strict": 0.9241,
                         "note": "предварительно: DBA k=1 + штраф за ту же камеру, raw, F1 при TNR ≥ 0.70 по сетке N 361–10847, как сервис (refusal_mode_a10.md)"},
     (1, "bg", "z100"): {"balanced": 4.3501, "strict": 8.5203,
@@ -105,7 +105,7 @@ REFUSAL_PRESETS = {
     (1, "both", "raw"): {"balanced": 0.7866, "strict": 0.9152,
                         "note": "предварительно: DBA k=1 + оба (OR), raw, F1 при TNR ≥ 0.70 по сетке N 361–10847, как сервис (refusal_mode_a10.md)"},
     (1, "both", "z100"): {"balanced": 4.1592, "strict": 7.3031,
-                        "note": "предварительно: DBA k=1 + оба (OR), z100, F1 при TNR ≥ 0.70 по сетке N 361–10847, как сервис (refusal_mode_a10.md)"},
+                        "note": "production: DBA k=1 + dedup both + z100, clean gallery stress protocol.",
 }
 
 

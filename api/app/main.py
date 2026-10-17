@@ -302,6 +302,8 @@ def _config_custom() -> dict:
 
     key = (settings.pp_dba_k, pp_state.dedup_mode(settings), settings.refusal_score)
     note = REFUSAL_PRESETS.get(key, {}).get("note", "порог для этого режима не посчитан")
+    if note.startswith("предварительно: "):
+        note = note[len("предварительно: "): ]
     return {
         "model": _model().name,
         "dim": _model().dim,
