@@ -6,7 +6,7 @@
     python research/refusal_mode.py --data-dir <данные> --env REID_WEIGHTS=<веса> --tag a10 [--zip dataset.zip]
 
 Протокол «как сервис» (neardup: у запроса без пары в галерее остаётся кадр его машины
-с той же камеры), 5 фолдов по 150 машинам holdout, 25 % машин фолда без пары, метрики
+с той же камеры), 150 машин holdout, 5 фолдов по 30 машин, 25 % машин фолда без пары, метрики
 эталона. Галереи — сетка N (holdout + случайная доля чужих кадров: тест и обучающие
 машины) и именованные 2.2k / 9.0k / 10.8k; тест — только чужие кадры, ничего на нём не
 подбирается. Скор считает код сервиса (research/threshold_vs_gallery.records_service →
@@ -87,6 +87,7 @@ def size_table(by_size: dict, thr: list, strict: list, formula: str, folds: int)
             "strict": {k: st(per_s, k) for k in ("TNR", "recall", "precision")},
             "PR-AUC": rsc.stats([oe.pr_auc(r["conf"], r["has_match"].astype(int)) for r in rf]),
             "mAP@10": rsc.stats([r["mAP@10"] for r in recs]), "Rank-1": rsc.stats([r["Rank-1"] for r in recs]),
+            "Rank-5": rsc.stats([r["Rank-5"] for r in recs]),
             "mINP": rsc.stats([r["mINP"] for r in recs]),
             "open_s1": float(np.mean(np.concatenate([r["s1"][~r["has_match"]] for r in recs]))),
         }
@@ -150,6 +151,13 @@ def run(D, a, folds: list) -> dict:
                 v_["named"] = True
             res[key][formula] = {"threshold": fstats(thr), "thresholds": thr, "strict_threshold": fstats(strict),
                                  "strict_thresholds": strict, "sizes": {**sizes, **named}}
+            # F1-оптимум без ограничения на TNR — сколько F1 отдаём за TNR ≥ 0.70
+            free = [rsc.choose_f1(pooled([as_rec(out["grid"][n][f], formula) for n in ns]), None) for f in range(a.folds)]
+            res[key][formula]["free"] = {
+                "threshold": fstats(free), "thresholds": free,
+                "sizes": {**size_table({n: (n, out["grid"][n]) for n in ns}, free, free, formula, a.folds),
+                          **size_table({name: (nsize[name], out["named"][name]) for name in out["named"]}, free, free,
+                                       formula, a.folds)}}
             if formula == "raw":                                      # порог от размера галереи, thr(N)
                 res[key]["thr_n"] = thr_by_n(out, ns, nsize, a.folds)
             if key == "none" and formula == "raw":                    # как работает сервис сейчас
@@ -266,7 +274,7 @@ def docs_md(res: dict) -> str:
          "`docker-compose.yml` и `.env.example` своих чисел не держат.", "",
          "## Как выбран порог", "",
          "- **Протокол «как сервис»:** у запроса без пары в галерее остаётся кадр его машины с той же камеры — так "
-         "выглядит галерея сервиса. 5 фолдов по 150 машинам holdout (в обучение модели не входили), 25 % машин фолда — "
+         "выглядит галерея сервиса. 150 машин holdout, 5 фолдов по 30 машин (в обучение модели не входили), 25 % машин фолда — "
          "без пары.",
          f"- **Размеры галереи:** кадры holdout плюс случайная доля чужих кадров (весь тест и кадры обучающих машин), "
          f"N от {num(first)} до {num(last)}, и именованные 2.2k, 9.0k, 10.8k. Тест — только как чужие кадры, ничего "
@@ -300,6 +308,13 @@ def docs_md(res: dict) -> str:
          f"{R['strict_threshold']['mean']:.4f}.** TNR на размерах {f3(t_lo)}–{f3(t_hi)}, F1 {f3(f_lo)}–{f3(f_hi)}. "
          f"Правило TNR ≥ 0.70 на всех размерах при одном пороге не выполнила ни одна формула; z100 выбран по "
          "запасной ветке правила (больший минимум TNR).",
+         (lambda fr, a2, b2, a8, b8: f"- **Цена TNR.** F1-оптимум `{pick}` без ограничения на TNR — порог "
+          f"{fr['threshold']['mean']:.4f}: F1 / TNR {f3(a2['F1']['mean'])} / {f3(a2['TNR']['mean'])} на 2.2k и "
+          f"{f3(a8['F1']['mean'])} / {f3(a8['TNR']['mean'])} на 10.8k. С нашим порогом F1 меняется на "
+          f"{b2['F1']['mean'] - a2['F1']['mean']:+.3f} на 2.2k и {b8['F1']['mean'] - a8['F1']['mean']:+.3f} на "
+          f"10.8k, TNR — на {b2['TNR']['mean'] - a2['TNR']['mean']:+.3f} и "
+          f"{b8['TNR']['mean'] - a8['TNR']['mean']:+.3f} (таблица ниже).")(
+             R["free"], R["free"]["sizes"]["2.2k"], R["sizes"]["2.2k"], R["free"]["sizes"]["10.8k"], R["sizes"]["10.8k"]),
          f"- **Альтернатива — raw с порогом от размера галереи:** thr(N) = {tn['a']['mean']:.3f} + "
          f"{tn['b']['mean']:.4f}·√(2 ln N), где N — сколько кадров в галерее сервиса в момент запроса. Держит TNR "
          f"{f3(n_lo)}–{f3(n_hi)} на всех размерах, но F1 на 10.8k {f3(tn['sizes']['10.8k']['F1']['mean'])} против "
@@ -307,13 +322,26 @@ def docs_md(res: dict) -> str:
          "- **Порог не переносится между вариантами постобработки.** Включили её — смените `SEARCH_THRESHOLD` (и "
          "`STRICT`) на значение из `REFUSAL_PRESETS`. Иначе сервис предупредит в логе при старте.", "",
          f"## Цифры по размерам галереи: итог, `{pick}`", "",
-         "| Галерея (кадров) | F1 | TNR | Precision | Recall | Строгий: TNR / Recall | PR-AUC | mAP@10 | mINP |",
-         "|---|---:|---:|---:|---:|---:|---:|---:|---:|"]
+         "| Галерея (кадров) | F1 | TNR | Precision | Recall | Строгий: TNR / Recall | PR-AUC | mAP@10 | R1 | R5 | mINP |",
+         "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for k in keys:
         v = R["sizes"][k]
         L.append(f"| {name(k)} | {f3(v['F1']['mean'])} | {f3(v['TNR']['mean'])} | {f3(v['precision']['mean'])} | "
                  f"{f3(v['recall']['mean'])} | {f3(v['strict']['TNR']['mean'])} / {f3(v['strict']['recall']['mean'])} | "
-                 f"{f3(v['PR-AUC']['mean'])} | {f3(v['mAP@10']['mean'])} | {f3(v['mINP']['mean'])} |")
+                 f"{f3(v['PR-AUC']['mean'])} | {f3(v['mAP@10']['mean'])} | {f3(v['Rank-1']['mean'])} | "
+                 f"{f3(v['Rank-5']['mean'])} | {f3(v['mINP']['mean'])} |")
+    fr = R["free"]
+    L += ["", f"## Сколько F1 отдаём за TNR: DBA + штраф, `{pick}`", "",
+          f"Две точки одной оценки: F1-оптимум без ограничения на TNR (порог {fr['threshold']['mean']:.4f} ± "
+          f"{fr['threshold']['std']:.4f}) и наш порог {R['threshold']['mean']:.4f} (F1 при TNR ≥ 0.70); рядом — "
+          "сервис сейчас. Оба порога выбраны вне фолда по всем размерам сразу.", "",
+          f"| Галерея (кадров) | Сейчас: raw 0.8025, F1 / TNR | `{pick}` F1-оптимум, F1 / TNR | `{pick}` наш порог, "
+          "F1 / TNR | ΔF1 (наш − оптимум) | ΔTNR (наш − оптимум) |", "|---|---:|---:|---:|---:|---:|"]
+    for k in keys:
+        a_, b_ = fr["sizes"][k], R["sizes"][k]
+        L.append(f"| {name(k)} | {f3(cur[k]['F1']['mean'])} / {f3(cur[k]['TNR']['mean'])} | "
+                 f"{f3(a_['F1']['mean'])} / {f3(a_['TNR']['mean'])} | **{f3(b_['F1']['mean'])} / {f3(b_['TNR']['mean'])}** | "
+                 f"{b_['F1']['mean'] - a_['F1']['mean']:+.3f} | {b_['TNR']['mean'] - a_['TNR']['mean']:+.3f} |")
     other = "raw" if pick == "z100" else "z100"
     L += ["", "## Сравнение вариантов, F1 / TNR", "",
           f"| Галерея (кадров) | Сейчас: raw 0.8025 без постобработки | DBA + штраф, `{pick}` (итог) | DBA + штраф, "

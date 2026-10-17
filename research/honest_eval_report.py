@@ -192,7 +192,7 @@ def prod_table(models: list) -> list:
         w = json.loads(p.read_text(encoding="utf-8"))["env"].get("REID_WEIGHTS", "?") if p.exists() else "нет прогона"
         weights.append(f"{lbl} — `{w}`")
     out = ["# Сравнение для порога в проде: " + ", ".join(lbl for _, lbl in tags), "",
-           "Веса: " + "; ".join(weights) + ". Протокол research/honest_eval.py: 5 фолдов по 150 машинам holdout, "
+           "Веса: " + "; ".join(weights) + ". Протокол research/honest_eval.py: 150 машин holdout, 5 фолдов по 30 машин, "
            "25 % машин фолда без пары, эталон организаторов; kr — k-reciprocal без расширения запроса "
            "(трансдуктивен, сервису недоступен). Отказ — research/calibrate_refusal_folds.py: сырой косинус, "
            "«вне фолда» — порог выбран на одном фолде (максимум TNR при recall ≥ цели) и проверен на остальных "

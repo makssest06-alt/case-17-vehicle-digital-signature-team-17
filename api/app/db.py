@@ -262,13 +262,18 @@ def insert_pp(rows, dba_updates) -> List[int]:
     return ids
 
 
-def search_pp(vec: np.ndarray, k: int, column: str) -> List[Dict[str, Any]]:
+def search_pp(vec: np.ndarray, k: int, column: str, ef_search: int) -> List[Dict[str, Any]]:
     """k ближайших по колонке column; confidence — косинус без округления.
-    hnsw.ef_search поднимается до k: по умолчанию (40) HNSW отдаёт не больше 40 строк."""
+    SET LOCAL hnsw.ef_search — в транзакции этого поиска: по умолчанию (40) HNSW
+    отдаёт не больше ~40 строк, а штрафу и z100 нужен top-100. Вызывающий передаёт
+    max(100, PP_CAMERA_TOPK)."""
     if column not in PP_COLUMNS:
         raise ValueError(f"колонка поиска: одна из {PP_COLUMNS}")
+    ef = int(ef_search)
+    if not 1 <= ef <= 1000:
+        raise ValueError(f"hnsw.ef_search должен быть от 1 до 1000, получено {ef}")
     with pool().connection() as conn, conn.cursor() as cur:
-        cur.execute("SELECT set_config('hnsw.ef_search', %s, true)", (str(max(40, int(k))),))
+        cur.execute(f"SET LOCAL hnsw.ef_search = {ef}")
         cur.execute(
             f"""
             SELECT id, vehicle_id, image_path, bbox, 1 - ({column} <=> %s) AS confidence

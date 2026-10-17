@@ -144,7 +144,7 @@ class Postprocess:
     def search(self, vec: np.ndarray, top_n: int, frame=None, bbox=None) -> Tuple[List[Dict[str, Any]], float]:
         """-> (top_n кандидатов в порядке ответа, оценка уверенности для отказа)."""
         k = rr.needed_k(top_n, self.camera == "on", self.topk, self.formula)
-        rows = self.store.search_pp(vec, k, self.column)
+        rows = self.store.search_pp(vec, k, self.column, rr.ef_search(self.topk))
         cos = np.array([r["confidence"] for r in rows], dtype="float64")
         flags = np.zeros(len(rows), bool)
         if self.camera == "on" and frame is not None and rows:

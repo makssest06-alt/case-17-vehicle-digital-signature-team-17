@@ -43,7 +43,7 @@ python research/honest_eval.py --data-dir /opt/case17/data --suite --tag maxim_v
   Готовые векторы можно подать файлом: `--embeddings vec.npz` (`ids`, `emb`).
 - Галереи: `small` (машины фолда), `2.2k` (+ весь тест как чужие машины),
   `8996` (состав clean-like из `research/GENERALIZATION_RESULTS.md`), `10.8k`
-  (+ тест и кадры обучающих машин). 5 фолдов по 150 машинам holdout, 25 %
+  (+ тест и кадры обучающих машин). 150 машин holdout, 5 фолдов по 30 машин, 25 %
   машин фолда без пары (TNR), режимы `official` и «без почти-дублей».
 - Результат: `research/honest_eval_results/honest_eval_<tag>_suite.md`
   (+ `.json`, `_folds.csv`). Для текущего студента —

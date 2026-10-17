@@ -486,7 +486,8 @@ def _search_custom(vec, n: int, frame, bbox):
     if _pp() is not None:
         found, score = _pp().search(vec, n, frame, bbox)
     else:                                   # только REFUSAL_SCORE=z100: нужен top-100
-        rows = db.search_pp(vec, pp_rerank.needed_k(n, False, 0, settings.refusal_score), "embedding")
+        rows = db.search_pp(vec, pp_rerank.needed_k(n, False, 0, settings.refusal_score), "embedding",
+                            pp_rerank.ef_search(settings.pp_camera_topk))
         cos = [r["confidence"] for r in rows]
         score = pp_rerank.refusal_score(cos, [False] * len(cos), settings.refusal_score)
         found = [{**r, "confidence": round(float(r["confidence"]), 4)} for r in rows[:n]]

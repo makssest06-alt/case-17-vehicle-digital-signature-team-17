@@ -1,6 +1,6 @@
 # knn для a10: сетка k × α
 
-Веса `~/models/clean_student/clean_student_a10_ep28.pt`, 5 фолдов по 150 машинам holdout, режим эталона для mAP@10 / Rank-1; Recall / TNR — без почти-дублей при пороге 0.7 (кандидат — top-1 варианта, решение по сырому косинусу). knn — α-QE по k ближайшим кадрам галереи (`honest_eval.knn_expand`). Δ — к raw.
+Веса `~/models/clean_student/clean_student_a10_ep28.pt`, 150 машин holdout, 5 фолдов по 30 машин, режим эталона для mAP@10 / Rank-1; Recall / TNR — без почти-дублей при пороге 0.7 (кандидат — top-1 варианта, решение по сырому косинусу). knn — α-QE по k ближайшим кадрам галереи (`honest_eval.knn_expand`). Δ — к raw.
 
 Воспроизвести: `python research/knn_grid.py --data-dir <данные> --env REID_WEIGHTS=<веса> --tag a10 --ks 2,3,5 --alphas 1,3 --thr 0.7`; счёт занял 0.9 мин.
 

@@ -102,7 +102,7 @@ class DbaTest(Harness):
         status, body = self.post("/v1/search", 1)
         self.assertEqual(status, 200)
         call = next(c for c in self.db.calls if c[0] == "search_pp")
-        self.assertEqual(call[1:], (10, "embedding_dba"))
+        self.assertEqual(call[1:], (10, "embedding_dba", 100))      # ef_search = max(100, PP_CAMERA_TOPK)
         q = sf.FakeModel().embed_batch([Image.open(io.BytesIO(sf.png(1))).crop((28, 21, 172, 129))])[0]
         g = all_dba(self.db)
         want = [self.db.rows[i]["id"] for i in np.argsort(-(g @ q))[:10]]
@@ -135,7 +135,7 @@ class CameraTest(Harness):
         self.assertNotEqual(ids[0], top)
         self.assertEqual(ids[:9], [c["id"] for c in plain["candidates"][1:10]])
         call = next(c for c in self.db.calls if c[0] == "search_pp")
-        self.assertEqual(call[1:], (100, "embedding"))              # штраф смотрит top-100
+        self.assertEqual(call[1:], (100, "embedding", 100))         # штраф смотрит top-100
 
     def test_refusal_uses_best_unflagged(self):
         self.start(pp_camera_penalty="on")
@@ -155,7 +155,7 @@ class CameraTest(Harness):
         np.testing.assert_allclose(self.db.rows[-1]["bg"], self.frame_bg(7), atol=1e-6)
         self.assertEqual(self.pp.bg, {})                            # store: хранить, но не штрафовать
         _, body = self.post("/v1/search", 7)
-        self.assertEqual(next(c for c in self.db.calls if c[0] == "search_pp")[1:], (10, "embedding"))
+        self.assertEqual(next(c for c in self.db.calls if c[0] == "search_pp")[1:], (10, "embedding", 100))
 
     def test_bulk_import_crops_have_no_background(self):
         self.start(pp_camera_penalty="on")
@@ -209,7 +209,7 @@ class RefusalScoreTest(unittest.TestCase):
             r = sf.call(main.app, "POST", "/v1/search", fields=BOX, files={"image": ("f1.png", sf.png(1))})
         body = json.loads(r["body"])
         self.assertEqual(len(body["candidates"] or []) <= 10, True)
-        self.assertEqual(next(c for c in db.calls if c[0] == "search_pp")[1:], (100, "embedding"))
+        self.assertEqual(next(c for c in db.calls if c[0] == "search_pp")[1:], (100, "embedding", 100))
 
 
 class ValidationTest(unittest.TestCase):

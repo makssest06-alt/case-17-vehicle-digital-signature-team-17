@@ -1,6 +1,6 @@
 # Сравнение для порога в проде: a10 (прод), старый студент (main)
 
-Веса: a10 (прод) — `~/models/clean_student/clean_student_a10_ep28.pt`; старый студент (main) — `<repo>/weights/siglip2_distill_ensemble_ep28.pt`. Протокол research/honest_eval.py: 5 фолдов по 150 машинам holdout, 25 % машин фолда без пары, эталон организаторов; kr — k-reciprocal без расширения запроса (трансдуктивен, сервису недоступен). Отказ — research/calibrate_refusal_folds.py: сырой косинус, «вне фолда» — порог выбран на одном фолде (максимум TNR при recall ≥ цели) и проверен на остальных четырёх, ± — разброс выбранного порога. Таблицы собирает `python research/honest_eval_report.py --prod 'a10:a10 (прод)' 'student_rk:старый студент (main)'`.
+Веса: a10 (прод) — `~/models/clean_student/clean_student_a10_ep28.pt`; старый студент (main) — `<repo>/weights/siglip2_distill_ensemble_ep28.pt`. Протокол research/honest_eval.py: 150 машин holdout, 5 фолдов по 30 машин, 25 % машин фолда без пары, эталон организаторов; kr — k-reciprocal без расширения запроса (трансдуктивен, сервису недоступен). Отказ — research/calibrate_refusal_folds.py: сырой косинус, «вне фолда» — порог выбран на одном фолде (максимум TNR при recall ≥ цели) и проверен на остальных четырёх, ± — разброс выбранного порога. Таблицы собирает `python research/honest_eval_report.py --prod 'a10:a10 (прод)' 'student_rk:старый студент (main)'`.
 
 ### Ранжирование: mAP@10 / Rank-1, режим эталона
 

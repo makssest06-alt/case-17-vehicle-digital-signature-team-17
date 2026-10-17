@@ -61,7 +61,7 @@ def header(fig, title, sub):
 def gallery_png(pts: list, path: Path) -> None:
     fig = plt.figure(figsize=(16, 9), dpi=100, facecolor=SURFACE)
     header(fig, "Чем больше чужих машин в галерее, тем ниже mAP@10",
-           "Студент из main, сырой косинус, протокол организаторов, 5 фолдов по 150 машинам holdout.\n"
+           "Студент из main, сырой косинус, протокол организаторов, 150 машин holdout, 5 фолдов по 30 машин.\n"
            "Полоса и усы: выборочный разброс по фолдам.")
     ax = fig.add_axes([0.08, 0.2, 0.86, 0.55])
     style(ax)
@@ -167,7 +167,8 @@ def slides(pts: list) -> str:
         "## 1. Честная валидация", "",
         f"- Метрики считает эталон организаторов без правок: junk — та же машина с той же камеры, "
         f"AP@10 нормирован на min(позитивов, 10).",
-        f"- {st['folds']} фолдов по {st['holdout_vehicles']} машинам holdout; у {st['openset_frac']:.0%} машин фолда "
+        f"- {st['holdout_vehicles']} машин holdout, {st['folds']} фолдов по {st['holdout_vehicles'] // st['folds']} машин; "
+        f"у {st['openset_frac']:.0%} машин фолда "
         f"пары в галерее нет, по ним меряется отказ. Модель строится кодом сервиса, скор — как у `/v1/search`.",
         f"- mAP@10 падает с размером галереи: {f3(first['map'])} на {num(first['n'])} кадрах → "
         + " → ".join(f"{f3(p['map'])}" for p in pts[1:]) + f" на {num(last['n'])}.",
@@ -226,7 +227,7 @@ def slides(pts: list) -> str:
         f"{f3(fin_r['sizes'][str(rm_grid[-1])]['own_threshold']['mean'])}; один порог raw на 10.8k даёт TNR "
         f"{f3(fin_r['sizes']['10.8k']['TNR']['mean'])}. Порог от N держит TNR, но на 10.8k F1 "
         f"{f3(rm['dba1+camera']['thr_n']['sizes']['10.8k']['F1']['mean'])}.",
-        "- Порог выбран вне фолда (5 фолдов по 150 машинам holdout) по всем размерам галереи сразу, тест — только "
+        "- Порог выбран вне фолда (150 машин holdout, 5 фолдов по 30 машин) по всем размерам галереи сразу, тест — только "
         "чужие кадры. Финал — после решения по постобработке, пересчёт одной командой `research/refusal_mode.py`, в "
         "конфиге меняется одно число.", "",
         "Подробно: `docs/refusal.md`; картинка — `honest_eval_results/threshold_vs_gallery_a10_service.png`", ""])

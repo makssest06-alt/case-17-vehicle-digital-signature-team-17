@@ -44,6 +44,7 @@ import honest_eval as he  # noqa: E402
 import refusal_score as rsc  # noqa: E402
 import reid_postprocess as pp  # noqa: E402
 import service_embeddings as se  # noqa: E402
+from service_score import pair_cos  # noqa: E402,F401  (A[q] · B[top[q, k]] кусками)
 
 TOPK = 100
 LAMBDAS = (0.05, 0.1, 0.2, 0.3, float("inf"))
@@ -82,12 +83,7 @@ def calib_pairs(D, bg: dict, n_queries: int = 3000, seed: int = 0) -> tuple:
     return bgs.ravel(), same.ravel(), np.repeat(cam[qi], TOPK)
 
 
-def pair_cos(A: np.ndarray, B: np.ndarray, top: np.ndarray, chunk: int = 256) -> np.ndarray:
-    """A[q] · B[top[q, k]] кусками по запросам: (Q, K, D) целиком не держим в памяти."""
-    out = np.empty(top.shape, np.result_type(A, B))
-    for s in range(0, len(top), chunk):
-        out[s:s + chunk] = np.einsum("qd,qkd->qk", A[s:s + chunk], B[top[s:s + chunk]])
-    return out
+
 
 
 def pr_at(bgs, same, t) -> dict:
@@ -346,22 +342,24 @@ def report_md(res: Path, tag: str) -> str:
                 "dba k=1 | nodup": "**да**", "kr | nodup": "справочно", "dba k=1 + kr | nodup": "справочно"}.get(key, "")
 
     def table(rows_, base):
-        out = ["| Вариант | mAP@10 9.0k / 10.8k / 8996 (Δ к raw) | F1 / TNR 9.0k | F1 / TNR 10.8k | F1 / TNR 8996 | "
-               "без пары → та же машина с той же камеры, 9.0k / 10.8k | Стоимость на запрос | В прод |",
-               "|---|---|---:|---:|---:|---:|---|---|"]
+        out = ["| Вариант | mAP@10 9.0k / 10.8k / 8996 (Δ к raw) | R1 / R5 10.8k | R1 / R5 8996 | F1 / TNR 9.0k | "
+               "F1 / TNR 10.8k | F1 / TNR 8996 | без пары → та же машина с той же камеры, 9.0k / 10.8k | "
+               "Стоимость на запрос | В прод |",
+               "|---|---|---:|---:|---:|---:|---:|---:|---|---|"]
         for key, label in rows_:
             if key not in r:
                 continue
             maps = " / ".join(f"{m(key, g):.3f}" + ("" if key == base else f" ({m(key, g) - m(base, g):+.3f})") for g in big)
             fr = lambda g: f"{m(key, g, 'F1'):.3f} / {m(key, g, 'TNR'):.3f}"
             same = " / ".join(f"{r[key][g]['open_same_cam_top1_all']} из {r[key][g]['n_open_all']}" for g in ("9.0k", "10.8k"))
-            out.append(f"| {label} | {maps} | {fr('9.0k')} | {fr('10.8k')} | {fr('8996')} | {same} | "
+            rk = lambda g: f"{m(key, g, 'Rank-1'):.3f} / {m(key, g, 'Rank-5'):.3f}"
+            out.append(f"| {label} | {maps} | {rk('10.8k')} | {rk('8996')} | {fr('9.0k')} | {fr('10.8k')} | {fr('8996')} | {same} | "
                        f"{cost.get(key, '—')} | {verdict(key)} |")
         return out
 
     dba = "dba k=1 | neardup"
     lines = [f"# Постобработка по одному запросу на больших галереях: {tag}", "",
-             f"Веса `{R['weights']}`, 5 фолдов по 150 машинам holdout, 25 % машин фолда без пары, метрики эталона. "
+             f"Веса `{R['weights']}`, 150 машин holdout, 5 фолдов по 30 машин, 25 % машин фолда без пары, метрики эталона. "
              "Главные галереи — 9.0k (holdout + 8639 кадров обучающих машин, по фолдам; состав как 8996), 10.8k и "
              "8996 (одна галерея команды; без пары в ней 7 запросов — её TNR не показатель). Порог отказа для каждой "
              "строки — максимум F1 при TNR ≥ 0.70, выбран на фолде этой же галереи и проверен на остальных; для 8996 — "

@@ -95,38 +95,31 @@ def service_bg(D, a) -> dict:
 
 def records_service(D, q_rows, g_rows, opened: set, bg: dict, conf: str, sp: dict, extra: bool = False) -> dict:
     """Записи отказа для скора сервиса. conf: s1 → оценка raw, z100 → z100 (обе — в conf_raw / conf_z100).
-    extra — ещё mAP@10 и mINP ранжирования после постобработки (для research/refusal_mode.py)."""
+    Ранжирование и оценка — research/service_score.rank_queries (код сервиса, точный top-K).
+    extra — ещё mAP@10, Rank-1, Rank-5 и mINP ранжирования после постобработки (для research/refusal_mode.py)."""
     import bigallery_pp as bp
+    import service_score as ss
     from app.pp import rerank as rr
 
     b = bp.make_block(D, q_rows, g_rows, opened, bg)
     mask = b["mask"][sp["mode"]]
     s = bp.dba_scores(b, sp["dba_k"], clean=sp["mode"] == "nodup") if sp["dba_k"] else b["qv"] @ b["gv"].T
     s = np.where(mask, -np.inf, s)
-    k = rr.needed_k(10, sp["camera"], sp["topk"], "z100")
-    top = np.argpartition(-s, k - 1, axis=1)[:, :k]
-    top = np.take_along_axis(top, np.argsort(-np.take_along_axis(s, top, 1), axis=1, kind="stable"), 1)
-    cos = np.take_along_axis(s, top, 1)
-    flags = ((bp.pair_cos(b["qbg"], b["gbg"], top) > sp["tau"]) & np.isfinite(cos) if sp["camera"]
-             else np.zeros(cos.shape, bool))
+    r = ss.rank_queries(s, b["qbg"], b["gbg"], rr.needed_k(10, sp["camera"], sp["topk"], "z100"), sp["tau"],
+                        sp["camera"])
     n = len(s)
-    c_raw, c_z, s1, top1 = (np.full(n, -np.inf), np.full(n, -np.inf), np.full(n, -np.inf), np.zeros(n, int))
-    for i in range(n):
-        ok = np.isfinite(cos[i])
-        c, f, t = cos[i][ok], flags[i][ok], top[i][ok]
-        o = rr.rank(c, f)
-        c_raw[i], c_z[i] = rr.refusal_score(c[o], f[o], "raw"), rr.refusal_score(c[o], f[o], "z100")
-        top1[i] = t[o[0]]
-        s1[i] = c_raw[i]
+    top1 = np.array([o[0] if len(o) else 0 for o in r["order"]])
     rows_ = np.arange(n)
-    rec = {"conf": c_raw if conf == "s1" else c_z, "conf_raw": c_raw, "conf_z100": c_z,
-           "has_match": (b["same_v"] & ~b["same_c"] & ~mask).any(1), "correct": b["same_v"][rows_, top1], "s1": s1}
+    rec = {"conf": r["conf_raw"] if conf == "s1" else r["conf_z100"], "conf_raw": r["conf_raw"],
+           "conf_z100": r["conf_z100"], "has_match": (b["same_v"] & ~b["same_c"] & ~mask).any(1),
+           "correct": b["same_v"][rows_, top1], "s1": r["conf_raw"]}
     if extra:
         pen = s.copy()
-        rr_, cc_ = np.nonzero(flags)
-        pen[rr_, top[rr_, cc_]] -= bp.BIG                        # штраф виден и в полном ранжировании
+        for i in range(n):
+            pen[i, r["order"][i][r["flags"][i]]] -= bp.BIG       # штраф виден и в полном ранжировании
         ev = bp.evaluate(b, pen, sp["mode"])
-        rec["mAP@10"], rec["Rank-1"], rec["mINP"] = ev["mAP@10"], ev["Rank-1"], minp(b, pen, sp["mode"])
+        rec["mAP@10"], rec["Rank-1"], rec["Rank-5"] = ev["mAP@10"], ev["Rank-1"], ev["Rank-5"]
+        rec["mINP"] = minp(b, pen, sp["mode"])
     return rec
 
 

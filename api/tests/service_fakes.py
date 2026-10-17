@@ -109,9 +109,9 @@ class FakeDB:
         self.calls.append(("insert_pp", ids))
         return ids
 
-    def search_pp(self, vec, k, column):
-        self.calls.append(("search_pp", int(k), column))
-        return self._ranked(vec, column)[:k]
+    def search_pp(self, vec, k, column, ef_search):
+        self.calls.append(("search_pp", int(k), column, int(ef_search)))
+        return self._ranked(vec, column, exact=True)[:k]          # как db.search_pp: косинус без округления
 
     def delete_pp(self, item_id, dba_updates):
         ok = self.delete_one(item_id)
@@ -127,13 +127,13 @@ class FakeDB:
                           "embedding": np.asarray(vec, "float32"), "embedding_dba": None, "bg": None})
         return new_id
 
-    def _ranked(self, vec, column):
+    def _ranked(self, vec, column, exact=False):
         q = np.asarray(vec, "float32")
         rows = [r for r in self.rows if r[column] is not None]
         sims = [float(np.dot(q, r[column]) / (np.linalg.norm(q) * np.linalg.norm(r[column]) + 1e-12)) for r in rows]
         order = sorted(range(len(rows)), key=lambda i: -sims[i])
         return [{"id": rows[i]["id"], "vehicle_id": rows[i]["vehicle_id"], "image_path": rows[i]["image_path"],
-                 "bbox": list(rows[i]["bbox"]), "confidence": round(sims[i], 4)} for i in order]
+                 "bbox": list(rows[i]["bbox"]), "confidence": sims[i] if exact else round(sims[i], 4)} for i in order]
 
 
 def rnd(v):

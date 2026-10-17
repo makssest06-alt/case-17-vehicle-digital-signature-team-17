@@ -49,6 +49,11 @@ def refusal_score(cos_sorted: np.ndarray, flags_sorted: np.ndarray, formula: str
     return float((keep[0] - rest.mean()) / max(float(rest.std()), 1e-6))
 
 
+def ef_search(camera_topk: int) -> int:
+    """hnsw.ef_search во включённом режиме: не меньше 100 и не меньше PP_CAMERA_TOPK."""
+    return max(Z_TOPK, int(camera_topk))
+
+
 def needed_k(top_n: int, camera_on: bool, camera_topk: int, formula: str) -> int:
     """Сколько кандидатов брать из базы, чтобы хватило и ответу, и штрафу, и z100."""
     return max(top_n, camera_topk if camera_on else 0, Z_TOPK if formula == "z100" else 0)

@@ -80,7 +80,7 @@ def main() -> int:
     g = [gname for gname, _ in GALLERIES]
     raw = rows["raw"]
     lines = [f"# knn для {a.tag}: сетка k × α", "",
-             f"Веса `{report['weights']}`, 5 фолдов по 150 машинам holdout, режим эталона для mAP@10 / Rank-1; "
+             f"Веса `{report['weights']}`, 150 машин holdout, 5 фолдов по 30 машин, режим эталона для mAP@10 / Rank-1; "
              f"Recall / TNR — без почти-дублей при пороге {thr} (кандидат — top-1 варианта, решение по сырому "
              "косинусу). knn — α-QE по k ближайшим кадрам галереи (`honest_eval.knn_expand`). Δ — к raw.", "",
              f"Воспроизвести: `python research/knn_grid.py --data-dir <данные> --env REID_WEIGHTS=<веса> --tag {a.tag} "

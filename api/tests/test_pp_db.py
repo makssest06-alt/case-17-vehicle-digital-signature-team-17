@@ -69,7 +69,7 @@ class PostprocessSqlTest(unittest.TestCase):
         rows = {r["id"]: r for r in db.fetch_pp(True)}
         np.testing.assert_allclose(rows[new[0]]["bg"], bg, atol=1e-7)
         np.testing.assert_allclose(rows[ids[0]]["embedding_dba"], self.vecs[2], atol=1e-6)
-        got = db.search_pp(self.vecs[3], 100, "embedding_dba")
+        got = db.search_pp(self.vecs[3], 100, "embedding_dba", 100)
         self.assertEqual(len(got), 100)                                     # HNSW по умолчанию отдал бы ≤ 40
         self.assertLess(len(db.search(self.vecs[3], 100)), 100)            # старый поиск упирается в ef_search (~40)
         cos = [g["confidence"] for g in got]
@@ -77,7 +77,9 @@ class PostprocessSqlTest(unittest.TestCase):
         self.assertTrue(db.delete_pp(new[0], [(ids[1], self.vecs[4])]))
         self.assertNotIn(new[0], {r["id"] for r in db.fetch_pp(False)})
         with self.assertRaises(ValueError):
-            db.search_pp(self.vecs[0], 5, "bg; DROP TABLE gallery")
+            db.search_pp(self.vecs[0], 5, "bg; DROP TABLE gallery", 100)
+        with self.assertRaises(ValueError):
+            db.search_pp(self.vecs[0], 5, "embedding", 0)
 
 
 if __name__ == "__main__":
