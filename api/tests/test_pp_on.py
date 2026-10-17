@@ -29,7 +29,11 @@ BOX = {"x": "40", "y": "30", "w": "120", "h": "90"}
 
 def cfg(**kw):
     from app.config import Settings
-    base = {"pp_dba_k": 0, "pp_camera_penalty": "off", "refusal_score": "raw", "search_threshold": 0.0}
+    # Эти тесты явно выбирают отдельный PP-сценарий. Не наследуем production
+    # default `both`, иначе проверка DBA/camera/bbox по отдельности смешивает
+    # сразу два правила.
+    base = {"pp_dba_k": 0, "pp_camera_penalty": "off", "pp_dedup": "off",
+            "refusal_score": "raw", "search_threshold": 0.0}
     return dataclasses.replace(Settings(), **{**base, **kw})
 
 
@@ -278,14 +282,15 @@ class ValidationTest(unittest.TestCase):
                    {"refusal_score": "raw", "search_threshold": 3.0}, {"pp_dedup": "iou"},
                    {"pp_camera_penalty": "on", "pp_dedup": "bbox"}, {"pp_dedup_iou": 1.5},
                    {"pp_dedup_refusal": "rect"}, {"pp_dedup_rank": "all"}):
-            with self.subTest(kw), patch.object(main, "settings", cfg(**{"search_threshold": 0.8, **kw})):
+            with self.subTest(kw), patch.object(main, "settings",
+                                                cfg(**{"search_threshold": 0.8, "embed_model": "resnet18", **kw})):
                 with self.assertRaises(RuntimeError):
                     main._validate_runtime_config()
 
     def test_z100_allows_threshold_above_one(self):
         main = sf.load_app()
-        with patch.object(main, "settings", cfg(refusal_score="z100", search_threshold=3.5,
-                                               search_threshold_strict=4.0)):
+        with patch.object(main, "settings", cfg(refusal_score="z100", search_threshold=3.5,      # веса не нужны
+                                               search_threshold_strict=4.0, embed_model="resnet18")):
             main._validate_runtime_config()
 
 

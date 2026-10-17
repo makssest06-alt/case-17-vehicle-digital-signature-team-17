@@ -26,12 +26,14 @@ class Settings:
     db_dsn: str = os.getenv("DB_DSN", "postgresql://case17:case17@db:5432/case17")
 
     # модель
-    embed_model: str = os.getenv("EMBED_MODEL", "resnet18")
+    # Production по умолчанию — clean student alpha=10.  Явный EMBED_MODEL
+    # по-прежнему позволяет запускать диагностические профили.
+    embed_model: str = os.getenv("EMBED_MODEL", "reid:vit_base_patch16_siglip_224.webli")
     embed_dim: int = _i("EMBED_DIM", 512)
     input_size: int = _i("INPUT_SIZE", 224)
     # Усреднение оригинала и отражения (test-time augmentation): вдвое дороже,
     # даёт +2.17 mAP — замер в research/results.md.
-    tta_flip: bool = _b("EMBED_TTA_FLIP", True)
+    tta_flip: bool = _b("EMBED_TTA_FLIP", False)
     batch_size: int = _i("BATCH_SIZE", 16)
     # Ожидаемый sha256 файла весов: при старте сверяется, не совпал — предупреждение в логе (app/weights_check.py).
     reid_weights_sha256: str = _env("REID_WEIGHTS_SHA256", "")
@@ -46,7 +48,7 @@ class Settings:
     #           среди ста ближайших; меньше зависит от размера галереи.
     # После выбора постобработки меняется одно число — SEARCH_THRESHOLD (и STRICT
     # для строгого режима); посчитанные значения — REFUSAL_PRESETS ниже.
-    refusal_score: str = _env("REFUSAL_SCORE", "raw")
+    refusal_score: str = _env("REFUSAL_SCORE", "z100")
     # Две рабочие точки, обе посчитаны на распределении, в котором работает
     # сервис (галерея не фильтруется по камере: camera_id на вход не подаётся).
     #   сбалансированная — максимум индекса Юдена, обе ошибки равноценны;
@@ -54,13 +56,13 @@ class Settings:
     #             запросов ошибочно принимается примерно один.
     # Выбор между ними — продуктовое решение, а не техническое, поэтому он
     # вынесен в интерфейс, а не зашит в код.
-    search_threshold: float = _f("SEARCH_THRESHOLD", 0.8025)
-    search_threshold_strict: float = _f("SEARCH_THRESHOLD_STRICT", 0.8465)
+    search_threshold: float = _f("SEARCH_THRESHOLD", 4.1592)
+    search_threshold_strict: float = _f("SEARCH_THRESHOLD_STRICT", 7.3031)
     search_margin: float = _f("SEARCH_MARGIN", 0.0)
 
     # ---- постобработка: по умолчанию выключена, ответы как без неё (api/app/pp/state.py) ----
-    pp_dba_k: int = _i("PP_DBA_K", 0)                                   # 0 — выкл; 1 — DBA по 1 соседу
-    pp_camera_penalty: str = _env("PP_CAMERA_PENALTY", "off").strip().lower()   # off | store | on
+    pp_dba_k: int = _i("PP_DBA_K", 1)                                   # production: DBA по 1 соседу
+    pp_camera_penalty: str = _env("PP_CAMERA_PENALTY", "on").strip().lower()   # production: фон
     pp_camera_tau: float = _f("PP_CAMERA_TAU", 0.68127)   # косинус фона > τ — «та же камера» (cheap_bg_a10.md)
     pp_camera_topk: int = _i("PP_CAMERA_TOPK", 100)       # сколько кандидатов из базы проверять на камеру
     # Исключение почти-дублей: off | bbox (правило рамок: сходство + рамка) | bg (признак фона) | both (OR).
@@ -68,7 +70,7 @@ class Settings:
     #   PP_DEDUP_REFUSAL — какие не учитываются в оценке отказа (пусто — как ранжирование);
     #   PP_DEDUP         — сокращение для обоих (пусто/off — по PP_CAMERA_PENALTY=on → bg).
     # Пороги правила рамок — dedup_compare_a10.md.
-    pp_dedup: str = _env("PP_DEDUP", "off").strip().lower()
+    pp_dedup: str = _env("PP_DEDUP", "both").strip().lower()   # production (glebmain)
     pp_dedup_rank: str = _env("PP_DEDUP_RANK", "").strip().lower()
     pp_dedup_refusal: str = _env("PP_DEDUP_REFUSAL", "").strip().lower()
     pp_dedup_sim_any: float = _f("PP_DEDUP_SIM_ANY", float("inf"))   # сырой косинус ≥ — почти-дубль без рамки
@@ -111,7 +113,7 @@ REFUSAL_PRESETS = {
     (1, "both", "both", "raw"): {"balanced": 0.7866, "strict": 0.9152,
                         "note": "предварительно: DBA k=1 + оба (OR), raw, F1 при TNR ≥ 0.70 по сетке N 361–10847, как сервис (refusal_mode_a10.md)"},
     (1, "both", "both", "z100"): {"balanced": 4.1592, "strict": 7.3031,
-                        "note": "предварительно: DBA k=1 + оба (OR), z100, F1 при TNR ≥ 0.70 по сетке N 361–10847, как сервис (refusal_mode_a10.md)"},
+                        "note": "production (glebmain): DBA k=1 + dedup both + z100"},
 }
 
 

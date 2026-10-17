@@ -142,7 +142,8 @@ def rnd(v):
 
 def norm_path(p):
     root = os.environ.get("DATA_DIR", "")
-    return str(p).replace(root, "<data>") if root else str(p)
+    value = str(p).replace(root, "<data>") if root else str(p)
+    return value.replace("\\", "/")
 
 
 def multipart(fields: dict, files: dict) -> tuple:

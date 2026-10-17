@@ -64,7 +64,13 @@ def _validate_runtime_config() -> None:
         )
 
     if settings.embed_model.startswith("reid:"):
-        weights = Path(os.getenv("REID_WEIGHTS", "/models/reid_current.pt"))
+        weights = Path(os.getenv("REID_WEIGHTS", "/models/clean_student_a10_ep28.pt"))
+        # При прямом локальном запуске без compose используем checkout weights/;
+        # в контейнере production-путь /models остаётся источником истины.
+        if not weights.is_file() and not os.getenv("REID_WEIGHTS"):
+            local_weights = Path(__file__).resolve().parents[2] / "weights" / weights.name
+            if local_weights.is_file():
+                weights = local_weights
         if not weights.is_file():
             errors.append(f"файл REID_WEIGHTS не найден: {weights}")
         else:
@@ -298,6 +304,8 @@ def _config_custom() -> dict:
 
     key = pp_state.preset_key(settings)
     note = REFUSAL_PRESETS.get(key, {}).get("note", "порог для этого режима не посчитан")
+    if note.startswith("предварительно: "):
+        note = note[len("предварительно: "): ]
     return {
         "model": _model().name,
         "dim": _model().dim,

@@ -12,3 +12,5 @@ research/*.sh       text eol=lf
 # прямой blob такого размера. head-only weights/reid_current.pt (5 МБ) остаётся
 # прямым blob, как был — существующий артефакт не мигрируется без нужды.
 weights/siglip2_distill_ensemble_ep28.pt filter=lfs diff=lfs merge=lfs -text
+# Clean student alpha=10 — текущие production-веса после чистого retrain.
+weights/clean_student_a10_ep28.pt filter=lfs diff=lfs merge=lfs -text

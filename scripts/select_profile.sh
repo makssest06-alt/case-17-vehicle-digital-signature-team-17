@@ -19,11 +19,11 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ENV_FILE="$ROOT/.env"
 
 # --- описание профилей --------------------------------------------------
-# cpu: SigLIP base + обученная голова. 359 МБ весов, 1.4 кадра/с на 2 vCPU,
-#      mAP 65.16. Это то, что проверено и лежит в репозитории.
+# cpu: clean student alpha=10 (SigLIP2 + ReID-голова), 512D.
+#      Это production-профиль, проверенный на clean holdout.
 CPU_MODEL="reid:vit_base_patch16_siglip_224.webli"
 CPU_DIM=512
-CPU_WEIGHTS="/models/reid_current.pt"
+CPU_WEIGHTS="/models/clean_student_a10_ep28.pt"
 
 # gpu: SigLIP so400m. 1631 МБ весов (+6.5 МБ голова = 1638 МБ при лимите 2048),
 #      примерно в 6 раз больше вычислений на кадр. На CPU это 0.35 кадра/с и
@@ -80,7 +80,7 @@ case "$MODE" in
     set_kv EMBED_MODEL "$CPU_MODEL"
     set_kv EMBED_DIM   "$CPU_DIM"
     set_kv REID_WEIGHTS "$CPU_WEIGHTS"
-    ok "CPU-профиль: SigLIP base + голова, 512D, mAP 65.16"
+    ok "CPU/GPU-safe production-профиль: clean student alpha=10, 512D"
     ;;
   gpu)
     # Голова под so400m появляется только после обучения на GPU (kaggle/).
@@ -94,8 +94,8 @@ case "$MODE" in
       ok "GPU-профиль: SigLIP so400m + обученная голова, 512D"
     else
       warn "GPU-профиль запрошен, но обученной головы под so400m ещё нет"
-      echo "  Без головы so400m даёт mAP 60.80 — это ХУЖЕ, чем base с головой (65.16)."
-      echo "  Поэтому оставляю CPU-профиль: он лучше по качеству и на видеокарте"
+      echo "  Без головы so400m даёт mAP 60.80 — это ХУЖЕ, чем clean student alpha=10."
+      echo "  Поэтому оставляю production-профиль alpha=10: он лучше по качеству и на видеокарте"
       echo "  тоже работает, просто быстрее."
       echo
       echo "  Чтобы включить so400m: обучить голову ноутбуком kaggle/train_reid.ipynb"
