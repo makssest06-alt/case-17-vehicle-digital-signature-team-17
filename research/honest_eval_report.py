@@ -212,6 +212,9 @@ def main() -> int:
         lines += ["## Размер галереи (сырой косинус)", "", *ladder_table(a.ladder), ""]
     if a.team_crops and a.team_frames:
         lines += [*team_compare({"crops": a.team_crops, "frames": a.team_frames}), ""]
+        notes = RES / "team_parity_notes.md"          # выводы пишутся руками, таблица — из JSON
+        if notes.exists():
+            lines += [notes.read_text(encoding="utf-8").rstrip(), ""]
     text = "\n".join(lines)
     print(text)
     if a.out:
