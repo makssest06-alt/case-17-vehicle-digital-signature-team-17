@@ -41,6 +41,6 @@ train↔holdout duplicate-пар, 550 query / 357 gallery, raw cosine, junk по
 - deployment/no-camera: `0.87435`, recall `0.8791`, TNR `1.000`;
 - cross-camera: `0.66986`, recall `0.7048`, TNR `0.8942`.
 
-Текущие `0.8025/0.8465` оставлены до отдельного согласованного merge
-postprocess/refusal-контракта Ильи и Андрея. Query-expansion/CSLS в сервис не
-включался.
+Production-профиль: `DBA k=1 + dedup both (bbox OR background) + z100`;
+пороги `4.1592/7.3031`. Raw `0.8025/0.8465` и query-expansion/CSLS в сервис
+не включаются.
