@@ -47,6 +47,21 @@ python research/honest_eval.py --data-dir <данные> --suite --tag <имя> 
 | картинки ошибок (номера закрыты) | `python research/error_examples.py --data-dir <данные>` | `error_examples/*.png` |
 | аудит утечек | `python research/audit_leaks.py --data-dir <данные> --zip dataset.zip` | `leak_audit.md` |
 
+### Промер прод-модели перед сменой порога
+
+```bash
+PYTHON=<python окружения> scripts/prod_model_check.sh <данные> ~/models/clean_student/clean_student_a10_ep28.pt a10
+# -> research/honest_eval_results/prod_a10.md
+```
+
+Скрипт сверяет sha256 весов с `research/clean_student/manifest.json` (ветка
+`team17/finals-student-gpu-handoff`, у a10 там `93114c59…40bf6ce`) и без
+совпадения не считает. Дальше: сюита raw и kr, отказ на 2.2k без почти-дублей
+вне фолда (0.8025, recall ≥ 0.6 и ≥ 0.7), таблица рядом со старым студентом
+(`honest_eval_report.py --prod`). `-n` — только сверить и показать команды.
+17.10 файла `clean_student_a10_ep28.pt` локально нет (в `clean_student.zip` его
+тоже нет), a10 пока не промерен.
+
 ### Как Андрею сравнить raw и KNN одной командой
 
 ```bash

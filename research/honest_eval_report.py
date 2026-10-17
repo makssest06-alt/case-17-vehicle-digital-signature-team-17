@@ -175,10 +175,57 @@ def models_table(models: list, variants: list) -> list:
     return out
 
 
+def prod_table(models: list) -> list:
+    """Таблица для порога в проде. models — «тег:подпись», первый — прод-модель.
+    Читает honest_eval_<тег>_suite.json (8996 и 10.8k, raw и kr) и
+    refusal_folds_<тег>.json (2.2k, без почти-дублей, вне фолда)."""
+    tags = [m.split(":", 1) for m in models]
+    head = "| | " + " | ".join(lbl for _, lbl in tags) + " |"
+    sep = "|---|" + "---:|" * len(tags)
+    suites = {}
+    for tag, _ in tags:
+        p = RES / f"honest_eval_{tag}_suite.json"
+        suites[tag] = json.loads(p.read_text(encoding="utf-8"))["suite"] if p.exists() else {}
+    out = ["### Ранжирование: mAP@10 / Rank-1, режим эталона", "", head, sep]
+    for gal, key in (("8996", "8996 (как у команды)"), ("10.8k", "10.8k (+ тест и обучающие)")):
+        for v in ("raw", "kr"):
+            cells = []
+            for tag, _ in tags:
+                m = suites[tag].get(key, {}).get("metrics", {}).get(v, {}).get("official")
+                if not m:
+                    cells.append("—")
+                elif isinstance(m["mAP@10"], dict):
+                    cells.append(f"{m['mAP@10']['mean']:.3f} ± {m['mAP@10']['std']:.3f} / {m['Rank-1']['mean']:.3f}")
+                else:
+                    cells.append(f"{m['mAP@10']:.4f} / {m['Rank-1']:.3f}")
+            out.append(f"| {gal}, {v} | " + " | ".join(cells) + " |")
+    out += ["", "### Отказ, 2.2k, без почти-дублей, 5 фолдов: Recall / TNR / F1", "", head, sep]
+    refusal = {}
+    for tag, _ in tags:
+        p = RES / f"refusal_folds_{tag}.json"
+        refusal[tag] = json.loads(p.read_text(encoding="utf-8"))["modes"]["nodup"] if p.exists() else {}
+    cells = []
+    for tag, _ in tags:
+        c = refusal[tag].get("current", {}).get("сбалансированный 0.8025")
+        cells.append("—" if not c else f"{c['recall']['mean']:.3f} / {c['TNR']['mean']:.3f} / {c['F1']['mean']:.3f}")
+    out.append("| порог 0.8025 (сейчас в проде) | " + " | ".join(cells) + " |")
+    for target in ("recall>=0.6", "recall>=0.7"):
+        cells = []
+        for tag, _ in tags:
+            t = refusal[tag].get("targets", {}).get(target)
+            cells.append("—" if not t else
+                         f"порог {t['threshold']['mean']:.3f} ± {t['threshold']['std']:.3f}: {t['recall']['mean']:.3f} / "
+                         f"{t['TNR']['mean']:.3f} / {t['F1']['mean']:.3f}")
+        out.append(f"| вне фолда, {target.replace('>=', ' ≥ ')} | " + " | ".join(cells) + " |")
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--models", nargs="*", default=None,
                     help="«тег:подпись» ...: таблица моделей рядом (8996, 2.2k, отказ) и выход")
+    ap.add_argument("--prod", nargs="*", default=None,
+                    help="«тег:подпись» ..., первый — прод-модель: 8996 и 10.8k (raw, kr) и отказ на 2.2k для порога")
     ap.add_argument("--variants", default="raw,rerank,kr")
     ap.add_argument("--compare", nargs="*", default=None,
                     help="теги прогонов --suite: печатает таблицу моделей рядом и выходит")
@@ -188,6 +235,12 @@ def main() -> int:
     ap.add_argument("--team-frames", default=None, help="тег прогона --team-clean-like на полных кадрах")
     ap.add_argument("--out", type=Path, default=None)
     a = ap.parse_args()
+    if a.prod:
+        text = "\n".join(prod_table(a.prod))
+        print(text)
+        if a.out:
+            a.out.write_text(text + "\n", encoding="utf-8")
+        return 0
     if a.models:
         text = "\n".join(models_table(a.models, a.variants.split(",")))
         print(text)
