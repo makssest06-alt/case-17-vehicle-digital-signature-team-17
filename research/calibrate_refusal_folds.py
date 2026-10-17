@@ -123,6 +123,8 @@ def main() -> int:
     ap.add_argument("--data-dir", type=Path, required=True)
     ap.add_argument("--distractors", default="test_all", choices=tuple(he.DISTRACTORS))
     ap.add_argument("--modes", default="nodup,official")
+    ap.add_argument("--targets", default=",".join(str(t) for t in TARGETS),
+                    help="цели по recall через запятую, например 0.6,0.65,0.7")
     ap.add_argument("--fixed", action="append", default=[],
                     help="ещё фиксированный порог, «имя=значение», например «отчёт cross-camera=0.6699»")
     ap.add_argument("--out", type=Path, default=HERE / "honest_eval_results" / "refusal_folds.json")
@@ -158,7 +160,7 @@ def main() -> int:
         for name, t in fixed.items():
             per = [metrics(r, t) for r in recs]
             block["current"][name] = {k: stats([p[k] for p in per]) for k in ("recall", "TNR", "F1", "precision")}
-        for target in TARGETS:
+        for target in [float(t) for t in a.targets.split(",")]:
             thr, ev = [], []
             for f in range(len(recs)):
                 chosen = choose(recs[f], target)                 # подбор на одном фолде

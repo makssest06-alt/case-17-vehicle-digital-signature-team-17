@@ -186,8 +186,22 @@ def prod_table(models: list) -> list:
     for tag, _ in tags:
         p = RES / f"honest_eval_{tag}_suite.json"
         suites[tag] = json.loads(p.read_text(encoding="utf-8"))["suite"] if p.exists() else {}
-    out = ["### Ранжирование: mAP@10 / Rank-1, режим эталона", "", head, sep]
-    for gal, key in (("8996", "8996 (как у команды)"), ("10.8k", "10.8k (+ тест и обучающие)")):
+    weights = []
+    for tag, lbl in tags:
+        p = RES / f"honest_eval_{tag}_suite.json"
+        w = json.loads(p.read_text(encoding="utf-8"))["env"].get("REID_WEIGHTS", "?") if p.exists() else "нет прогона"
+        weights.append(f"{lbl} — `{w}`")
+    out = ["# Сравнение для порога в проде: " + ", ".join(lbl for _, lbl in tags), "",
+           "Веса: " + "; ".join(weights) + ". Протокол research/honest_eval.py: 5 фолдов по 150 машинам holdout, "
+           "25 % машин фолда без пары, эталон организаторов; kr — k-reciprocal без расширения запроса "
+           "(трансдуктивен, сервису недоступен). Отказ — research/calibrate_refusal_folds.py: сырой косинус, "
+           "«вне фолда» — порог выбран на одном фолде (максимум TNR при recall ≥ цели) и проверен на остальных "
+           "четырёх, ± — разброс выбранного порога. Таблицы собирает "
+           f"`python research/honest_eval_report.py --prod {' '.join(repr(m) for m in models)}`.", "",
+           "### Ранжирование: mAP@10 / Rank-1, режим эталона", "", head, sep]
+    galleries = list(next((sv for sv in suites.values() if sv), {}))
+    for key in galleries:
+        gal = key.split(" (")[0]
         for v in ("raw", "kr"):
             cells = []
             for tag, _ in tags:
@@ -204,12 +218,16 @@ def prod_table(models: list) -> list:
     for tag, _ in tags:
         p = RES / f"refusal_folds_{tag}.json"
         refusal[tag] = json.loads(p.read_text(encoding="utf-8"))["modes"]["nodup"] if p.exists() else {}
-    cells = []
-    for tag, _ in tags:
-        c = refusal[tag].get("current", {}).get("сбалансированный 0.8025")
-        cells.append("—" if not c else f"{c['recall']['mean']:.3f} / {c['TNR']['mean']:.3f} / {c['F1']['mean']:.3f}")
-    out.append("| порог 0.8025 (сейчас в проде) | " + " | ".join(cells) + " |")
-    for target in ("recall>=0.6", "recall>=0.7"):
+    fixed = [("сбалансированный 0.8025", "порог 0.8025 (сейчас в проде)")]
+    fixed += [(n, n) for n in refusal[tags[0][0]].get("current", {}) if n.startswith(("рабочая точка", "точка старого"))]
+    for name, label in fixed:
+        cells = []
+        for tag, _ in tags:
+            c = refusal[tag].get("current", {}).get(name)
+            cells.append("—" if not c else f"{c['recall']['mean']:.3f} / {c['TNR']['mean']:.3f} / {c['F1']['mean']:.3f}")
+        out.append(f"| {label} | " + " | ".join(cells) + " |")
+    targets = list(refusal[tags[0][0]].get("targets", {})) or ["recall>=0.6", "recall>=0.7"]
+    for target in targets:
         cells = []
         for tag, _ in tags:
             t = refusal[tag].get("targets", {}).get(target)
@@ -217,7 +235,17 @@ def prod_table(models: list) -> list:
                          f"порог {t['threshold']['mean']:.3f} ± {t['threshold']['std']:.3f}: {t['recall']['mean']:.3f} / "
                          f"{t['TNR']['mean']:.3f} / {t['F1']['mean']:.3f}")
         out.append(f"| вне фолда, {target.replace('>=', ' ≥ ')} | " + " | ".join(cells) + " |")
+    first = refusal[tags[0][0]].get("targets", {})
+    band = {t: v for t, v in first.items() if BAND[0] <= v["recall"]["mean"] <= BAND[1]}
+    if band:
+        t, v = max(band.items(), key=lambda kv: kv[1]["TNR"]["mean"])
+        out += ["", f"Рабочая точка {tags[0][1]}: среди целей вне фолда с recall на остальных фолдах в "
+                f"{BAND[0]}–{BAND[1]} ({', '.join(band)}) выше TNR у {t}: порог {v['threshold']['mean']:.3f} ± "
+                f"{v['threshold']['std']:.3f}, recall {v['recall']['mean']:.3f}, TNR {v['TNR']['mean']:.3f}."]
     return out
+
+
+BAND = (0.65, 0.70)          # полоса recall для рабочей точки отказа
 
 
 def main() -> int:
