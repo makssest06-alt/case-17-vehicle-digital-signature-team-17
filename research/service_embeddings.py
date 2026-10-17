@@ -119,14 +119,68 @@ def weights_sha(env: dict) -> str:
     return _sha256(p) if p.exists() else "missing"
 
 
+def _api_files() -> list:
+    return sorted((API / "app").rglob("*.py"))
+
+
+def code_hash() -> str:
+    """sha256 кода сервиса api/app/**/*.py: другой код — другой кэш."""
+    h = hashlib.sha256()
+    for p in _api_files():
+        h.update(str(p.relative_to(API)).encode())
+        h.update(p.read_bytes())
+    return h.hexdigest()
+
+
+def service_env_keys() -> set:
+    """Все переменные окружения, которые читает код сервиса (getenv и _i/_f/_b
+    в app/config.py). Из окружения дочернего процесса они вычищаются, чтобы
+    случайная переменная оболочки не попала в замер мимо ключа кэша."""
+    keys = {"OMP_NUM_THREADS"}
+    for p in _api_files():
+        text = p.read_text(encoding="utf-8")
+        keys |= set(re.findall(r'getenv\(\s*"([A-Z0-9_]+)"', text))
+        keys |= set(re.findall(r'\b_[ifb]\(\s*"([A-Z0-9_]+)"', text))
+    return keys
+
+
+def _key(spec: dict) -> str:
+    return hashlib.sha256(json.dumps(spec, sort_keys=True).encode()).hexdigest()[:16]
+
+
 def cache_path(profile: str, env: dict, ids: list, images_dir: Path, cache_dir: Path,
                frames: str = "") -> Path:
     spec = {"profile": profile, "env": env, "weights_sha": weights_sha(env),
-            "images_dir": str(images_dir), "ids": ids}
-    if frames:                       # без поля ключ кропов совпадает со старыми кэшами
+            "images_dir": str(images_dir), "ids": ids, "code": code_hash()}
+    if frames:
         spec["frames"] = frames
-    key = json.dumps(spec, sort_keys=True)
-    return cache_dir / f"{profile}-{hashlib.sha256(key.encode()).hexdigest()[:16]}.npz"
+    return cache_dir / f"{profile}-{_key(spec)}.npz"
+
+
+def _legacy_cache_path(profile: str, env: dict, ids: list, images_dir: Path, cache_dir: Path,
+                       frames: str = "") -> Path:
+    """Ключ кэша до 17.10, без хэша кода."""
+    spec = {"profile": profile, "env": env, "weights_sha": weights_sha(env),
+            "images_dir": str(images_dir), "ids": ids}
+    if frames:
+        spec["frames"] = frames
+    return cache_dir / f"{profile}-{_key(spec)}.npz"
+
+
+def _adopt_legacy(legacy: Path, out: Path) -> bool:
+    """Старый кэш принимается, только если создан ПОСЛЕ последнего изменения
+    кода сервиса (mtime файлов api/app): тогда считал тот же код. Иначе —
+    пересчёт. Старый файл не удаляется."""
+    if not legacy.exists():
+        return False
+    if legacy.stat().st_mtime <= max(p.stat().st_mtime for p in _api_files()):
+        return False
+    z = np.load(legacy, allow_pickle=False)
+    meta = json.loads(str(z["meta"]))
+    meta.update(code=code_hash(), adopted_from=legacy.name)
+    np.savez(out, emb=z["emb"], ids=z["ids"], meta=json.dumps(meta, ensure_ascii=False))
+    print(f"  кэш {legacy.name} принят как {out.name}: создан после последнего изменения api/app", flush=True)
+    return True
 
 
 def embed(profile: str, images_dir: Path, ids: list, cache_dir: Path = DEFAULT_CACHE,
@@ -139,20 +193,26 @@ def embed(profile: str, images_dir: Path, ids: list, cache_dir: Path = DEFAULT_C
     make_submission.py) или, при frames_zip, полный кадр из dataset.zip,
     обрезанный функциями сервиса app.imaging.load_image → validate_bbox →
     crop_with_pad (так отвечает /v1/embed). boxes: {image_id: (x, y, w, h)}.
-    Кадры, чей bbox сервис отверг, получают нулевой вектор и печатаются.
+    Кадр, чей bbox сервис отверг, получает вектор из NaN: сервис такой запрос
+    не принял бы, и вызывающий код обязан его выкинуть, а не считать нулём.
     """
     env = profile_env(profile, compose_ref, overrides)
     frames = f"zip:{frames_zip}" if frames_zip else ""
     out = cache_path(profile, env, ids, images_dir, cache_dir, frames)
+    if not out.exists():
+        _adopt_legacy(_legacy_cache_path(profile, env, ids, images_dir, cache_dir, frames), out)
     if out.exists():
         z = np.load(out, allow_pickle=False)
-        if list(z["ids"]) == list(ids):
+        meta = json.loads(str(z["meta"]))
+        if list(z["ids"]) == list(ids) and meta.get("code") == code_hash() and meta.get("profile") == profile:
             return z["emb"]
     out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
         f.write("\n".join(ids))
         ids_file = f.name
-    child = dict(os.environ, **env)
+    scrub = service_env_keys()
+    child = {k: v for k, v in os.environ.items() if k not in scrub}
+    child.update(env)
     # Число потоков меняет только скорость (и порядок суммирования ~1e-7),
     # не результат; сервис в контейнере работает на двух.
     child["OMP_NUM_THREADS"] = str(threads or os.cpu_count() or 2)
@@ -215,6 +275,7 @@ def _worker(a) -> int:
         keep = [k for k, im in enumerate(imgs) if im is not None]
         if keep:
             emb[[s + k for k in keep]] = model.embed_batch([imgs[k] for k in keep])
+        emb[[s + k for k, im in enumerate(imgs) if im is None]] = np.nan
         done = s + len(chunk)
         if done % (a.batch * 20) == 0 or done == len(ids):
             print(f"  [{a.profile}] {done}/{len(ids)}  "
@@ -223,6 +284,7 @@ def _worker(a) -> int:
             "tta_flip": bool(settings.tta_flip), "tf_mode": getattr(model, "tf_mode", None),
             "env": {k: os.environ.get(k, "") for k in MODEL_KEYS},
             "source": f"zip:{a.frames_zip}" if a.frames_zip else str(a.images_dir),
+            "code": code_hash(),
             "rejected_bbox": rejected,
             "seconds": round(time.perf_counter() - t0, 1)}
     if rejected:
@@ -241,6 +303,7 @@ def main() -> int:
     ap.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE)
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--compose-ref", default="", help="коммит для docker-compose.yml; пусто — рабочее дерево")
+    ap.add_argument("--env", action="append", default=[], help="KEY=VAL поверх профиля, например REID_WEIGHTS=...")
     ap.add_argument("--show-env", action="store_true", help="напечатать окружение профиля и выйти")
     ap.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--ids-file", help=argparse.SUPPRESS)
@@ -250,13 +313,15 @@ def main() -> int:
     a = ap.parse_args()
     if a.worker:
         return _worker(a)
+    overrides = dict(kv.split("=", 1) for kv in a.env)
     if a.show_env:
-        print(json.dumps(profile_env(a.profile, a.compose_ref), ensure_ascii=False, indent=2))
+        print(json.dumps(profile_env(a.profile, a.compose_ref, overrides), ensure_ascii=False, indent=2))
         return 0
     if not a.ids_csv:
         ap.error("нужен --ids-csv")
     ids = [r["image_id"] for r in csv.DictReader(a.ids_csv.open(encoding="utf-8"))]
-    e = embed(a.profile, a.images_dir, ids, a.cache_dir, a.batch, compose_ref=a.compose_ref)
+    e = embed(a.profile, a.images_dir, ids, a.cache_dir, a.batch, compose_ref=a.compose_ref,
+              overrides=overrides)
     print(f"{a.profile}: {e.shape}")
     return 0
 

@@ -76,6 +76,81 @@ class FullRankingParityTests(unittest.TestCase):
         he.self_check(q, g, query, gallery)          # бросает AssertionError при расхождении
 
 
+class OpenSetRefusalTests(unittest.TestCase):
+    """Запрос без пары: отказ — TN, принятие — FP, TNR только по таким запросам."""
+
+    def setUp(self):
+        self.query = he.frame(rows([("q_known", "A", "1"), ("q_open", "Z", "1")]))
+        self.gallery = he.frame(rows([("pos", "A", "2"), ("neg", "B", "3")]))
+
+    def test_refused_open_query_is_true_negative(self):
+        sim = np.array([[0.9, 0.1], [0.2, 0.3]])        # у q_open лучший — 0.3 < порога
+        m = he.evaluate(sim, sim, self.query, self.gallery, "official", threshold=0.5)
+        self.assertEqual((m["TP"], m["FP"], m["FN"], m["TN"]), (1, 0, 0, 1))
+        self.assertEqual(m["TNR"], 1.0)
+        self.assertEqual(m["n_openset"], 1)
+
+    def test_accepted_open_query_is_false_positive(self):
+        sim = np.array([[0.9, 0.1], [0.2, 0.8]])        # q_open принят с чужим кандидатом
+        m = he.evaluate(sim, sim, self.query, self.gallery, "official", threshold=0.5)
+        self.assertEqual((m["FP"], m["TN"]), (1, 0))
+        self.assertEqual(m["TNR"], 0.0)
+
+    def test_no_refusal_metrics_for_postprocess(self):
+        sim = np.array([[0.9, 0.1], [0.2, 0.8]])
+        m = he.evaluate(sim, sim, self.query, self.gallery, "official", threshold=0.5, refusal=False)
+        self.assertTrue(np.isnan(m["TNR"]) and np.isnan(m["F1"]))
+        self.assertEqual(m["Rank-1"], 1.0)
+
+
+class RejectedFrameTests(unittest.TestCase):
+    """Кадр с NaN-вектором (bbox отверг сервис) выкидывается, а не считается нулём."""
+
+    def test_nan_rows_are_dropped_and_counted(self):
+        class Stub:
+            dropped = set()
+
+            def vectors(self, ids):
+                return np.array([[1.0, 0.0] if i != "bad" else [np.nan, np.nan] for i in ids])
+
+        stub = Stub()
+        kept = he.Data.valid(stub, rows([("ok", "A", "1"), ("bad", "A", "2")]))
+        self.assertEqual([r["image_id"] for r in kept], ["ok"])
+        self.assertEqual(stub.dropped, {"bad"})
+        self.assertEqual(he.Data.valid(stub, []), [])     # дистракторы none — пустой список
+
+
+class SummarizeTests(unittest.TestCase):
+    def test_nan_folds_are_counted_and_ddof_is_one(self):
+        s = he.summarize([{"TNR": 1.0}, {"TNR": float("nan")}, {"TNR": 0.0}])
+        self.assertEqual(s["TNR"]["n"], 2)
+        self.assertAlmostEqual(s["TNR"]["mean"], 0.5)
+        self.assertAlmostEqual(s["TNR"]["std"], round(float(np.std([1.0, 0.0], ddof=1)), 4))
+
+
+class Team8996CompositionTests(unittest.TestCase):
+    """Убираются обе стороны пар дублей holdout↔обучение, остальное остаётся."""
+
+    def test_both_sides_of_duplicate_pairs_are_removed(self):
+        import json
+        import tempfile
+        from pathlib import Path
+
+        class Stub:
+            hold = {"H"}
+            train = rows([("hq", "H", "1"), ("hq2", "H", "1"), ("hg", "H", "2"), ("t1", "T", "1"), ("t2", "T", "2")])
+            split_old = [{**r, "role": role} for r, role in
+                         zip(rows([("hg", "H", "2"), ("hq", "H", "1"), ("hq2", "H", "1")]), ("gallery", "query", "query"))]
+
+        audit = {"exact_full_frame_duplicates": {"pairs": [{"kind": "holdout↔train1391", "a": "hq", "b": "t1"}]}}
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "leak_audit.json"
+            p.write_text(json.dumps(audit), encoding="utf-8")
+            q, g = he.team8996(Stub(), p)
+        self.assertEqual(sorted(r["image_id"] for r in q), ["hq2"])
+        self.assertEqual(sorted(r["image_id"] for r in g), ["hg", "t2"])
+
+
 class SplitRuleTests(unittest.TestCase):
     def test_first_frame_per_camera_goes_to_gallery(self):
         train = rows([("b", "1", "1"), ("a", "1", "1"), ("c", "1", "2"), ("z", "2", "1")])

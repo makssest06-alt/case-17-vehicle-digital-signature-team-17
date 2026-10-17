@@ -297,9 +297,9 @@ def main() -> int:
         "test_frames_in_test_only_clusters": int(sum(lab[k] in test_only for k in te)),
         "nn_cos_test_to_train": {"p10": round(float(np.percentile(nn_test, 10)), 4),
                                  "median": round(float(np.median(nn_test)), 4)},
-        "nn_cos_train_to_train_leave_one_out": {"p10": round(float(np.percentile(nn_tr, 10)), 4),
+        "nn_cos_train_to_train_leave_one_FRAME_out": {"p10": round(float(np.percentile(nn_tr, 10)), 4),
                                                 "median": round(float(np.median(nn_tr)), 4)},
-        "train_nn_is_same_camera_pct": round(float(same_cam_nn.mean()) * 100, 2),
+        "train_nn_is_same_camera_pct_leave_one_FRAME_out": round(float(same_cam_nn.mean()) * 100, 2),
     }
 
     # 3. камера голосованием ближайших кадров train (основной способ: кластеры

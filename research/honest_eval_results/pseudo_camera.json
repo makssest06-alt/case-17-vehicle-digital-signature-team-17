@@ -152,11 +152,11 @@
       "p10": 0.8993,
       "median": 0.9273
     },
-    "nn_cos_train_to_train_leave_one_out": {
+    "nn_cos_train_to_train_leave_one_FRAME_out": {
       "p10": 0.9153,
       "median": 0.9522
     },
-    "train_nn_is_same_camera_pct": 95.97
+    "train_nn_is_same_camera_pct_leave_one_FRAME_out": 95.97
   },
   "knn_camera": {
     "k": 5,
