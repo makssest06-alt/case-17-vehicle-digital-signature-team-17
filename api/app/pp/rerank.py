@@ -18,11 +18,15 @@ Z_TOPK = 100
 
 
 def camera_flags(qbg, cand_bg: list, tau: float) -> np.ndarray:
-    """cand_bg — признаки фона кандидатов, None — признака нет (флага нет)."""
-    if qbg is None:
-        return np.zeros(len(cand_bg), bool)
-    q = np.asarray(qbg, dtype="float32")
-    return np.array([b is not None and float(np.dot(np.asarray(b, dtype="float32"), q)) > tau for b in cand_bg], bool)
+    """cand_bg — признаки фона кандидатов (сервис держит их в float16), None — признака
+    нет (флага нет). Одно умножение матрицы на вектор вместо цикла по кандидатам."""
+    out = np.zeros(len(cand_bg), bool)
+    has = np.array([b is not None for b in cand_bg], bool)
+    if qbg is None or not has.any():
+        return out
+    m = np.stack([b for b in cand_bg if b is not None]).astype("float32")
+    out[has] = m @ np.asarray(qbg, dtype="float32") > tau
+    return out
 
 
 def rank(cos: np.ndarray, flags: np.ndarray) -> np.ndarray:

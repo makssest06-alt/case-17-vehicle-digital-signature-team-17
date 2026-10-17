@@ -59,7 +59,7 @@ class Settings:
     # ---- постобработка: по умолчанию выключена, ответы как без неё (api/app/pp/state.py) ----
     pp_dba_k: int = _i("PP_DBA_K", 0)                                   # 0 — выкл; 1 — DBA по 1 соседу
     pp_camera_penalty: str = _env("PP_CAMERA_PENALTY", "off").strip().lower()   # off | store | on
-    pp_camera_tau: float = _f("PP_CAMERA_TAU", 0.6813)    # косинус фона > τ — «та же камера» (cheap_bg_a10.md)
+    pp_camera_tau: float = _f("PP_CAMERA_TAU", 0.68127)   # косинус фона > τ — «та же камера» (cheap_bg_a10.md)
     pp_camera_topk: int = _i("PP_CAMERA_TOPK", 100)       # сколько кандидатов из базы проверять на камеру
 
     # загрузка файлов

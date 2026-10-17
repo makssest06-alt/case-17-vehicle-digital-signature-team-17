@@ -183,6 +183,18 @@ class RefusalScoreTest(unittest.TestCase):
         want = (top[0] - bg.mean()) / max(bg.std(), 1e-6)            # research/refusal_score.z_of
         self.assertAlmostEqual(rr.refusal_score(top, np.zeros(100, bool), "z100"), want)
 
+    def test_camera_flags_match_per_candidate_dot(self):
+        rng = np.random.default_rng(1)
+        q = bgm.l2(rng.standard_normal(bgm.BG_DIM).astype("float32"))
+        cands = [None if i % 7 == 0 else bgm.l2((q + rng.standard_normal(bgm.BG_DIM) * s).astype("float32"))
+                 .astype("float16") for i, s in enumerate(np.linspace(0.005, 0.05, 60))]
+        want = [b is not None and float(np.dot(b.astype("float32"), q)) > 0.68127 for b in cands]
+        got = rr.camera_flags(q, cands, 0.68127)
+        self.assertEqual(got.tolist(), want)
+        self.assertTrue(0 < got.sum() < 60 - 9)                    # есть и флаги, и не-флаги
+        self.assertEqual(rr.camera_flags(None, cands, 0.5).tolist(), [False] * 60)
+        self.assertEqual(rr.camera_flags(q, [None, None], 0.5).tolist(), [False, False])
+
     def test_rank_moves_flagged_last_keeping_order(self):
         order = rr.rank(np.array([0.9, 0.7, 0.8, 0.7]), np.array([True, False, False, False]))
         self.assertEqual(order.tolist(), [2, 1, 3, 0])
