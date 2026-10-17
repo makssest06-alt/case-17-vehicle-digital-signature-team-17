@@ -5,7 +5,7 @@
   "holdout_query": 550,
   "holdout_gallery": 357,
   "exact_duplicate_pairs_removed": 5,
-  "runtime_student": "clean_student_a25_ep28.pt",
+  "runtime_student": "clean_student_a10_ep28.pt",
   "teachers": [
     "siglip2_clean_retrain_ep28.pt",
     "siglip1_clean_ep28.pt",
@@ -14,15 +14,16 @@
   ],
   "teacher_weights": [0.364, 0.232, 0.182, 0.222],
   "student": {
-    "alpha": 25,
+    "alpha": 10,
     "backbone": "siglip2_base",
     "tf_mode": "squash",
     "tta": false,
-    "mAP10_clean": 0.8613508871934287,
+    "mAP10_clean": 0.8666094448829256,
     "rank1_clean": 0.8305709023941068,
-    "rank5_clean": 0.9337016574585635
+    "rank5_clean": 0.9465930018416207
   },
   "sha256": {
+    "clean_student_a10_ep28.pt": "93114c5923869d01e92cd70c2c421f783d05ebdac5652a1f2dc919aa040bf6ce",
     "clean_student_a25_ep28.pt": "b2f823aec636f58c6ee95da7729db82d67c24d2d3d7486ebf629b991270d6eb6",
     "clip_clean_ep28.pt": "a11ca8cd6eca53616712d014d1574ca48cc7028b6f53b2cc3b830d412f7854f9",
     "siglip1_base_clean_ep28.pt": "36deec65c6fb1f3375b097012c198cedda50d7a15aa64d0e7dc3af2707541076",

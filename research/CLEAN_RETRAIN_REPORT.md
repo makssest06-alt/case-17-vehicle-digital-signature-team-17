@@ -117,9 +117,38 @@ accounted usage). The commit exists locally but the weight objects are not on
 the remote. Text reports and manifests can be pushed; weights require quota
 increase or cleanup by the team/SourceCraft support.
 
+## Refusal and runtime smoke
+
+Controlled 50% open-set calibration on the clean holdout for alpha=10:
+
+| Protocol | Target recall | Threshold | Recall | TNR | F1 |
+|---|---:|---:|---:|---:|---:|
+| cross-camera | 0.70 | 0.6699 | 0.7011 | 0.8942 | 0.7755 |
+| deployment/no camera filter | 0.70 | 0.8743 | 0.8755 | 1.0000 | 0.9336 |
+
+These are diagnostic operating points, not production defaults. The final
+threshold must match the evaluator/service score contract after Gleb integrates
+the final ranking path.
+
+Local RTX 4060 FP16 smoke test for alpha=10, no TTA:
+
+| Batch | Per image latency | Throughput |
+|---:|---:|---:|
+| 1 | 8.27 ms | 121.0 FPS |
+| 8 | 4.88 ms | 204.8 FPS |
+| 16 | 5.15 ms | 194.2 FPS |
+| 32 | 5.36 ms | 186.5 FPS |
+
+GPU FP16 vs CPU FP32 mean cosine is `0.999999`, minimum `0.999998` on eight
+images. This is a local smoke test, not the organizer's complete JPEG/decode
+benchmark or a guaranteed A5000 score.
+
 ## Current decision
 
-- Keep old production student until the team explicitly accepts clean alpha=10.
+- Proposed replacement: `clean_student_a10_ep28.pt`, SHA-256
+  `93114c5923869d01e92cd70c2c421f783d05ebdac5652a1f2dc919aa040bf6ce`.
+- Keep old production student until the team explicitly accepts clean alpha=10
+  and Gleb integrates it into the lifecycle/GPU profile.
 - Do not deploy the rejected Sub-center student.
 - Do not use old query-query expansion/CSLS as final ranking without protocol
   approval; expanded-gallery evidence favors k-reciprocal without final CSLS.

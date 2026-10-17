@@ -10,9 +10,10 @@ not yet wired into the active service configuration.
 - `siglip1_clean_ep28.pt`: clean retrained SigLIP1 squash teacher
 - `siglip1_base_clean_ep28.pt`: clean retrained SigLIP1 base/timm teacher
 - `clip_clean_ep28.pt`: clean retrained CLIP teacher
-- `clean_student_a25_ep28.pt`: one clean student distilled from the new four-model ensemble
+- `clean_student_a25_ep28.pt`: clean student alpha=25
+- `clean_student_a10_ep28.pt`: selected clean student alpha=10
 
-The student is the only intended runtime model. Teacher weights are retained for
+The alpha=10 student is the intended runtime candidate. Teacher weights are retained for
 reproducibility and future ablations; do not load them in the production service.
 
 ## Clean holdout metrics
@@ -29,7 +30,8 @@ Official evaluator, raw cosine, same cleaned holdout (550 query / 357 gallery,
 | clean CLIP | 0.6674 | 0.6077 | 0.8306 |
 | old teacher ensemble | 0.8341 | 0.7827 | 0.9411 |
 | clean teacher ensemble | 0.8384 | 0.7993 | 0.9319 |
-| **clean student alpha=25** | **0.8614** | **0.8306** | **0.9337** |
+| clean student alpha=25 | 0.8614 | 0.8306 | 0.9337 |
+| **clean student alpha=10** | **0.8666** | **0.8306** | **0.9466** |
 
 The student improves the old student on this clean holdout. It is not yet
 accepted for production until the expanded-gallery stress protocol and runtime
