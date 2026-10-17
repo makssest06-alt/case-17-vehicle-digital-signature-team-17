@@ -46,7 +46,7 @@ class Settings:
     #           среди ста ближайших; меньше зависит от размера галереи.
     # После выбора постобработки меняется одно число — SEARCH_THRESHOLD (и STRICT
     # для строгого режима); посчитанные значения — REFUSAL_PRESETS ниже.
-    refusal_score: str = _env("REFUSAL_SCORE", "raw")
+    refusal_score: str = _env("REFUSAL_SCORE", "z100")
     # Две рабочие точки, обе посчитаны на распределении, в котором работает
     # сервис (галерея не фильтруется по камере: camera_id на вход не подаётся).
     #   сбалансированная — максимум индекса Юдена, обе ошибки равноценны;
@@ -54,18 +54,18 @@ class Settings:
     #             запросов ошибочно принимается примерно один.
     # Выбор между ними — продуктовое решение, а не техническое, поэтому он
     # вынесен в интерфейс, а не зашит в код.
-    search_threshold: float = _f("SEARCH_THRESHOLD", 0.8025)
-    search_threshold_strict: float = _f("SEARCH_THRESHOLD_STRICT", 0.8465)
+    search_threshold: float = _f("SEARCH_THRESHOLD", 4.1592)
+    search_threshold_strict: float = _f("SEARCH_THRESHOLD_STRICT", 7.3031)
     search_margin: float = _f("SEARCH_MARGIN", 0.0)
 
     # ---- постобработка: по умолчанию выключена, ответы как без неё (api/app/pp/state.py) ----
-    pp_dba_k: int = _i("PP_DBA_K", 0)                                   # 0 — выкл; 1 — DBA по 1 соседу
-    pp_camera_penalty: str = _env("PP_CAMERA_PENALTY", "off").strip().lower()   # off | store | on
+    pp_dba_k: int = _i("PP_DBA_K", 1)                                   # production: DBA по 1 соседу
+    pp_camera_penalty: str = _env("PP_CAMERA_PENALTY", "on").strip().lower()   # production: фон
     pp_camera_tau: float = _f("PP_CAMERA_TAU", 0.68127)   # косинус фона > τ — «та же камера» (cheap_bg_a10.md)
     pp_camera_topk: int = _i("PP_CAMERA_TOPK", 100)       # сколько кандидатов из базы проверять на камеру
     # Исключение почти-дублей из ранжирования и оценки отказа: off | bbox (правило Андрея: сходство + рамка)
     # | bg (штраф по фону, = PP_CAMERA_PENALTY=on) | both (OR). Пороги правила — dedup_compare_a10.md.
-    pp_dedup: str = _env("PP_DEDUP", "off").strip().lower()
+    pp_dedup: str = _env("PP_DEDUP", "both").strip().lower()
     pp_dedup_sim: float = _f("PP_DEDUP_SIM", 0.84)         # сырой косинус ≥
     pp_dedup_iou: float = _f("PP_DEDUP_IOU", 0.6)          # IoU рамок в координатах кадра ≥
     pp_dedup_center: float = _f("PP_DEDUP_CENTER", 0.3)    # сдвиг центра в долях среднего размера рамки ≤

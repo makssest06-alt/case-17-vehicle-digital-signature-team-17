@@ -18,15 +18,20 @@ sys.path.insert(0, str(HERE))
 
 import service_fakes as sf  # noqa: E402
 
-OFF = {"pp_dba_k": 0, "pp_camera_penalty": "off", "refusal_score": "raw"}
+OFF = {"pp_dba_k": 0, "pp_camera_penalty": "off", "pp_dedup": "off", "refusal_score": "raw",
+       "search_threshold": 0.8025, "search_threshold_strict": 0.8465}
 
 
 class PostprocessOffTest(unittest.TestCase):
-    def test_defaults_are_off(self):
+    def test_defaults_match_production(self):
         from app.config import Settings
         from app.pp import state
 
-        self.assertFalse(state.enabled(Settings()))
+        s = Settings()
+        self.assertTrue(state.enabled(s))
+        self.assertEqual((s.pp_dba_k, state.dedup_mode(s), s.refusal_score,
+                          s.search_threshold, s.search_threshold_strict),
+                         (1, "both", "z100", 4.1592, 7.3031))
 
     def test_empty_compose_variables_mean_config_defaults(self):
         """docker-compose.yml пробрасывает ${X:-}: пустая строка — значение из config.py."""
@@ -44,7 +49,7 @@ class PostprocessOffTest(unittest.TestCase):
         finally:
             importlib.reload(config)
         self.assertEqual((s.search_threshold, s.search_threshold_strict, s.refusal_score, s.pp_dba_k,
-                          s.pp_camera_penalty), (0.8025, 0.8465, "raw", 0, "off"))
+                          s.pp_camera_penalty, s.pp_dedup), (4.1592, 7.3031, "z100", 1, "on", "both"))
 
     def test_responses_and_db_calls_match_golden(self):
         golden = json.loads((HERE / "data" / "golden_pp_off.json").read_text(encoding="utf-8"))
