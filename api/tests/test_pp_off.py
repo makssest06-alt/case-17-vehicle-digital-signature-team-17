@@ -1,0 +1,65 @@
+"""Флаги постобработки выключены — сервис отвечает байт в байт как до неё.
+
+Эталон api/tests/data/golden_pp_off.json снят на коде origin/glebmain 598c311
+(api/tests/make_golden_pp_off.py). Сравниваются статус, заголовки и тело каждого
+ответа и все вызовы базы: /v1/search (принятие, отказ, пустая галерея, плохой
+bbox), /v1/gallery, bulk-import, DELETE, /v1/config.
+
+Запуск из каталога api/:
+    python -m unittest discover -s tests -v
+"""
+import json
+import sys
+import unittest
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+
+import service_fakes as sf  # noqa: E402
+
+OFF = {"pp_dba_k": 0, "pp_camera_penalty": "off", "refusal_score": "raw"}
+
+
+class PostprocessOffTest(unittest.TestCase):
+    def test_defaults_are_off(self):
+        from app.config import Settings
+        from app.pp import state
+
+        self.assertFalse(state.enabled(Settings()))
+
+    def test_empty_compose_variables_mean_config_defaults(self):
+        """docker-compose.yml пробрасывает ${X:-}: пустая строка — значение из config.py."""
+        import importlib
+        import os
+        from unittest.mock import patch
+
+        from app import config
+
+        empty = {k: "" for k in ("SEARCH_THRESHOLD", "SEARCH_THRESHOLD_STRICT", "REFUSAL_SCORE", "PP_DBA_K",
+                                 "PP_CAMERA_PENALTY", "PP_CAMERA_TAU", "PP_CAMERA_TOPK")}
+        try:
+            with patch.dict(os.environ, empty):
+                s = importlib.reload(config).Settings()
+        finally:
+            importlib.reload(config)
+        self.assertEqual((s.search_threshold, s.search_threshold_strict, s.refusal_score, s.pp_dba_k,
+                          s.pp_camera_penalty), (0.8025, 0.8465, "raw", 0, "off"))
+
+    def test_responses_and_db_calls_match_golden(self):
+        golden = json.loads((HERE / "data" / "golden_pp_off.json").read_text(encoding="utf-8"))
+        main_module = sf.load_app()
+        main_module.app.state.pp = None
+        with sf.data_dir() as root:
+            got = sf.run_requests(main_module.app, main_module, sf.FakeDB(), root, OFF)
+        self.assertEqual([g["name"] for g in got], [g["name"] for g in golden])
+        for g, e in zip(got, golden):
+            with self.subTest(e["name"]):
+                self.assertEqual(g["status"], e["status"])
+                self.assertEqual(g["headers"], e["headers"])
+                self.assertEqual(g["body"], e["body"])
+                self.assertEqual(g["db_calls"], e["db_calls"])
+
+
+if __name__ == "__main__":
+    unittest.main()

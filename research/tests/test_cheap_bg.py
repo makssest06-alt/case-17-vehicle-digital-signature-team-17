@@ -84,11 +84,11 @@ class ShapeTests(unittest.TestCase):
 
     def test_signature_changes_with_descriptor_settings(self):
         sig = cb.signature()
-        old, cb.SMALL = cb.SMALL, (64, 36)
+        old, cb.bgm.SMALL = cb.bgm.SMALL, (64, 36)
         try:
             self.assertNotEqual(sig, cb.signature())
         finally:
-            cb.SMALL = old
+            cb.bgm.SMALL = old
         self.assertEqual(sig, cb.signature())
 
     def test_only_requested_parts(self):

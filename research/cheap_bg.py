@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Дешёвый признак фона для штрафа за ту же камеру: без второго прогона сети.
 
+Сам признак живёт в сервисе (api/app/pp/background.py) и импортируется отсюда.
+
 resnet18 по кадру с замазанной машиной (research/pseudo_camera.py) стоит 19–25 мс
 CPU на запрос (research/bench_bigallery_pp.py). Здесь фон описывается пикселями
 кадра, который сервис и так декодирует (api/app/imaging.load_image): кадр ужимается
@@ -48,12 +50,11 @@ sys.path.insert(0, str(HERE))
 import bigallery_pp as bp  # noqa: E402
 import honest_eval as he  # noqa: E402
 import pseudo_camera as pc  # noqa: E402
-from dba import l2  # noqa: E402
+from dba import l2  # noqa: E402,F401
+from app.pp import background as bgm  # noqa: E402  (путь к api/ добавил research/dba.py)
+from app.pp.background import (BINS, GRAY, PARTS, SMALL, ZONES, blur121, combine, describe, erode,  # noqa: E402,F401
+                               grad_part, hist_part, pool, small_frame, tiny_part)
 
-SMALL = (128, 72)                       # 1920×1080 / 15
-GRAY = np.array([0.299, 0.587, 0.114], "float32")
-ZONES, BINS = 4, 4
-PARTS = {"grad64": 64 * 36, "grad32": 32 * 18, "tiny": 32 * 18 * 3, "hist": ZONES * ZONES * BINS ** 3}
 KINDS = ("grad64", "grad32", "tiny", "hist", "grad64+tiny", "grad64+hist", "grad32+tiny+hist")
 REFERENCE = {"resnet18": "emb", "grad_pc": "grad"}       # из pseudo_camera_desc.npz
 GPU_MS = {"b1": 8.27, "b8": 4.88}       # a10, RTX 4060 FP16, только модель
@@ -65,87 +66,15 @@ PENALTY = {"dba": 1, "kr": False, "lambda": float("inf"), "tau": "p90"}
 # признак
 # --------------------------------------------------------------------------
 
-def small_frame(im: Image.Image, box: tuple) -> tuple:
-    """Кадр 128×72 (float32, RGB) и маска фона: False — машина с запасом."""
-    f = max(1, min(im.width // SMALL[0], im.height // SMALL[1]))
-    s = im.reduce(f) if f > 1 else im
-    if s.size != SMALL:                       # BOX: пиксель — среднее своего прямоугольника, маска с запасом его накрывает
-        s = s.resize(SMALL, Image.BOX)
-    a = np.asarray(s, dtype="float32")
-    x, y, w, h = box
-    sx, sy = SMALL[0] / im.width, SMALL[1] / im.height
-    x0, x1 = int(np.floor((x - pc.PAD * w) * sx)) - 1, int(np.ceil((x + (1 + pc.PAD) * w) * sx)) + 1
-    y0, y1 = int(np.floor((y - pc.PAD * h) * sy)) - 1, int(np.ceil((y + (1 + pc.PAD) * h) * sy)) + 1
-    bg = np.ones(SMALL[::-1], bool)
-    bg[max(y0, 0):max(y1, 0), max(x0, 0):max(x1, 0)] = False
-    return a, bg
-
-
-def pool(x: np.ndarray, f: int) -> np.ndarray:
-    h, w = x.shape[0] // f * f, x.shape[1] // f * f
-    return x[:h, :w].reshape(h // f, f, w // f, f, *x.shape[2:]).mean((1, 3))
-
-
-def blur121(g: np.ndarray) -> np.ndarray:
-    p = np.pad(g, 1, mode="edge")
-    p = (p[:-2] + 2 * p[1:-1] + p[2:]) / 4
-    return (p[:, :-2] + 2 * p[:, 1:-1] + p[:, 2:]) / 4
-
-
-def erode(m: np.ndarray) -> np.ndarray:
-    out = np.zeros_like(m)
-    out[1:-1, 1:-1] = m[1:-1, 1:-1] & m[:-2, 1:-1] & m[2:, 1:-1] & m[1:-1, :-2] & m[1:-1, 2:]
-    return out
-
-
-def grad_part(a: np.ndarray, bg: np.ndarray, f: int) -> np.ndarray:
-    g = a @ GRAY
-    g = np.where(bg, g, g[bg].mean() if bg.any() else 0.0)       # машина — средним фона, не своими пикселями
-    p = pool(blur121(g), f)
-    gx, gy = np.zeros_like(p), np.zeros_like(p)
-    gx[:, 1:-1] = p[:, 2:] - p[:, :-2]
-    gy[1:-1] = p[2:] - p[:-2]
-    ok = erode(pool(bg.astype("float32"), f) == 1.0)
-    return l2(np.where(ok, np.sqrt(gx ** 2 + gy ** 2), 0.0).ravel())
-
-
-def tiny_part(a: np.ndarray, bg: np.ndarray) -> np.ndarray:
-    p = pool(a, 4)
-    ok = pool(bg.astype("float32"), 4) == 1.0
-    mu, sd = (p[ok].mean(0), p[ok].std(0) + 1e-6) if ok.any() else (0.0, 1.0)
-    return l2(np.where(ok[..., None], (p - mu) / sd, 0.0).ravel())
-
-
-def hist_part(a: np.ndarray, bg: np.ndarray) -> np.ndarray:
-    q = np.minimum(a.astype(int) // (256 // BINS), BINS - 1)
-    code = (q[..., 0] * BINS + q[..., 1]) * BINS + q[..., 2]
-    H, W = bg.shape
-    zone = (np.arange(H) * ZONES // H)[:, None] * ZONES + (np.arange(W) * ZONES // W)[None, :]
-    h = np.bincount((zone * BINS ** 3 + code)[bg], minlength=PARTS["hist"]).reshape(ZONES * ZONES, -1)
-    h = h / np.maximum(h.sum(1, keepdims=True), 1)
-    return l2(np.sqrt(h).ravel().astype("float32"))
-
-
-def describe(im: Image.Image, box: tuple, parts=tuple(PARTS)) -> dict:
-    a, bg = small_frame(im, box)
-    fn = {"grad64": lambda: grad_part(a, bg, 2), "grad32": lambda: grad_part(a, bg, 4),
-          "tiny": lambda: tiny_part(a, bg), "hist": lambda: hist_part(a, bg)}
-    return {p: fn[p]().astype("float32") for p in parts}
-
-
 def signature() -> str:
     """Отпечаток устройства признака: кэш с другим отпечатком пересчитывается."""
     import hashlib
     import inspect
 
-    src = "".join(inspect.getsource(f) for f in (small_frame, pool, blur121, erode, grad_part, tiny_part, hist_part,
-                                                 describe))
-    return hashlib.sha256(repr((SMALL, ZONES, BINS, PARTS, pc.PAD, GRAY.tolist(), src)).encode()).hexdigest()[:16]
-
-
-def combine(mats: list) -> np.ndarray:
-    """Склейка частей (N, d_i): каждая L2, затем вместе L2 — веса частей равны."""
-    return l2(np.concatenate([l2(m) for m in mats], axis=1))
+    src = "".join(inspect.getsource(f) for f in (bgm.small_frame, bgm.pool, bgm.blur121, bgm.erode, bgm.grad_part,
+                                                 bgm.tiny_part, bgm.hist_part, bgm.describe))
+    return hashlib.sha256(repr((bgm.SMALL, bgm.ZONES, bgm.BINS, bgm.PARTS, bgm.PAD, bgm.GRAY.tolist(), src)).encode()
+                          ).hexdigest()[:16]
 
 
 # --------------------------------------------------------------------------
