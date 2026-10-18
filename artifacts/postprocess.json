@@ -1,5 +1,5 @@
 {
-  "model": "reid:vit_base_patch16_siglip_224.webli",
+  "model": "reid:vit_base_patch16_siglip_224.v2_webli",
   "weights": "clean_student_a10_ep28.pt",
   "weights_sha256": "93114c5923869d01e92cd70c2c421f783d05ebdac5652a1f2dc919aa040bf6ce",
   "crop": "bbox + 10% запаса (app/imaging.crop_with_pad), REID_TF_MODE=squash, TTA flip=False",

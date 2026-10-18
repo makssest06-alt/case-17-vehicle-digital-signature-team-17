@@ -31,10 +31,21 @@ else
   fi
   [ -n "$URL" ] || fail "weights/$(basename "$SRC") в контексте сборки — $WHY. Укажите WEIGHTS_URL или выполните git lfs pull: \`git lfs install && git lfs pull\` либо \`WEIGHTS_URL=<ссылка> docker compose up -d --build\`"
   echo "веса: в контексте сборки $WHY — качаю ${URL%%\?*}"
+  # urllib идёт по редиректам (releases/download -> *.githubusercontent.com). Ошибка HTTP — код и подсказка
+  # одной строкой, без трейсбека; ссылка печатается без «?…» (подписи и токены в запросе).
   python3 - "$URL" "$OUT.part" <<'PY' || { rm -f "$OUT.part"; fail "не удалось скачать по WEIGHTS_URL"; }
-import shutil, sys, urllib.request
-with urllib.request.urlopen(sys.argv[1], timeout=60) as r, open(sys.argv[2], "wb") as f:
-    shutil.copyfileobj(r, f, 1 << 20)
+import shutil, sys, urllib.error, urllib.request
+url = sys.argv[1]
+HINT = {404: "404: релиза нет или репозиторий приватный", 401: "нужна авторизация — ссылка должна быть публичной",
+        403: "доступ запрещён — ссылка должна быть публичной, либо истекла подпись редиректа"}
+try:
+    with urllib.request.urlopen(url, timeout=60) as r, open(sys.argv[2], "wb") as f:
+        shutil.copyfileobj(r, f, 1 << 20)
+except urllib.error.HTTPError as e:
+    hint = HINT.get(e.code)
+    sys.exit(f"ОШИБКА (веса): HTTP {e.code} {e.reason} — {url.split('?')[0]}" + (f". {hint}" if hint else ""))
+except urllib.error.URLError as e:
+    sys.exit(f"ОШИБКА (веса): нет соединения — {url.split('?')[0]}: {e.reason}")
 PY
   mv "$OUT.part" "$OUT"
   echo "веса: скачано $(wc -c < "$OUT") байт"

@@ -365,6 +365,8 @@ docker run --rm --gpus all --network none -v /путь/к/датасету:/data
   case17-api:local python scripts/bench_extract.py --out /artifacts/bench_extract.json
 ```
 
+Ход замера (загрузка модели, sha256 весов, этапы и их итоги) идёт в stderr, в stdout — только итоговый JSON.
+
 Ускорения (разрешены Q36) — переменные окружения; качество — на галерее 361 / 546 запросах holdout
 полным циклом `extract()` (`research/extract_flags.py`, `research/honest_eval_results/extract_flags_a10.md`):
 
@@ -412,8 +414,10 @@ docker run --rm --gpus all --network none -v /путь/к/датасету:/data
 полный кадр + bbox → кроп → a10 → DBA k=1 по галерее → отказ raw без почти-дублей
 (фон ИЛИ рамка), порог 0.7586. Каждый query обрабатывается отдельно, другие query
 не используются. Принято 859 query, отказов 251 (22.6%). Параметры, sha256 весов и
-счёт — в `artifacts/postprocess.json`. Проверка происхождения
-(`scripts/validate_submission.py`, 26 проверок): `submission.csv` воспроизводится
+счёт — в `artifacts/postprocess.json`. Лог прогона — `make_submission.log` в том же каталоге и в stderr,
+формат как у сервиса: путь и sha256 весов, устройство, FP16, порог и пресет, время по этапам, принято и
+отказов; в git не входит. Проверка происхождения
+(`scripts/validate_submission.py`, 27 проверок): `submission.csv` воспроизводится
 из `embeddings.npy` (DBA k=1 по галерее) точь-в-точь на всех 1110 запросах; top-1
 по векторам без DBA расходится с ним у 3.8% query.
 

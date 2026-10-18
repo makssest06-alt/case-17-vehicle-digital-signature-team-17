@@ -4,6 +4,7 @@
 веса лежат в файле, а не скачиваются из хаба, и что эмбеддинг —
 среднее оригинала и горизонтального отражения.
 """
+import logging
 import os
 from pathlib import Path
 from typing import List
@@ -16,6 +17,7 @@ from PIL import Image
 
 from .base import EmbeddingModel
 
+log = logging.getLogger("case17.model")
 
 # Ключи реестра analysis/backbones.py -> имена timm. Чекпоинт хранит свой
 # бэкбон в args["backbone"], и это надёжнее переменной окружения: если
@@ -44,6 +46,22 @@ BACKBONE_TIMM = {
     "dinov2_vits14": ["vit_small_patch14_dinov2.lvd142m",
                       "vit_small_patch14_dinov2"],
 }
+
+
+def timm_names(ck_backbone: str, fallback: str) -> List[str]:
+    """Имена timm для бэкбона из args["backbone"] чекпоинта; не объявлен — имя из EMBED_MODEL."""
+    names = BACKBONE_TIMM.get(ck_backbone, [fallback])
+    return [names] if isinstance(names, str) else list(names)
+
+
+def checkpoint_model_name(backbone: str, weights: str) -> str:
+    """reid:<имя timm бэкбона, на котором обучен чекпоинт> — без построения сети (для подписи в отчётах)."""
+    try:
+        ck = torch.load(weights, map_location="cpu", weights_only=False, mmap=True)
+    except (RuntimeError, ValueError):         # старый формат torch.save — без mmap
+        ck = torch.load(weights, map_location="cpu", weights_only=False)
+    cfg = ck.get("cfg") or ck.get("args") or {}
+    return f"reid:{timm_names(str(cfg.get('backbone') or ''), backbone)[0]}"
 
 
 class _ReidHead(nn.Module):
@@ -104,18 +122,17 @@ class ReidCheckpointModel(EmbeddingModel):
         # настройка окружения, а args["backbone"] — факт о весах. Расхождение
         # означает, что собран не тот чекпоинт, о котором думают.
         ck_backbone = str(cfg.get("backbone") or "")
-        names = BACKBONE_TIMM.get(ck_backbone, [self.backbone_name])
-        if isinstance(names, str):
-            names = [names]
+        names = timm_names(ck_backbone, self.backbone_name)
         if ck_backbone and names[0] != self.backbone_name:
-            print(f"  reid_checkpoint: EMBED_MODEL задан как {self.backbone_name}, "
-                  f"но чекпоинт обучен на {ck_backbone} -> беру {names[0]}", flush=True)
+            log.info("EMBED_MODEL задан как %s, но чекпоинт обучен на %s -> беру %s",
+                     self.backbone_name, ck_backbone, names[0])
+        # Имя модели — по чекпоинту: оно попадает в /health, ответы API, postprocess.json и JSON замера.
+        self.name = f"reid:{names[0]}"
         backbone, used_name = self._create_backbone(timm, names, head_only)
         if len(names) > 1 and used_name != names[0]:
-            print(f"  reid_checkpoint: тег {names[0]} не разрешился на "
-                  f"timm {timm.__version__} — беру архитектуру {used_name}. "
-                  f"Для чекпоинта полного дообучения это безопасно (веса "
-                  f"приходят из файла, pretrained не используется).", flush=True)
+            log.info("тег %s не разрешился на timm %s — беру архитектуру %s. Для чекпоинта полного "
+                     "дообучения это безопасно (веса приходят из файла, pretrained не используется).",
+                     names[0], timm.__version__, used_name)
         head = _ReidHead(backbone.num_features, hidden, out_dim, dropout)
 
         if head_only:
@@ -146,15 +163,16 @@ class ReidCheckpointModel(EmbeddingModel):
         # а не догадка кода.
         self.tf_mode = os.getenv("REID_TF_MODE") or str(cfg.get("tf_mode") or "timm")
         if not cfg.get("tf_mode") and not os.getenv("REID_TF_MODE"):
-            print(f"  reid_checkpoint: {Path(self.weights_path).name} не объявил "
-                  f"args[tf_mode] и REID_TF_MODE не задан — беру 'timm' "
-                  f"(прежнее поведение). Если модель обучена на squash-кропе, "
-                  f"поставьте REID_TF_MODE=squash, иначе метрики просядут.",
-                  flush=True)
+            log.warning("%s не объявил args[tf_mode] и REID_TF_MODE не задан — беру 'timm' (прежнее "
+                        "поведение). Если модель обучена на squash-кропе, поставьте REID_TF_MODE=squash, "
+                        "иначе метрики просядут.", Path(self.weights_path).name)
         if self.tf_mode not in ("timm", "squash"):
             raise ValueError(f"REID_TF_MODE/args[tf_mode] = {self.tf_mode!r}, "
                              f"ожидалось 'timm' или 'squash'")
 
+        # Веса только для инференса: eval() (BatchNorm, Dropout), forward — под inference_mode (градиенты не
+        # считаются). requires_grad_(False) не ставим: на CPU у nn.Linear с замороженным весом другое ядро,
+        # векторы сдвигаются до 1.7e-7, и embeddings.npy / candidates.csv перестают совпадать побайтно.
         backbone.eval()
         head.eval()
         # A CUDA-enabled torch build is required to use an available GPU.
@@ -171,7 +189,9 @@ class ReidCheckpointModel(EmbeddingModel):
         head.to(self.device)
         self._model, self._head = backbone, head
         self.dim = out_dim
-        print(f"  reid_checkpoint: device={self.device} fp16={self._fp16}", flush=True)
+        log.info("модель %s: веса %s, устройство %s, FP16 %s, кроп %s %d, размерность %d",
+                 self.name, Path(self.weights_path).name, self.device, "да" if self._fp16 else "нет",
+                 self.tf_mode, self.input_size, out_dim)
         # Release source tensors after copying; no second checkpoint retained.
         del ck, state, enc, hd
 

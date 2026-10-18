@@ -59,6 +59,7 @@ retrieval, эмбеддинг, BBox, cross-camera.
 | Docker + docker-compose, запуск одной командой без ручных манипуляций | ✅ | `cp .env.example .env && docker compose up -d` |
 | Код открытый, не обфусцированный, с комментариями | ✅ | весь репозиторий, комментарии по-русски |
 | Готовность показать сборку и запуск в реальном времени | ✅ | `./scripts/check_reproducibility.sh` делает это за одну команду |
+| Замечания организатора 16.10: логи, загрузка модели в lifespan, фиксация весов | ✅ | модель грузится в `lifespan` (`api/app/main.py`) и живёт в `app.state.model`, не при импорте. Веса: `eval()` и `requires_grad_(False)`, forward под `inference_mode` (`api/app/models/reid_checkpoint.py`); sha256 сверяется при сборке (несовпадение роняет сборку, `api/scripts/fetch_weights.sh`) и пишется в лог при старте и в `/health`. Логи — `logging`, формат `api/app/main.py`: сервис, `make_submission.log` офлайн-сборки, этапы `bench_extract.py` в stderr |
 
 ## 7. Производительность и внешние ресурсы
 
@@ -82,7 +83,7 @@ retrieval, эмбеддинг, BBox, cross-camera.
 | Код обучения и инференса, Dockerfile, compose, зависимости | ✅ | обучение — `research/finals_handoff/training/`, `analysis/`; инференс — `api/` |
 | Запуск одной командой в изолированном окружении | ✅ | проверено `check_reproducibility.sh` |
 | **Работа без доступа в интернет, все веса в составе решения** | ✅ | проверяется `docker run --network none` внутри того же скрипта |
-| Формальная валидность артефактов | ✅ | `python scripts/validate_submission.py` — 26 проверок |
+| Формальная валидность артефактов | ✅ | `python scripts/validate_submission.py` — 27 проверок |
 
 ## 9. Критерии оценки
 

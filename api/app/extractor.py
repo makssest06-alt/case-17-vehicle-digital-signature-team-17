@@ -16,6 +16,7 @@
 Без EXTRACT_JPEG_DRAFT кроп совпадает с сервисом и офлайн-скриптом пиксель в пиксель.
 """
 import io
+import logging
 import math
 import os
 import time
@@ -30,6 +31,7 @@ from .config import settings
 from .imaging import crop_with_pad, validate_bbox
 from .models.registry import build_model
 
+log = logging.getLogger("case17.extractor")
 Source = Union[str, Path, bytes]
 DRAFT_SCALES = (8, 4, 2)                       # во сколько раз JPEG умеет уменьшать при декодировании
 
@@ -50,6 +52,10 @@ class Extractor:
         t0 = time.perf_counter()
         self.model.load()
         self.load_s = time.perf_counter() - t0
+        d = self.describe()
+        log.info("extract(): модель %s загружена за %.1f с — устройство %s, FP16 %s, JPEG draft %s, потоков %d",
+                 d["model"], self.load_s, d["device"], "да" if d["fp16"] else "нет",
+                 "да" if d["jpeg_draft"] else "нет", d["threads"])
         return self.load_s
 
     # ------------------------------------------------------------------ кадр -> кроп

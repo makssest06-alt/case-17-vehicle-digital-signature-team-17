@@ -12,11 +12,13 @@
 Полный цикл — app/extractor.py: чтение файла с диска, декодирование, кроп по bbox, препроцессинг, forward, L2.
 Флаги ускорения — переменные окружения (REID_FP16, EXTRACT_JPEG_DRAFT, EXTRACT_THREADS), см. app/extractor.py.
 --smoke — дымовой прогон на 2–3 кадрах (не замер).
+Этапы и загрузка модели — лог в stderr; stdout — только итоговый JSON (можно перенаправить в файл).
 """
 import argparse
 import csv
 import hashlib
 import json
+import logging
 import os
 import statistics
 import sys
@@ -30,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # api/ — пак
 from app.config import settings            # noqa: E402
 from app.extractor import Extractor        # noqa: E402
 
+log = logging.getLogger("case17.bench")
 WEIGHT_EXT = (".pt", ".pth", ".bin", ".onnx", ".engine", ".plan", ".safetensors", ".ckpt", ".trt", ".pb",
               ".tflite", ".npz")                                   # Q37: чем меряют суммарный размер весов
 
@@ -83,6 +86,8 @@ def main() -> int:
     ap.add_argument("--smoke", action="store_true", help="дымовой прогон: 2 прогрева, 3 замера, 1 с на батч")
     ap.add_argument("--out", default=None, help="куда записать JSON")
     a = ap.parse_args()
+    # формат как в app/main.py; в stderr, чтобы stdout оставался чистым JSON
+    logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     if a.smoke:
         a.warmup, a.runs, a.seconds, a.frames = 2, 3, 1.0, min(a.frames, 3)
 
@@ -92,8 +97,10 @@ def main() -> int:
         rows = [r for _, r in zip(range(a.frames), csv.DictReader(f))]
     items = [(images / f"{r['image_id']}.jpg", tuple(int(float(r[c])) for c in "xywh")) for r in rows]
     if not items:
-        print(f"нет кадров в {data / a.csv}", file=sys.stderr)
+        log.error("нет кадров в %s", data / a.csv)
         return 1
+    log.info("замер extract(): %d кадров из %s%s", len(items), data / a.csv,
+             " — дымовой прогон, не замер" if a.smoke else "")
 
     import torch
     ex = Extractor()
@@ -103,8 +110,10 @@ def main() -> int:
     m = ex.model
     weights = os.getenv("REID_WEIGHTS", "")
     w_sha = hashlib.sha256(Path(weights).read_bytes()).hexdigest() if weights and Path(weights).is_file() else None
+    log.info("веса %s: sha256 %s", weights or "—", w_sha or "— (файла нет)")
 
     # latency_b1: полный цикл на одно ТС, синхронизация до и после каждого замера
+    log.info("latency_b1: прогрев %d, замеров %d (batch=1)", a.warmup, a.runs)
     for i in range(a.warmup):
         ex.extract(*items[i % len(items)])
     sync(m)
@@ -116,6 +125,7 @@ def main() -> int:
         sync(m)
         lat.append((time.perf_counter() - t0) * 1000)
     lat_ms = statistics.median(lat)
+    log.info("latency_b1: медиана %.2f мс, p95 %.2f мс", lat_ms, float(np.percentile(lat, 95)))
 
     # throughput: устойчивый FPS при каждом размере батча, не меньше --seconds
     fps = {}
@@ -130,7 +140,9 @@ def main() -> int:
             n += B
             if time.perf_counter() - t0 >= a.seconds:
                 break
-        fps[B] = n / (time.perf_counter() - t0)
+        took = time.perf_counter() - t0
+        fps[B] = n / took
+        log.info("throughput: батч %d — %.1f кадров/с (%d кадров за %.1f с)", B, fps[B], n, took)
 
     # детерминизм: два прогона на одних данных
     probe = items[: min(len(items), 32)]
@@ -152,9 +164,13 @@ def main() -> int:
         "weights_size_q37": weights_size(roots),
         **score(lat_ms, fps[best_b]),
     }
+    log.info("итог: latency_b1 %.2f мс, лучший FPS %.1f (батч %d), VRAM %s МБ, детерминизм max|Δ| %g, "
+             "баллы %.2f из 20 (Q34)", lat_ms, fps[best_b], best_b, res["peak_vram_MB"],
+             res["determinism_max_abs_diff"], res["performance_pct_of_20"])
     print(json.dumps(res, ensure_ascii=False, indent=2))
     if a.out:
         Path(a.out).write_text(json.dumps(res, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        log.info("JSON записан: %s", a.out)
     return 0
 
 
