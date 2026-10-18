@@ -79,6 +79,7 @@ class HealthResponse(BaseModel):
     status: str
     model: str
     dim: int
+    weights_sha256: Optional[str] = None   # sha256 файла весов, посчитан при старте; нет файла — поля нет
 
 
 class ReadyResponse(BaseModel):

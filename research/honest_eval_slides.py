@@ -138,17 +138,16 @@ def slides(pts: list) -> str:
     sc = load("score_contract.json")
     leak = load("leak_audit.json")
     err = load("error_breakdown.json")
-    rm = load("refusal_mode_a10.json")                                 # режим отказа, a10, как сервис
+    cg = load("closed_gallery_a10.json")                               # 361 / 1111 как закрытый тест
     sub = {g["group"]: g for g in err["subgroups"]}
     means = lambda c: {k: v["mean"] for k, v in c.items()}           # среднее по фолдам
     svc_off = means(sc["modes"]["official"]["contracts"]["service (raw, 0.8025)"])
     svc_nod = means(sc["modes"]["nodup"]["contracts"]["service (raw, 0.8025)"])
     mixed = means(sc["modes"]["nodup"]["contracts"]["mixed (CSLS, 0.8025)"])
     art = means(sc["modes"]["nodup"]["contracts"]["artifacts (CSLS, 10-й процентиль)"])
-    fin = rm.get("final", "dba1+camera")
-    now, fin_z, fin_r = rm["none"]["current"], rm[fin]["z100"], rm[fin]["raw"]
-    rm_grid = rm[fin]["grid"]
-    tz = [v["TNR"]["mean"] for k, v in fin_z["sizes"].items() if k.isdigit()]
+    cgG, cgP = cg["galleries"], cg["presets"]
+    cg_fin, cg_fb, cg_prev = cgP[cg["final"]], cgP[cg["fallback"]], cgP[cg["prev_final"]]
+    pf = lambda p, g: f"{f3(p['per_gallery'][g]['F1'])} / {f3(p['per_gallery'][g]['TNR'])}"
     old = st["old_protocol"]
     ec = err["errors_by_category"]
     n_f = err["errors"]
@@ -193,7 +192,8 @@ def slides(pts: list) -> str:
         f"соседний кадр в галерее с косинусом ≥ 0.95 (сплит make_split.py).",
         f"- Постобработка (расширение запроса + k-reciprocal) на 2.2k даёт "
         f"{f3(big['rerank']['official']['mAP@10']['mean'])} против {f3(big['raw']['official']['mAP@10']['mean'])}, "
-        "но опирается на другие запросы, и `/v1/search` так не отвечает.", "",
+        "но опирается на другие запросы, и `/v1/search` так не отвечает. Прирост на 2.2k завышен: там пачки "
+        "почти-дублей тестовых запросов (решения — по галереям 361 / 1111, слайд 4).", "",
         "Картинки: `honest_eval_results/score_scale.png`, `honest_eval_results/gallery_size_map.png`", "",
         "## 3. Разбор ошибок", "",
         f"- {n_f} ошибок top-1 на {err['scored_queries']} запросах (2.2k). "
@@ -213,25 +213,25 @@ def slides(pts: list) -> str:
         "выше порога 0.8025.", "",
         "Картинки (номера закрыты): `honest_eval_results/error_examples/fail_1_twin.png`, "
         "`fail_2_front_rear.png`, `fail_4_night.png`, `fail_5_glare.png`", "",
-        "## 4. Режим отказа (предварительно, прод-модель a10)", "",
-        f"- Отказ — оценка лучшего кандидата ниже порога. В галерее сервиса у запроса без пары остаётся кадр его "
-        f"машины с той же камеры, и сейчас (raw 0.8025, без постобработки) TNR {f3(now['2.2k']['TNR']['mean'])} на "
-        f"2.2k и {f3(now['10.8k']['TNR']['mean'])} на 10.8k: чужим сервис почти не отказывает.",
-        f"- Итог, предварительно: {rm[fin]['label']}, оценка z100 = (s1 − mean(s2..s100)) / "
-        f"std(s2..s100), порог {fin_z['threshold']['mean']:.2f}. F1 / TNR {f3(fin_z['sizes']['2.2k']['F1']['mean'])} / "
-        f"{f3(fin_z['sizes']['2.2k']['TNR']['mean'])} на 2.2k, {f3(fin_z['sizes']['10.8k']['F1']['mean'])} / "
-        f"{f3(fin_z['sizes']['10.8k']['TNR']['mean'])} на 10.8k; TNR {f3(min(tz))}–{f3(max(tz))} на галереях от "
-        f"{num(rm_grid[0])} до {num(rm_grid[-1])} кадров.",
-        f"- Почему не сырой косинус: максимум сходства с чужими машинами растёт с размером галереи "
-        f"({f3(fin_r['sizes'][str(rm_grid[0])]['open_s1'])} → {f3(fin_r['sizes'][str(rm_grid[-1])]['open_s1'])}), "
-        f"лучший порог raw — {f3(fin_r['sizes'][str(rm_grid[0])]['own_threshold']['mean'])} → "
-        f"{f3(fin_r['sizes'][str(rm_grid[-1])]['own_threshold']['mean'])}; один порог raw на 10.8k даёт TNR "
-        f"{f3(fin_r['sizes']['10.8k']['TNR']['mean'])}. Порог от N держит TNR, но на 10.8k F1 "
-        f"{f3(rm[fin]['thr_n']['sizes']['10.8k']['F1']['mean'])}.",
-        "- Порог выбран вне фолда (150 машин holdout, 5 фолдов по 30 машин) по всем размерам галереи сразу, тест — только "
-        "чужие кадры. Финал — после решения по постобработке, пересчёт одной командой `research/refusal_mode.py`, в "
-        "конфиге меняется одно число.", "",
-        "Подробно: `docs/refusal.md`; картинка — `honest_eval_results/threshold_vs_gallery_a10_service.png`", ""])
+        "## 4. Режим отказа (прод-модель a10, галереи 361 / 1111 как закрытый тест)", "",
+        f"- Решаем на галереях из невиданных машин — 361 и 1111 (один кадр на пару машина-камера, как в закрытом "
+        f"тесте). 2.2k / 9k / 10.8k завышают DBA: на 2.2k +{f3(cgG['2.2k']['DBA']['mAP@10'] - cgG['2.2k']['raw']['mAP@10'])}"
+        f" mAP@10, на 1111 +{f3(cgG['1111']['DBA']['mAP@10'] - cgG['1111']['raw']['mAP@10'])}.",
+        f"- Сейчас без постобработки (raw 0.8025) F1 / TNR {f3(cg['current']['361']['F1'])} / "
+        f"{f3(cg['current']['361']['TNR'])} на 361: чужому отвечает кадр его же машины с той же камеры.",
+        f"- Итог: ранжирование — DBA k=1 без флагов (mAP@10 {f3(cgG['361'][cg['final']]['mAP@10'])} / "
+        f"{f3(cgG['1111'][cg['final']]['mAP@10'])}); отказ — z100 без почти-дублей «фон ИЛИ рамка», порог "
+        f"{cg_fin['threshold']:.2f}: F1 / TNR {pf(cg_fin, '361')} на 361 и {pf(cg_fin, '1111')} на 1111.",
+        f"- Фон в ранжировании убран: он уводил из top-1 кадр той же машины с той же камеры, а эталон засчитывает "
+        f"такой ответ верным (official_evaluate.py:290). С ним F1 / TNR {pf(cg_prev, '361')} и {pf(cg_prev, '1111')}, "
+        f"mAP@10 {f3(cgG['361'][cg['prev_final']]['mAP@10'])} / {f3(cgG['1111'][cg['prev_final']]['mAP@10'])}.",
+        f"- Цена TNR: F1-оптимум без ограничения {f3(cg['free']['per_gallery']['361']['F1'])} / "
+        f"{f3(cg['free']['per_gallery']['361']['TNR'])} и {f3(cg['free']['per_gallery']['1111']['F1'])} / "
+        f"{f3(cg['free']['per_gallery']['1111']['TNR'])}. Запасной план без фона (если не хватит FPS): "
+        f"{pf(cg_fb, '361')} и {pf(cg_fb, '1111')}.",
+        "- Порог вне фолда (протокол Андрея: 4 ротации по 25 % машин без пары, 2 фолда), TNR ≥ 0.70 на каждой из двух "
+        "галерей; тест — только чужие кадры. Пересчёт — `research/closed_gallery.py`, в конфиге одно число.", "",
+        "Подробно: `docs/refusal.md`, `honest_eval_results/closed_gallery_a10.md`", ""])
 
 
 def main() -> int:

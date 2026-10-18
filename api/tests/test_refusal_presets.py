@@ -1,4 +1,4 @@
-"""REFUSAL_PRESETS в app/config.py совпадают с расчётом research/refusal_mode.py.
+"""REFUSAL_PRESETS в app/config.py совпадают с расчётом research/closed_gallery.py (361 / 1111).
 
 Нужен только app.config (без fastapi). Если research/ рядом нет (образ сервиса) — пропуск.
     python -m unittest tests.test_refusal_presets -v      # из каталога api/
@@ -8,15 +8,15 @@ import json
 import unittest
 from pathlib import Path
 
-RESULT = Path(__file__).resolve().parents[2] / "research" / "honest_eval_results" / "refusal_mode_a10.json"
+RESULT = Path(__file__).resolve().parents[2] / "research" / "honest_eval_results" / "closed_gallery_a10.json"
 
 
-@unittest.skipUnless(RESULT.exists(), "нет research/honest_eval_results/refusal_mode_a10.json")
+@unittest.skipUnless(RESULT.exists(), "нет research/honest_eval_results/closed_gallery_a10.json")
 class RefusalPresetsTest(unittest.TestCase):
     def test_presets_match_research(self):
         from app.config import REFUSAL_PRESETS
 
-        computed = json.loads(RESULT.read_text(encoding="utf-8"))["presets"]
+        computed = json.loads(RESULT.read_text(encoding="utf-8"))["config_presets"]
         self.assertGreater(len(computed), 0)
         for key, want in computed.items():
             with self.subTest(key):
@@ -37,9 +37,11 @@ class RefusalPresetsTest(unittest.TestCase):
     def test_current_service_point_untouched(self):
         from app.config import REFUSAL_PRESETS, Settings
 
-        cur = REFUSAL_PRESETS[(1, "both", "z100")]
+        cur = REFUSAL_PRESETS[(1, "off", "both", "z100")]                 # production: итог
         s = Settings()
         self.assertEqual((cur["balanced"], cur["strict"]), (s.search_threshold, s.search_threshold_strict))
+        from app.pp import state
+        self.assertEqual(state.preset_key(s), (1, "off", "both", "z100"))   # пресет по умолчанию — ключ итога
 
 
 if __name__ == "__main__":
