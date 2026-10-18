@@ -1,0 +1,7 @@
+# Контекст сборки api — корень репозитория (docker-compose.yml: context: ., dockerfile: api/Dockerfile).
+# Белый список: демону уходят только api/ и веса; data/, .git, research/ и остальное — нет.
+*
+!api/
+!weights/clean_student_a10_ep28.pt
+**/__pycache__
+**/*.pyc

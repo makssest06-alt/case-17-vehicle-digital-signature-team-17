@@ -22,7 +22,7 @@ is_real() {
 mkdir -p "$(dirname "$OUT")"
 if is_real "$SRC"; then
   echo "веса: $(basename "$SRC") из контекста сборки, $(wc -c < "$SRC") байт — не качаю"
-  cp "$SRC" "$OUT"
+  [ "$SRC" = "$OUT" ] || cp "$SRC" "$OUT"
 else
   if [ -f "$SRC" ]; then
     WHY="LFS-указатель ($(wc -c < "$SRC") байт), а не веса"

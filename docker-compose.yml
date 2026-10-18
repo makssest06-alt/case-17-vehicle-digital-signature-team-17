@@ -26,12 +26,11 @@ services:
 
   api:
     build:
-      context: ./api
-      # weights/ — второй контекст сборки: стадия weights в api/Dockerfile берёт оттуда
-      # clean_student_a10_ep28.pt, если это настоящий файл (git lfs pull), иначе
-      # качает по WEIGHTS_URL; sha256 сверяется всегда.
-      additional_contexts:
-        weights_ctx: ./weights
+      # Контекст — корень репозитория: образу нужны api/ и weights/clean_student_a10_ep28.pt
+      # (.dockerignore — белый список). Стадия weights в api/Dockerfile берёт веса оттуда,
+      # если это настоящий файл (git lfs pull), иначе качает по WEIGHTS_URL; sha256 сверяется всегда.
+      context: .
+      dockerfile: api/Dockerfile
       args:
         EMBED_MODEL: ${EMBED_MODEL:-reid:vit_base_patch16_siglip_224.webli}
         WEIGHTS_URL: ${WEIGHTS_URL:-}
