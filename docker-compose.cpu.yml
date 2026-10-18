@@ -1,0 +1,8 @@
+# Запуск на машине без NVIDIA (CPU): тот же стек без резервирования видеокарты.
+#   docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d --build
+# По умолчанию docker-compose.yml резервирует GPU (жюри меряет на A5000, ответ организаторов Q30).
+# Нужен Docker Compose ≥ 2.24 (тег !reset). То же через окружение — и для scripts/check_reproducibility.sh:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.cpu.yml docker compose up -d --build
+services:
+  api:
+    deploy: !reset {}

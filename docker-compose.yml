@@ -37,7 +37,7 @@ services:
     image: case17-api:local
     container_name: case17-api
     restart: unless-stopped
-    # Requires NVIDIA container runtime. Not ignored on a CPU-only host.
+    # Requires NVIDIA container runtime. Not ignored on a CPU-only host — там: -f docker-compose.cpu.yml.
     deploy:
       resources:
         reservations:

@@ -164,6 +164,7 @@ WEIGHTS_URL=<ссылка на clean_student_a10_ep28.pt> docker compose up -d -
 ```
 
 Без обоих сборка остановится с сообщением «укажите WEIGHTS_URL или выполните git lfs pull».
+На машине без NVIDIA (compose по умолчанию резервирует GPU): `docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d --build`.
 При запуске сеть не нужна: веса и бэкбон уже в образе.
 
 Всё. Интерфейс — http://localhost:8080, Swagger — http://localhost:8000/docs.
