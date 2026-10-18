@@ -1,0 +1,60 @@
+  reid_checkpoint: EMBED_MODEL задан как vit_base_patch16_siglip_224, но чекпоинт обучен на siglip2_base -> беру vit_base_patch16_siglip_224.v2_webli
+  reid_checkpoint: device=cuda fp16=True
+device=cuda fp16=True tta=False parallel=0 torch_threads=2
+  B= 1 rep1: 19.540ms img fps=51.18 e2e=19.460ms
+  B= 1 rep2: 19.527ms img fps=51.21 e2e=19.425ms
+  B= 1 rep3: 19.435ms img fps=51.45 e2e=20.071ms
+  B= 8 rep1: 15.159ms img fps=65.97 e2e=15.204ms
+  B= 8 rep2: 15.293ms img fps=65.39 e2e=15.235ms
+  B= 8 rep3: 15.365ms img fps=65.08 e2e=15.344ms
+  B=16 rep1: 15.191ms img fps=65.83 e2e=15.143ms
+  B=16 rep2: 15.019ms img fps=66.58 e2e=14.427ms
+  B=16 rep3: 14.577ms img fps=68.6 e2e=14.731ms
+  B=32 rep1: 14.693ms img fps=68.06 e2e=14.710ms
+  B=32 rep2: 15.135ms img fps=66.07 e2e=14.423ms
+  B=32 rep3: 14.542ms img fps=68.76 e2e=14.831ms
+SUMMARY B=1: 19.435ms fps=51.45
+SUMMARY B=8: 15.159ms fps=65.97
+SUMMARY B=16: 14.577ms fps=68.6
+SUMMARY B=32: 14.542ms fps=68.76
+written bench_v2_v1.json
+  reid_checkpoint: EMBED_MODEL задан как vit_base_patch16_siglip_224, но чекпоинт обучен на siglip2_base -> беру vit_base_patch16_siglip_224.v2_webli
+  reid_checkpoint: device=cuda fp16=True
+device=cuda fp16=True tta=False parallel=16 torch_threads=2
+  B= 1 rep1: 22.871ms img fps=43.72 e2e=23.244ms
+  B= 1 rep2: 22.097ms img fps=45.25 e2e=22.230ms
+  B= 1 rep3: 23.462ms img fps=42.62 e2e=20.918ms
+  B= 8 rep1: 12.650ms img fps=79.05 e2e=13.462ms
+  B= 8 rep2: 12.430ms img fps=80.45 e2e=13.369ms
+  B= 8 rep3: 12.711ms img fps=78.67 e2e=11.599ms
+  B=16 rep1: 10.894ms img fps=91.79 e2e=11.248ms
+  B=16 rep2: 11.209ms img fps=89.22 e2e=10.842ms
+  B=16 rep3: 9.977ms img fps=100.23 e2e=9.942ms
+  B=32 rep1: 8.285ms img fps=120.7 e2e=8.079ms
+  B=32 rep2: 8.287ms img fps=120.68 e2e=8.203ms
+  B=32 rep3: 8.383ms img fps=119.29 e2e=8.439ms
+SUMMARY B=1: 22.097ms fps=45.25
+SUMMARY B=8: 12.43ms fps=80.45
+SUMMARY B=16: 9.977ms fps=100.23
+SUMMARY B=32: 8.285ms fps=120.7
+written bench_v2_v2.json
+  reid_checkpoint: EMBED_MODEL задан как vit_base_patch16_siglip_224, но чекпоинт обучен на siglip2_base -> беру vit_base_patch16_siglip_224.v2_webli
+  reid_checkpoint: device=cuda fp16=True
+device=cuda fp16=True tta=True parallel=16 torch_threads=2
+  B= 1 rep1: 27.368ms img fps=36.54 e2e=26.547ms
+  B= 1 rep2: 27.201ms img fps=36.76 e2e=26.787ms
+  B= 1 rep3: 26.306ms img fps=38.01 e2e=24.926ms
+  B= 8 rep1: 11.815ms img fps=84.64 e2e=11.592ms
+  B= 8 rep2: 12.315ms img fps=81.2 e2e=12.947ms
+  B= 8 rep3: 12.773ms img fps=78.29 e2e=12.457ms
+  B=16 rep1: 11.044ms img fps=90.55 e2e=11.183ms
+  B=16 rep2: 11.085ms img fps=90.22 e2e=10.946ms
+  B=16 rep3: 11.184ms img fps=89.41 e2e=11.132ms
+  B=32 rep1: 10.726ms img fps=93.23 e2e=10.859ms
+  B=32 rep2: 10.746ms img fps=93.06 e2e=10.681ms
+  B=32 rep3: 10.713ms img fps=93.35 e2e=10.804ms
+SUMMARY B=1: 26.306ms fps=38.01
+SUMMARY B=8: 11.815ms fps=84.64
+SUMMARY B=16: 11.044ms fps=90.55
+SUMMARY B=32: 10.713ms fps=93.35
+written bench_v2_v3.json

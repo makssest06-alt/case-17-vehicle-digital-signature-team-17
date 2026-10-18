@@ -1,0 +1,138 @@
+{
+ "tta_flip": false,
+ "parallel_decode": 0,
+ "decode_workers": 1,
+ "fp16_active": true,
+ "torch_threads": 2,
+ "protocol": "read->decode->crop_with_pad(0.10)->squash224->fp16 fwd->head->[flip TTA]->L2; search excluded",
+ "results": [
+  {
+   "batch_size": 1,
+   "reps": [
+    {
+     "rep": 1,
+     "iters": 40,
+     "throughput_ms": 19.54,
+     "sustained_fps": 51.18,
+     "e2e_sync_ms": 19.46,
+     "e2e_fps": 51.39
+    },
+    {
+     "rep": 2,
+     "iters": 40,
+     "throughput_ms": 19.527,
+     "sustained_fps": 51.21,
+     "e2e_sync_ms": 19.425,
+     "e2e_fps": 51.48
+    },
+    {
+     "rep": 3,
+     "iters": 40,
+     "throughput_ms": 19.435,
+     "sustained_fps": 51.45,
+     "e2e_sync_ms": 20.071,
+     "e2e_fps": 49.82
+    }
+   ],
+   "best_sustained_ms": 19.435,
+   "best_sustained_fps": 51.45,
+   "median_sustained_fps": 51.21
+  },
+  {
+   "batch_size": 8,
+   "reps": [
+    {
+     "rep": 1,
+     "iters": 40,
+     "throughput_ms": 15.159,
+     "sustained_fps": 65.97,
+     "e2e_sync_ms": 15.204,
+     "e2e_fps": 65.77
+    },
+    {
+     "rep": 2,
+     "iters": 40,
+     "throughput_ms": 15.293,
+     "sustained_fps": 65.39,
+     "e2e_sync_ms": 15.235,
+     "e2e_fps": 65.64
+    },
+    {
+     "rep": 3,
+     "iters": 40,
+     "throughput_ms": 15.365,
+     "sustained_fps": 65.08,
+     "e2e_sync_ms": 15.344,
+     "e2e_fps": 65.17
+    }
+   ],
+   "best_sustained_ms": 15.159,
+   "best_sustained_fps": 65.97,
+   "median_sustained_fps": 65.39
+  },
+  {
+   "batch_size": 16,
+   "reps": [
+    {
+     "rep": 1,
+     "iters": 40,
+     "throughput_ms": 15.191,
+     "sustained_fps": 65.83,
+     "e2e_sync_ms": 15.143,
+     "e2e_fps": 66.04
+    },
+    {
+     "rep": 2,
+     "iters": 40,
+     "throughput_ms": 15.019,
+     "sustained_fps": 66.58,
+     "e2e_sync_ms": 14.427,
+     "e2e_fps": 69.31
+    },
+    {
+     "rep": 3,
+     "iters": 40,
+     "throughput_ms": 14.577,
+     "sustained_fps": 68.6,
+     "e2e_sync_ms": 14.731,
+     "e2e_fps": 67.88
+    }
+   ],
+   "best_sustained_ms": 14.577,
+   "best_sustained_fps": 68.6,
+   "median_sustained_fps": 66.58
+  },
+  {
+   "batch_size": 32,
+   "reps": [
+    {
+     "rep": 1,
+     "iters": 40,
+     "throughput_ms": 14.693,
+     "sustained_fps": 68.06,
+     "e2e_sync_ms": 14.71,
+     "e2e_fps": 67.98
+    },
+    {
+     "rep": 2,
+     "iters": 40,
+     "throughput_ms": 15.135,
+     "sustained_fps": 66.07,
+     "e2e_sync_ms": 14.423,
+     "e2e_fps": 69.33
+    },
+    {
+     "rep": 3,
+     "iters": 40,
+     "throughput_ms": 14.542,
+     "sustained_fps": 68.76,
+     "e2e_sync_ms": 14.831,
+     "e2e_fps": 67.43
+    }
+   ],
+   "best_sustained_ms": 14.542,
+   "best_sustained_fps": 68.76,
+   "median_sustained_fps": 68.06
+  }
+ ]
+}

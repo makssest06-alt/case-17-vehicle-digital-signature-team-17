@@ -1,0 +1,19 @@
+{
+ "device": "NVIDIA GeForce RTX 4060 Laptop GPU",
+ "compute_capability": "8.9",
+ "vram_total_gb": 7.62,
+ "multico": 24,
+ "nvidia_smi": "NVIDIA GeForce RTX 4060 Laptop GPU, 595.99.02, 8188 MiB, [N/A]",
+ "driver_cuda_line": "| NVIDIA-SMI 595.99.02              Driver Version: 595.99.02      CUDA Version: 13.2     |",
+ "torch_version": "2.14.1+cu130",
+ "torch_cuda": "13.0",
+ "cudnn": 92400,
+ "fp16_capable": true,
+ "cpu_model": "13th Gen Intel(R) Core(TM) i5-13500H",
+ "cpu_logical_cores": 16,
+ "ram_total_gb": 14.6,
+ "os": "Ubuntu 26.04.1 LTS",
+ "kernel": "7.0.0-38-generic",
+ "hostname": "l1zard-P15-24",
+ "python": "3.14.4"
+}
