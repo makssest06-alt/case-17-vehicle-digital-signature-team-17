@@ -77,4 +77,4 @@ L2-норм. Результат (8639,512) float32, 17 692 800 байт, sha256
   `build_clean_teacher.py` не оскриптован (config+результат в
   `bm_improve/clean_models/ensemble/`).
 
-**training code only; weights are sent via HF/manual - see team handoff.**
+**training code only; a10 weights are in this repo via git LFS (`weights/clean_student_a10_ep28.pt`), учителя — локально/вручную (не в LFS из-за квот).**
