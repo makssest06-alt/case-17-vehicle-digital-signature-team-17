@@ -104,12 +104,30 @@ ok "данные подменены пустой папкой $EMPTY_DATA — с
 # Веса НЕ подменяем: обученная голова обязана приехать вместе с клоном,
 # иначе у постороннего человека поднимется не наша модель.
 MODELS_REL=$(grep -E '^MODELS_HOST_DIR=' .env | cut -d= -f2-)
-WEIGHTS_REL=$(grep -E '^REID_WEIGHTS=' .env | cut -d= -f2- | sed 's|^/models/||')
-if [ -f "${MODELS_REL:-./weights}/$WEIGHTS_REL" ]; then
-  ok "веса модели в клоне: ${MODELS_REL}/$WEIGHTS_REL ($(du -h "${MODELS_REL}/$WEIGHTS_REL" | cut -f1))"
-else
-  bad "в клоне нет весов ${MODELS_REL:-./weights}/$WEIGHTS_REL — поднимется не та модель"
-fi
+WEIGHTS_ABS=$(grep -E '^REID_WEIGHTS=' .env | cut -d= -f2-)
+case "$WEIGHTS_ABS" in
+  /opt/weights/*)
+    # Веса запекаются в образ (api/Dockerfile, стадия weights): из weights/ клона,
+    # если там настоящий файл (git lfs pull), иначе по WEIGHTS_URL.
+    W="weights/$(basename "$WEIGHTS_ABS")"
+    URL="${WEIGHTS_URL:-$(grep -E '^WEIGHTS_URL=' .env | cut -d= -f2- || true)}"
+    if [ -f "$W" ] && [ "$(wc -c < "$W")" -ge 1048576 ] && [ "$(head -c 23 "$W")" != "version https://git-lfs" ]; then
+      ok "веса модели в клоне: $W ($(du -h "$W" | cut -f1)) — попадут в образ при сборке"
+    elif [ -n "$URL" ]; then
+      ok "в клоне $W — LFS-указатель; веса скачаются при сборке по WEIGHTS_URL"
+    else
+      bad "в клоне $W — LFS-указатель, WEIGHTS_URL не задан: сборка остановится (git lfs pull или WEIGHTS_URL)"
+    fi
+    ;;
+  *)
+    WEIGHTS_REL=${WEIGHTS_ABS#/models/}
+    if [ -f "${MODELS_REL:-./weights}/$WEIGHTS_REL" ]; then
+      ok "веса модели в клоне: ${MODELS_REL}/$WEIGHTS_REL ($(du -h "${MODELS_REL}/$WEIGHTS_REL" | cut -f1))"
+    else
+      bad "в клоне нет весов ${MODELS_REL:-./weights}/$WEIGHTS_REL — поднимется не та модель"
+    fi
+    ;;
+esac
 
 docker compose -p "$PROJECT" config -q 2>/dev/null && ok "docker-compose.yml валиден" || bad "docker-compose.yml невалиден"
 
