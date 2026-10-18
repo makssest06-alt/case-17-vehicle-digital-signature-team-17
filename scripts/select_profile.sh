@@ -83,7 +83,7 @@ case "$MODE" in
     ok "CPU/GPU-safe production-профиль: clean student alpha=10, 512D"
     ;;
   gpu)
-    # Голова под so400m появляется только после обучения на GPU (kaggle/).
+    # Голова под so400m появляется только после обучения на GPU (kaggle/train_reid.ipynb).
     # Без неё so400m работает zero-shot и даёт mAP 60.80 — ХУЖЕ, чем
     # base с головой (65.16). Поэтому молча на zero-shot не переключаемся.
     HOST_MODELS="$(grep -E '^MODELS_HOST_DIR=' "$ENV_FILE" | cut -d= -f2- || echo ./weights)"
@@ -99,7 +99,7 @@ case "$MODE" in
       echo "  тоже работает, просто быстрее."
       echo
       echo "  Чтобы включить so400m: обучить голову ноутбуком kaggle/train_reid.ipynb"
-      echo "  с backbone=vit_so400m_patch14_siglip_224.webli, затем"
+      echo "  (в ячейке CFG: backbone = \"vit_so400m_patch14_siglip_224.webli\"), затем"
       echo "    ./scripts/install_trained_weights.sh <файл>.pt --name reid_so400m.pt"
       set_kv EMBED_MODEL "$CPU_MODEL"
       set_kv EMBED_DIM   "$CPU_DIM"

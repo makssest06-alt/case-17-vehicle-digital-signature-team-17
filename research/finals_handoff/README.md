@@ -64,30 +64,12 @@ Runtime-ансамбль не предлагается.
 
 ## GPU-патч
 
-`gpu.patch` применяется из корня чистого репозитория:
+`gpu.patch` удалён 18.10: его правки (torch 2.5.1+cu124, FP16, резервирование NVIDIA в compose) уже
+в основной ветке, повторно патч не применяется. Без NVIDIA — `docker-compose.cpu.yml` (корневой README).
 
-```bash
-git apply --check research/finals_handoff/gpu.patch
-# После проверки интегратором:
-git apply research/finals_handoff/gpu.patch
-```
+## Билдер тестовых артефактов (экспериментальный)
 
-Патч использует torch 2.5.1+cu124 / torchvision 0.20.1+cu124 и сохраняет
-`API_MEM_LIMIT=1536m`. Compose с NVIDIA reservation **требует GPU runtime**;
-на CPU-хосте секция не игнорируется автоматически. Сам загрузчик допускает CPU.
-`REID_REQUIRE_CUDA=1` включает явную ошибку при недоступном GPU (для командного
-прогона задавать окружение явно; в compose потребуется добавить проброс).
-
-На RTX 4060 Laptop прежний тест заранее загруженных PIL-кропов показал:
-batch=1 ~22.2 мс; batch=16 ~98 FPS; batch=32 ~100 FPS. На 8 изображениях
-GPU FP16 vs CPU FP32 cosine >=0.999999. Это **не полный официальный benchmark**:
-в таймер не входили чтение и decode JPEG. Гарантий скорости A5000 или +20 баллов нет.
-Docker build, совместимость cu124 с драйвером стенда 12.2 и пик RAM при
-лимите 1536m требуют отдельной проверки; локальный тест использует другую версию torch.
-
-## Билдер и открытые тестовые артефакты
-
-После применения GPU-патча, в окружении API-зависимостей, из корня проекта:
+В окружении API-зависимостей, из корня проекта:
 
 ```bash
 python research/finals_handoff/build_final_artifacts.py \
@@ -97,9 +79,9 @@ python research/finals_handoff/build_final_artifacts.py \
 python research/finals_handoff/check_handoff.py
 ```
 
-`open_test/` — пример результата для 1110 query / 750 gallery:
-1036 приняты, 74 отказа, embeddings `(1860,512)` float32. Это **не замена**
-корневых `artifacts/` и не оценка качества скрытого теста. Изображения не включены.
+Веса `siglip2_distill_ensemble_ep28.pt` (прежний студент) из репозитория убраны 18.10 — взять из истории
+(`git show backup/glebmain-2026-10-18:weights/siglip2_distill_ensemble_ep28.pt` + `git lfs pull`). Пример
+результата `open_test/` удалён 18.10, чтобы не путался с корневыми `artifacts/` (сдаваемые — там, модель a10).
 
 ### Ограничения, обнаруженные после чтения первоисточников
 
@@ -144,8 +126,6 @@ evaluator на raw-cosine validation mAP@10 просел на 0.0191, Rank-1 н�
 
 ## Проверки перед публикацией
 
-- `git apply --check gpu.patch` — PASS на чистом main d87517d; патч применён
-  для проверки и снят обратно. Активные api/compose остаются без изменений.
 - `check_handoff.py` — PASS: single/batch/permutation query-independent,
   gallery 2/5/6/10 конечны, gallery 0/1 отвергаются, формат и отказы корректны.
 - Новый полный прогон билдера на открытом тесте через патч на RTX 4060 — PASS,

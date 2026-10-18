@@ -143,6 +143,29 @@ Production-профиль: ранжирование DBA k=1 без флагов,
 
 ---
 
+### 2.7 Обучение: как воспроизвести a10
+
+Код обучения — `research/finals_handoff/training/` (`train_reid.py`, `train_distill.py`,
+`extract_emb.py`, `evaluate_pair.py`); манифест весов и метрики на чистом holdout —
+`research/clean_student/manifest.json`, `research/clean_student/README.md`. Порядок:
+
+1. **Учителя** на чистых строках обучения (без пяти exact-дублей train↔holdout):
+   `research/run_clean_retrain.sh` — SigLIP 1 squash, SigLIP 1 base и CLIP через `train_reid.py`
+   (30 эпох, чекпоинт эпохи 28). SigLIP 2-учитель (`siglip2_clean_retrain_ep28.pt`) в скрипте не
+   записан — тот же `train_reid.py` с `--backbone siglip2_base`.
+2. **Эмбеддинги учителя** — взвешенный ансамбль четырёх (веса 0.364 / 0.232 / 0.182 / 0.222,
+   `manifest.json`) на тех же строках, как в `analysis/distill_teacher.py`; отдельный скрипт этого
+   шага в ветке обучения не сохранился.
+3. **Студент**: `research/run_clean_student_sweep.sh` — `train_distill.py`, SigLIP 2 ViT-B/16,
+   squash, `loss = ArcFace + Triplet + α·(1 − cos)`; в скрипте прогон α = 2, 6, 50, a10 — те же
+   аргументы с `--alpha 10 --tag clean_student_a10`, чекпоинт эпохи 28.
+4. Сверить sha256 с `manifest.json` (a10: `93114c59…`).
+
+Пути в скриптах — с машины, где обучали (переменные в начале скриптов): заменить на свои.
+Тестовая выборка в обучении не участвует. `kaggle/train_reid.ipynb` (и вариант для Colab,
+собираются `kaggle/build_notebooks.py`) — прежний путь дообучения на бесплатной T4; a10 им не
+обучался, он нужен для головы под so400m (`scripts/select_profile.sh`).
+
 ## 3. Запуск одной командой
 
 ```bash
@@ -354,7 +377,7 @@ research/         валидация, отказ, анализ ошибок, с�
 analysis/         обучение и эксперименты до clean retrain (train_reid.py, train_distill.py,
                   distill_teacher.py)
 scripts/          validate_submission.py, check_reproducibility.sh, select_profile.sh
+kaggle/           ноутбуки дообучения на Kaggle / Colab (прежний путь, голова под so400m)
 ```
 
-Рецепт запуска обучения a10 (`research/run_clean_retrain.sh`, `research/run_clean_student_sweep.sh`) и
-манифест весов (`research/clean_student/manifest.json`) — в ветке `team17/finals-student-gpu-handoff`.
+Рецепт обучения a10 и манифест весов — раздел 2.7; `kaggle/` — ноутбуки прежнего пути дообучения.

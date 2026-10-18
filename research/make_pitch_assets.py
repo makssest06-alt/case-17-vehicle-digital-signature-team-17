@@ -343,7 +343,7 @@ def chart_user_journey():
 
 
 def copy_existing():
-    """Готовые картинки: коллажи ошибок и скриншоты живого интерфейса.
+    """Готовые картинки: скриншоты живого интерфейса (коллажи ошибок колода берёт прямо из research/errors/).
 
     Скриншоты снимаются Playwright по SSH-туннелю к демо-стенду и кладутся
     в /tmp перед запуском — заново их сгенерировать нельзя, поэтому они
@@ -351,9 +351,6 @@ def copy_existing():
     """
     import shutil
     pairs = [
-        (HERE / "errors" / "error_сильная_смена_ракурса.jpg", "06_errors_viewpoint.jpg"),
-        (HERE / "errors" / "error_ночь.jpg", "07_errors_night.jpg"),
-        (HERE / "errors" / "error_похожая_машина.jpg", "08_errors_similar.jpg"),
         (Path("/tmp/ui_search_easy.png"), "09_ui_search.png"),
         (Path("/tmp/ui_hard.png"), "13_ui_hard_viewpoint.png"),
         (Path("/tmp/ui_night.png"), "14_ui_night.png"),

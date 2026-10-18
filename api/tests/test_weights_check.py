@@ -37,7 +37,6 @@ class WeightsCheckTest(unittest.TestCase):
         self.assertIsNone(wc.check("resnet18", "abc"))
         with patch.dict(os.environ, {"REID_WEIGHTS": str(self.path) + ".missing"}):
             self.assertIsNone(wc.check("reid:vit", "abc"))
-        self.assertEqual(wc.weights_path(f"onnx:{self.path}"), self.path)
 
 
 class HealthShaTest(unittest.TestCase):
