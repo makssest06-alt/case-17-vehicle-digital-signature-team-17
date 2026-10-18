@@ -64,9 +64,9 @@ def _validate_runtime_config() -> None:
         )
 
     if settings.embed_model.startswith("reid:"):
-        weights = Path(os.getenv("REID_WEIGHTS", "/models/clean_student_a10_ep28.pt"))
+        weights = Path(os.getenv("REID_WEIGHTS", "/opt/weights/clean_student_a10_ep28.pt"))
         # При прямом локальном запуске без compose используем checkout weights/;
-        # в контейнере production-путь /models остаётся источником истины.
+        # в контейнере веса лежат в образе, /opt/weights (api/Dockerfile).
         if not weights.is_file() and not os.getenv("REID_WEIGHTS"):
             local_weights = Path(__file__).resolve().parents[2] / "weights" / weights.name
             if local_weights.is_file():

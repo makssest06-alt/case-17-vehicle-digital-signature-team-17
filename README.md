@@ -147,8 +147,22 @@ Production-профиль использует DBA `k=1`, правило поч�
 git clone <ссылка на репозиторий>
 cd case-17-vehicle-digital-signature-team-17
 cp .env.example .env          # при необходимости поменять POSTGRES_PASSWORD
-docker compose up -d
 ```
+
+Веса модели (`weights/clean_student_a10_ep28.pt`, 362 МБ) лежат в Git LFS и при сборке
+запекаются в образ. Два способа их получить — любой из них:
+
+```bash
+# 1) через Git LFS
+git lfs install && git lfs pull
+docker compose up -d
+
+# 2) без git-lfs: скачать при сборке по ссылке (sha256 сверяется, при несовпадении сборка падает)
+WEIGHTS_URL=<ссылка на clean_student_a10_ep28.pt> docker compose up -d --build
+```
+
+Без обоих сборка остановится с сообщением «укажите WEIGHTS_URL или выполните git lfs pull».
+При запуске сеть не нужна: веса и бэкбон уже в образе.
 
 Всё. Интерфейс — http://localhost:8080, Swagger — http://localhost:8000/docs.
 
@@ -165,8 +179,8 @@ curl -s localhost:8000/ready
 docker compose exec api python scripts/make_submission.py
 ```
 
-Интернет при инференсе не нужен: веса поставляются в составе решения (через Git
-LFS в `weights/`).
+Интернет при инференсе не нужен: веса запекаются в образ на этапе сборки (из Git LFS
+в `weights/` или по `WEIGHTS_URL`, со сверкой sha256).
 
 ### API
 
@@ -278,7 +292,7 @@ VERI-Wild) измерены как ориентир, но в решение не
 api/              FastAPI-сервис (инференс)
 web/              веб-интерфейс (nginx)
 db/               PostgreSQL + pgvector, инициализация схемы
-weights/          веса (через Git LFS)
+weights/          веса (Git LFS; при сборке — в образ, /opt/weights)
 artifacts/        артефакты сдачи
 docs/             SUBMISSION_README.md, TZ_CHECKLIST.md
 research/         обучение, валидация, анализ ошибок, презентация

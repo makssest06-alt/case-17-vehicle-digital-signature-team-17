@@ -27,8 +27,14 @@ services:
   api:
     build:
       context: ./api
+      # weights/ — второй контекст сборки: стадия weights в api/Dockerfile берёт оттуда
+      # clean_student_a10_ep28.pt, если это настоящий файл (git lfs pull), иначе
+      # качает по WEIGHTS_URL; sha256 сверяется всегда.
+      additional_contexts:
+        weights_ctx: ./weights
       args:
         EMBED_MODEL: ${EMBED_MODEL:-reid:vit_base_patch16_siglip_224.webli}
+        WEIGHTS_URL: ${WEIGHTS_URL:-}
     image: case17-api:local
     container_name: case17-api
     restart: unless-stopped
@@ -74,13 +80,14 @@ services:
       OMP_NUM_THREADS: "2"
       HF_HUB_OFFLINE: "1"
       HF_HOME: /opt/hfcache
-      REID_WEIGHTS: ${REID_WEIGHTS:-/models/clean_student_a10_ep28.pt}
+      REID_WEIGHTS: ${REID_WEIGHTS:-/opt/weights/clean_student_a10_ep28.pt}   # в образе (api/Dockerfile)
       # Режим кропа для чекпоинтов, которые не пишут tf_mode в args (студент).
       # Без проброса загрузчик возьмёт timm(base)-кроп и squash-модель
       # потеряет ~2 mAP. См. api/app/models/reid_checkpoint.py.
       REID_TF_MODE: ${REID_TF_MODE:-squash}
     volumes:
       - ${DATA_HOST_DIR:-./data}:/data:ro
+      # только для своих весов (REID_WEIGHTS=/models/<файл>); веса a10 — в образе
       - ${MODELS_HOST_DIR:-./weights}:/models:ro
       - ./artifacts:/artifacts
     ports:

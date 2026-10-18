@@ -23,7 +23,7 @@ ENV_FILE="$ROOT/.env"
 #      Это production-профиль, проверенный на clean holdout.
 CPU_MODEL="reid:vit_base_patch16_siglip_224.webli"
 CPU_DIM=512
-CPU_WEIGHTS="/models/clean_student_a10_ep28.pt"
+CPU_WEIGHTS="/opt/weights/clean_student_a10_ep28.pt"   # в образе (api/Dockerfile)
 
 # gpu: SigLIP so400m. 1631 МБ весов (+6.5 МБ голова = 1638 МБ при лимите 2048),
 #      примерно в 6 раз больше вычислений на кадр. На CPU это 0.35 кадра/с и
