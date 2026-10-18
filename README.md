@@ -337,13 +337,21 @@ python api/scripts/make_submission.py --zip dataset.zip --out artifacts   # ил
 ## 8. Структура репозитория
 
 ```
-api/              FastAPI-сервис (инференс)
+api/              FastAPI-сервис (инференс), тесты; api/scripts/make_submission.py — артефакты сдачи
 web/              веб-интерфейс (nginx)
 db/               PostgreSQL + pgvector, инициализация схемы
 weights/          веса (Git LFS; при сборке — в образ, /opt/weights)
-artifacts/        артефакты сдачи
-docs/             SUBMISSION_README.md, TZ_CHECKLIST.md
-research/         обучение, валидация, анализ ошибок, презентация
-scripts/          validate_submission.py, check_reproducibility.sh
-kaggle/           ноутбуки обучения
+artifacts/        артефакты сдачи (a10)
+data/             сюда кладётся датасет (test_*.csv, images/); в git пусто
+docs/             refusal.md — порог отказа; TZ_falcon_tech.txt, TZ_CHECKLIST.md;
+                  SUBMISSION_README.md — историческая сдача 27.09
+research/         валидация, отказ, анализ ошибок, слайды;
+                  research/finals_handoff/training/ — код обучения clean-моделей (train_reid.py,
+                  train_distill.py: a10 = дистилляция с весом 10)
+analysis/         обучение и эксперименты до clean retrain (train_reid.py, train_distill.py,
+                  distill_teacher.py)
+scripts/          validate_submission.py, check_reproducibility.sh, select_profile.sh
 ```
+
+Рецепт запуска обучения a10 (`research/run_clean_retrain.sh`, `research/run_clean_student_sweep.sh`) и
+манифест весов (`research/clean_student/manifest.json`) — в ветке `team17/finals-student-gpu-handoff`.

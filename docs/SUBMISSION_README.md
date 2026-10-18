@@ -552,7 +552,7 @@ submission. Мы посчитали три пункта mAP меньшей це�
 | Что | Где |
 |---|---|
 | Код инференса | `api/` |
-| Код обучения | `kaggle/train_reid.ipynb`, `research/finetune_clip.py` |
+| Код обучения | `research/finals_handoff/training/`, `analysis/train_reid.py`, `research/finetune_clip.py` (`kaggle/train_reid.ipynb` — в ветке `team17/finals-student-gpu-handoff`) |
 | Подготовка данных | `scripts/make_kaggle_archive.sh`, описание кропов в разделе 2.1 |
 | Фиксированный сплит валидации | `research/val_ids.txt` (150 машин, `seed=42`) |
 | Замеры и протокол | `research/results.md` |
