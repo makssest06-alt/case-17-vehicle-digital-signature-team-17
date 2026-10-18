@@ -1,0 +1,46 @@
+  reid_checkpoint: EMBED_MODEL задан как vit_base_patch16_siglip_224.webli, но чекпоинт обучен на siglip2_base -> беру vit_base_patch16_siglip_224.v2_webli
+  reid_checkpoint: device=cuda fp16=True
+{
+  "model": "reid:vit_base_patch16_siglip_224.webli",
+  "dim": 512,
+  "device": "cuda",
+  "fp16": true,
+  "jpeg_draft": false,
+  "threads": 16,
+  "tf_mode": "squash",
+  "load_s": 1.0236772030000338,
+  "torch": "2.14.1+cu130",
+  "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU",
+  "weights": "clean_student_a10_ep28.pt",
+  "weights_sha256": "93114c5923869d01e92cd70c2c421f783d05ebdac5652a1f2dc919aa040bf6ce",
+  "frames": 256,
+  "smoke": false,
+  "latency_b1_ms": {
+    "median": 20.28,
+    "p95": 25.85,
+    "runs": 300,
+    "warmup": 50
+  },
+  "throughput_fps": {
+    "1": 57.2,
+    "8": 80.1,
+    "16": 93.8,
+    "32": 94.1
+  },
+  "best_fps": 94.1,
+  "best_batch": 32,
+  "peak_vram_MB": 532.9,
+  "determinism_max_abs_diff": 0.0,
+  "weights_size_q37": {
+    "roots": [
+      "/home/l1zard/diskD/bm_glebmain_bench/weights/clean_student_a10_ep28.pt",
+      "/srv"
+    ],
+    "files": 1,
+    "bytes": 379734230,
+    "MB": 362.1
+  },
+  "latency_score": 1.0,
+  "throughput_score": 0.881,
+  "performance_pct_of_20": 18.81
+}
