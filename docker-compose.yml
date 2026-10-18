@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-case17}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD не задан - создай .env из .env.example}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-case17}   # без .env — как DB_DSN по умолчанию (api/app/config.py); порт базы наружу не публикуется
       POSTGRES_DB: ${POSTGRES_DB:-case17}
       EMBED_DIM: ${EMBED_DIM:-512}
       PGDATA: /var/lib/postgresql/data/pgdata
@@ -49,7 +49,7 @@ services:
       db:
         condition: service_healthy
     environment:
-      DB_DSN: postgresql://${POSTGRES_USER:-case17}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-case17}
+      DB_DSN: postgresql://${POSTGRES_USER:-case17}:${POSTGRES_PASSWORD:-case17}@db:5432/${POSTGRES_DB:-case17}
       EMBED_MODEL: ${EMBED_MODEL:-reid:vit_base_patch16_siglip_224.webli}
       EMBED_DIM: ${EMBED_DIM:-512}
       INPUT_SIZE: ${INPUT_SIZE:-224}
