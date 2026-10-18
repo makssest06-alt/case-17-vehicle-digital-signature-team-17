@@ -158,10 +158,14 @@ class ReidCheckpointModel(EmbeddingModel):
         backbone.eval()
         head.eval()
         # A CUDA-enabled torch build is required to use an available GPU.
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # REID_DEVICE: auto (по умолчанию: cuda, если есть, иначе cpu) | cpu | cuda | mps — для замеров и проверок.
+        want = os.getenv("REID_DEVICE", "auto").strip().lower() or "auto"
+        self.device = torch.device(("cuda" if torch.cuda.is_available() else "cpu") if want == "auto" else want)
         if os.getenv("REID_REQUIRE_CUDA", "0") == "1" and self.device.type != "cuda":
             raise RuntimeError("REID_REQUIRE_CUDA=1 but CUDA is unavailable")
-        self._fp16 = self.device.type == "cuda" and os.getenv("REID_FP16", "1") == "1"
+        # FP16 (autocast) — на CUDA по умолчанию, REID_FP16=0 выключает; на MPS — только явно (REID_FP16=1).
+        fp16_env = os.getenv("REID_FP16", "1" if self.device.type == "cuda" else "0")
+        self._fp16 = self.device.type in ("cuda", "mps") and fp16_env == "1"
         self._tf = self._build_tf(timm, backbone)
         backbone.to(self.device)
         head.to(self.device)
@@ -274,7 +278,7 @@ class ReidCheckpointModel(EmbeddingModel):
         от -1.18 до -5.21 mAP (analysis/service_path_grid.py).
         """
         if self._fp16:
-            with torch.autocast("cuda", dtype=torch.float16):
+            with torch.autocast(self.device.type, dtype=torch.float16):
                 z = self._model(x)
                 if self._normalize_before_head:
                     z = F.normalize(z, p=2, dim=1)

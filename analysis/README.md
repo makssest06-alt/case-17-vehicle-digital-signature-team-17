@@ -1,26 +1,28 @@
 # Анализ и план улучшения (ветка `team17/improvement-plan`)
 
-Ветка создана для передачи результатов анализа. Существующие ветки не тронуты.
+> **Исторический каталог** — работа до clean retrain. Все числа ниже — на старом сплите
+> (150 машин holdout, 361 gallery, 5 exact-дублей train↔holdout ещё не убраны) и с
+> транздуктивной постобработкой, которую ответ организаторов Q38 запрещает; с текущими не
+> сравниваются. Текущая модель a10 и её обучение — `research/clean_student/`,
+> `research/run_clean_retrain.sh`, `research/run_clean_student_sweep.sh`,
+> `research/finals_handoff/training/` (раздел «Обучение» корневого README).
+> 18.10 удалены эксперименты ансамбля, которые не запускались (импортировали отсутствующие
+> `rerank_test`, `reid_postprocess_andrey`, `validate_ensemble`), и отчёты о них; они есть в
+> истории git до `65667dc`.
 
 ## Что здесь
 
 | Файл | Что это |
 |---|---|
-| `IMPROVEMENT_PLAN.md` | Полный план: находки, числа, что не работает, что делать |
-| `TRAINING_PLAN.md` | План дообучения + результат проверки (обучение с нуля дало +3.4 mAP) |
-| `reid_postprocess.py` | Готовая постобработка (+3 mAP, без переобучения) |
-| `train_reid.py` | **Восстановленный скрипт обучения** (geom-aug, squash, cross-cam) |
+| `train_reid.py` | **Скрипт обучения** (geom-aug, squash, cross-cam); `backbones.py`, `head_model.py` — его зависимости |
+| `train_distill.py` | Дистилляция ансамбля в одну модель |
+| `distill_teacher.py` | Эмбеддинги учителя (взвешенный ансамбль) для дистилляции |
 | `extract_emb.py` | Эмбеддинги из чекпоинта на holdout-сплите |
-| `eval_sweep.py` | Метрики по серии чекпоинтов (траектория обучения) |
-| `sweep_mix.py` | Подбор веса ансамбля по 5 разбиениям |
-| `pick_sq30.py` | Выбор эпохи по 20 разбиениям (не по максимуму на одном) |
-| `mix_sq30.py`, `mix_final.py`, `mix_grid.py` | Поиск и проверка 3-way смеси |
-| `mix4.py`, `mix4_grid.py`, `mix4_validate.py` | Добавление 4-й модели, перебор по симплексу, независимая проверка весов |
-| `run_official_eval3.py`, `run_official_eval4.py` | Сквозная проверка конфигураций официальным `evaluate.py` |
-| `postproc_tune.py`, `postproc_validate.py` | Подбор и независимая проверка параметров |
-| `openset_calib.py`, `openset_tune.py` | Калибровка порога отказа на синтетическом open-set |
-| `build_submission.py` | Сборка итоговых артефактов (submission/embeddings/candidates) |
-| `backbones.py`, `head_model.py` | Зависимости скрипта обучения |
+| `prep_siglip2.py`, `prep_clip.py`, `prep_dinov2.py`, `prep_small.py` | Начальные чекпоинты бэкбонов в формате обучения |
+| `reid_postprocess.py` | Постобработка (расширение запроса + CSLS + re-ranking; использует другие query — для сдачи не применяется, Q38); `l2` из него берёт `distill_teacher.py` |
+| `DISTILLATION_REPORT.md` | Отчёт о дистилляции прежнего студента |
+| `bench_*.py`, `bench_*.json` | CPU-замеры ансамбля и студентов (2 потока) |
+| `build_test_artifacts.py`, `extract_no_tta.py`, `extract_size.py`, `train_small_students.py`, `bench_backbones.py`, `bench_small.py` | Эксперименты: артефакты ансамблем, TTA, размер кропа, малые бэкбоны |
 
 ## Главное в трёх строках
 

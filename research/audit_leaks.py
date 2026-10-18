@@ -43,7 +43,10 @@ sys.path.insert(0, str(HERE))
 import audit_generalization as ag  # noqa: E402
 import service_embeddings as se  # noqa: E402
 
-STUDENT = ROOT / "weights" / "siglip2_distill_ensemble_ep28.pt"
+# По умолчанию — production a10. Сохранённый honest_eval_results/leak_audit.md — ИСТОРИЧЕСКИЙ: посчитан на
+# прежнем студенте siglip2_distill_ensemble_ep28.pt (sha256 500f7b47…), с a10 не перегонялся; веса прежнего
+# студента из репозитория убраны 18.10 (git show backup/glebmain-2026-10-18:weights/… + git lfs pull).
+STUDENT = ROOT / "weights" / "clean_student_a10_ep28.pt"
 HAMMING = (0, 4, 8)          # пороги для таблицы: точная копия хэша, почти копия, похожие
 
 

@@ -233,6 +233,10 @@ def check_candidates(art: Path, q_ids, g_ids, rep: Report, threshold=None):
     if too_many:
         rep.warn(f"query с более чем {TOP_K} кандидатами: {too_many}")
     unsorted = sum(1 for v in by_q.values() if any(a < b - 1e-9 for a, b in zip(v, v[1:])))
+    rep_top = {}
+    for r in rows:                                    # ответ по запросу — верхний по confidence (Q19, Q23)
+        if r[0] not in rep_top or float(r[2]) > rep_top[r[0]][1]:
+            rep_top[r[0]] = (r[1], float(r[2]))
     if unsorted:
         rep.fail(f"query, где confidence не убывает: {unsorted}")
     else:
@@ -247,6 +251,7 @@ def check_candidates(art: Path, q_ids, g_ids, rep: Report, threshold=None):
             rep.fail(f"строк ниже порога {threshold}: {below}")
         else:
             rep.ok(f"все строки не ниже порога {threshold}")
+    return {q: g for q, (g, _) in rep_top.items()}
 
 
 def check_postprocess(art: Path, emb, sub, q_ids, g_ids, rep: Report):
@@ -299,6 +304,17 @@ def check_postprocess(art: Path, emb, sub, q_ids, g_ids, rep: Report):
     rep.ok(f"справочно: топ-1 по векторам без DBA расходится с submission.csv на {diff} из {nq} "
            f"({diff / nq * 100:.1f}%) — порядок задан DBA-галереей и воспроизведён выше")
     return True
+
+
+def check_answer_vs_submission(sub, top: dict, rep: Report):
+    """Верхний по confidence кандидат в candidates.csv (решение по запросу, Q19/Q23) — первый в submission.csv."""
+    if not top or sub is None:
+        return
+    bad = sum(1 for q, g in top.items() if sub.get(q, [None])[0] != g)
+    if bad:
+        rep.fail(f"у {bad} принятых query верхний по confidence кандидат не первый в submission.csv")
+    else:
+        rep.ok(f"у всех {len(top)} принятых query верхний по confidence кандидат — первый в submission.csv")
 
 
 def check_consistency(emb, order_ok, sub, q_ids, g_ids, rep: Report, sample=200):
@@ -382,7 +398,8 @@ def main() -> int:
 
     sub = check_submission(art, q_ids, g_ids, rep)
     emb, order_ok = check_embeddings(art, q_ids, g_ids, rep)
-    check_candidates(art, q_ids, g_ids, rep, a.threshold)
+    top = check_candidates(art, q_ids, g_ids, rep, a.threshold)
+    check_answer_vs_submission(sub, top, rep)
     # Постобработка и прямой топ-1 — взаимоисключающие способы доказать
     # происхождение submission.csv. Что применимо, то и проверяем.
     if not check_postprocess(art, emb, sub, q_ids, g_ids, rep):

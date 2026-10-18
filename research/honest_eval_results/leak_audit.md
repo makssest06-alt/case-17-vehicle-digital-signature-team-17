@@ -1,5 +1,7 @@
 # Аудит утечек и почти-дублей (шаг 1, D3/D4)
 
+> **Исторический отчёт:** векторы — прежний студент `siglip2_distill_ensemble_ep28.pt`; с a10 не перегонялся. `research/audit_leaks.py` по умолчанию берёт теперь a10.
+
 ```bash
 python research/audit_leaks.py --data-dir <папка с train.csv, test_*.csv, crops/> \
   --zip <dataset.zip> --out-dir research/honest_eval_results
