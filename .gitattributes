@@ -14,3 +14,4 @@ research/*.sh       text eol=lf
 weights/siglip2_distill_ensemble_ep28.pt filter=lfs diff=lfs merge=lfs -text
 # Clean retrain artifacts are research-only; runtime must use one selected student.
 research/clean_student/models/*.pt filter=lfs diff=lfs merge=lfs -text
+*.pt filter=lfs diff=lfs merge=lfs -text
