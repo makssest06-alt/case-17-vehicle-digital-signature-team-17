@@ -36,3 +36,28 @@ throughput 94.4/100 (≈0.6 бала до максимума) — на 4060 Lapt
 
 Файлы: bench_extract_t{1,4,16}.json («threads» в describe()), run_t{1,4,16}.log.
 Станца: native (официальный сценарий, без контейнера) — см. шапку.
+
+## Docker-раздел (nvidia-container-toolkit установлен 18.10, sudo выдан)
+
+После установки nvidia-container-toolkit и пересборки `case17-api:local` из glebmain e41f92a
+(`docker compose build api`; pip-слои из кеша, финальная 247.6 с) официальный протокол прошёл
+**в контейнере**, команда как в PR#5 §5:
+
+```
+docker run --rm --gpus all --network none -v <dataset>:/data:ro -v .../artifacts:/artifacts \
+  case17-api:local python /srv/scripts/bench_extract.py --data /data --out /artifacts/bench_extract.json
+```
+
+| Stanza | EXTRACT_THREADS | B1 median мс | FPS 1/8/16/32 | best | perf (из 20) |
+|---|---:|---:|---|---:|---:|
+| docker (основной, дефолт) | 4 | 22.00 | 55.0 / 72.0 / 83.7 / 91.2 | 91.2 | 18.24 |
+| docker | 8 | 21.61 | 54.8 / 58.0 / 64.8 / 90.0 | 90.0 | 18.00 |
+| docker | 16 | 21.33 | 54.2 / 56.9 / 71.1 / 92.3 | 92.3 | 18.46 |
+| native (этот же код) | 4 | 20.07 | … / 89.1 / 94.4 | 94.4 | 18.87 |
+
+VRAM в контейнере 698 МБ (слои torch cu124), детерминизм 0, веса 379,734,230 Б (sha от build'а
+совпал). Потоки в контейнере тоже не вытягивают >92 FPS: узкое место — декод/препроцессинг
+на CPU ноутбука, передача данных в GPU. Гейт латентности закрывается в обоих станцах с запасом.
+Для A5000: контейнерный путь готов и проверен на этой машине, используется как есть.
+
+Файлы: docker/bench_extract_default.json (основной, t4), docker/bench_extract_docker_t{8,16}.json.
