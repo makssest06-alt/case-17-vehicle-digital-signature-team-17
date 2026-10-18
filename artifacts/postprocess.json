@@ -1,42 +1,32 @@
 {
-  "checkpoint": "siglip2_distill_ensemble_ep28.pt",
-  "checkpoint_sha256": "500f7b47d2a67d2289c74d7f0f94795f12a022507661b07caecffa0d33f3a0c9",
-  "crop": "squash (bbox + 10% context, Resize((224,224)) BICUBIC)",
-  "tta": false,
-  "pipeline": "qq_expand -> k_reciprocal_rerank -> csls",
-  "params": {
-    "qq_k": 3,
-    "qq_alpha": 3.0,
-    "rerank_k1": 10,
-    "rerank_k2": 6,
-    "rerank_lambda": 0.7,
-    "csls_k": 5
+  "model": "reid:vit_base_patch16_siglip_224.webli",
+  "weights": "clean_student_a10_ep28.pt",
+  "weights_sha256": "93114c5923869d01e92cd70c2c421f783d05ebdac5652a1f2dc919aa040bf6ce",
+  "crop": "bbox + 10% запаса (app/imaging.crop_with_pad), REID_TF_MODE=squash, TTA flip=False",
+  "postprocess": {
+    "path": "app.pp.state.Postprocess — тот же код, что в сервисе; другие query не используются",
+    "PP_DBA_K": 1,
+    "PP_DEDUP_RANK": "off",
+    "PP_DEDUP_REFUSAL": "both",
+    "PP_CAMERA_TAU": 0.68127,
+    "PP_DEDUP_SIM": 0.84,
+    "PP_DEDUP_IOU": 0.6,
+    "PP_DEDUP_CENTER": 0.3
   },
   "refusal": {
-    "rule": "10-й процентиль top-1",
-    "threshold": 0.094672,
-    "accepted": 999,
-    "refused": 111
+    "score": "z100",
+    "threshold": 4.6506,
+    "preset": {
+      "balanced": 4.6506,
+      "note": "итог: DBA; отказ фон ИЛИ рамка (наши пороги): 361/1111 как закрытый тест, F1 при TNR ≥ 0.70 на каждой (closed_gallery_a10.md)"
+    },
+    "accepted": 784,
+    "refused": 326,
+    "candidates_rule": "принятый query — top-10 как в ответе /v1/search, confidence — косинус кандидата"
   },
   "consistency": {
-    "top1_mismatch_pct": 20.45,
-    "note": "доля запросов, где top-1 после постобработки отличается от top-1 по косинусу embeddings.npy; evaluate.py считает основной mAP из submission.csv, из векторов — справочный mAP_full"
+    "top1_mismatch_pct": 3.78,
+    "note": "доля query, где top-1 submission.csv (по DBA-галерее) отличается от top-1 по косинусу векторов embeddings.npy (без постобработки)"
   },
-  "val_metrics_official_evaluate_py": {
-    "qq_k_3": {
-      "mAP@10": 0.8961,
-      "Rank-1": 0.8639,
-      "Rank-5": 0.9637
-    },
-    "qq_k_1": {
-      "mAP@10": 0.8915,
-      "Rank-1": 0.8584,
-      "Rank-5": null
-    },
-    "ensemble4_reference": {
-      "mAP@10": 0.8946,
-      "Rank-1": 0.8675,
-      "Rank-5": 0.9401
-    }
-  }
+  "reproduce": "docker compose exec api python scripts/make_submission.py (или python api/scripts/make_submission.py --zip dataset.zip --out artifacts)"
 }

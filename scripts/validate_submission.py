@@ -258,38 +258,46 @@ def check_postprocess(art: Path, emb, sub, q_ids, g_ids, rep: Report):
     embeddings.npy, применить записанный рядом конвейер с записанными
     параметрами и получить ту же таблицу. Это и есть доказательство
     происхождения, причём проверяемое кем угодно.
+
+    postprocess.json от api/scripts/make_submission.py: галерея g' = DBA(g, PP_DBA_K)
+    тем же кодом, что в сервисе (api/app/pp/dba.py), порядок — косинус query с g'.
     """
     pp_path = art / "postprocess.json"
     if not pp_path.exists():
         return False
     section("постобработка выдачи")
-    meta = json.loads(pp_path.read_text())
-    rep.ok(f"конвейер: {meta.get('pipeline')}, параметры {meta.get('params')}")
+    meta = json.loads(pp_path.read_text(encoding="utf-8"))
+    post = meta.get("postprocess") or {}
+    if emb is None or sub is None:
+        rep.fail("нечего воспроизводить — embeddings.npy или submission.csv не прочитан")
+        return True
+    k, rank_mode = int(post.get("PP_DBA_K", 0)), post.get("PP_DEDUP_RANK", "off")
+    rep.ok(f"модель {meta.get('model')}, DBA k={k}, ранжирование {rank_mode}, "
+           f"отказ {meta.get('refusal', {}).get('score')} ≥ {meta.get('refusal', {}).get('threshold')}")
+    if rank_mode != "off":
+        rep.fail(f"PP_DEDUP_RANK={rank_mode}: порядок зависит от рамок и фона кадров, "
+                 f"из одних векторов его не воспроизвести")
+        return True
 
-    sys.path.insert(0, str(art.parent / "research"))
+    sys.path.insert(0, str(art.parent / "api"))
     try:
-        import reid_postprocess as pp
+        from app.pp.dba import dba
     except ImportError as exc:
-        rep.fail(f"нечем воспроизвести постобработку: {exc}")
+        rep.fail(f"нечем воспроизвести DBA (api/app/pp/dba.py): {exc}")
         return True
 
     nq = len(q_ids)
-    par = meta.get("params", {})
-    sim, _, _ = pp.rank([emb[:nq]], [emb[nq:]], weights=[1.0],
-                        qq_k=par.get("qq_k", 1), qq_alpha=par.get("qq_alpha", 3.0),
-                        csls_k=par.get("csls_k", 5),
-                        rerank_lambda=par.get("rerank_lambda", 0.7),
-                        rerank_k1=par.get("rerank_k1", 30),
-                        rerank_k2=par.get("rerank_k2", 6))
-    order = np.argsort(-sim, axis=1)[:, :TOP_K]
-    bad = sum(1 for i, qid in enumerate(q_ids)
-              if [g_ids[j] for j in order[i]] != sub[qid])
+    g = dba(emb[nq:], k=k) if k else emb[nq:]
+    order = np.argsort(-(emb[:nq] @ g.T), axis=1, kind="stable")[:, :TOP_K]
+    bad = sum(1 for i, qid in enumerate(q_ids) if [g_ids[j] for j in order[i]] != sub[qid])
     if bad == 0:
-        rep.ok(f"submission.csv воспроизводится из embeddings.npy точь-в-точь "
-               f"на всех {nq} запросах")
+        rep.ok(f"submission.csv воспроизводится из embeddings.npy точь-в-точь на всех {nq} запросах")
     else:
-        rep.fail(f"submission.csv не воспроизводится из embeddings.npy: "
-                 f"расходится {bad} строк из {nq}")
+        rep.fail(f"submission.csv не воспроизводится из embeddings.npy: расходится {bad} строк из {nq}")
+    raw = np.argmax(emb[:nq] @ emb[nq:].T, axis=1)
+    diff = sum(1 for i, qid in enumerate(q_ids) if g_ids[raw[i]] != sub[qid][0])
+    rep.ok(f"справочно: топ-1 по векторам без DBA расходится с submission.csv на {diff} из {nq} "
+           f"({diff / nq * 100:.1f}%) — порядок задан DBA-галереей и воспроизведён выше")
     return True
 
 
@@ -352,7 +360,8 @@ def main() -> int:
     ap.add_argument("--data", default="/opt/case17/data",
                     help="каталог с test_query.csv и test_gallery.csv")
     ap.add_argument("--threshold", type=float, default=None,
-                    help="порог отказа, если нужно проверить candidates.csv на него")
+                    help="порог на confidence (косинус) — только для REFUSAL_SCORE=raw; при z100 "
+                         "решение об отказе принимается по оценке запроса, а не по confidence строки")
     ap.add_argument("--strict", action="store_true", help="предупреждения тоже роняют")
     a = ap.parse_args()
 

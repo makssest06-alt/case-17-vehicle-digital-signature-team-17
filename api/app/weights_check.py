@@ -18,7 +18,7 @@ log = logging.getLogger("case17")
 def weights_path(embed_model: str) -> Optional[Path]:
     """Файл весов модели: REID_WEIGHTS для reid:<бэкбон>, путь для onnx:<путь>; у timm-заглушки файла нет."""
     if embed_model.startswith("reid:"):
-        return Path(os.getenv("REID_WEIGHTS", "/models/reid_current.pt"))
+        return Path(os.getenv("REID_WEIGHTS", "/opt/weights/clean_student_a10_ep28.pt"))
     if embed_model.startswith("onnx:"):
         return Path(embed_model.split(":", 1)[1])
     return None
