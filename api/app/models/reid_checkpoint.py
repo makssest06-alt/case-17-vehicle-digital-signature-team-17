@@ -48,6 +48,10 @@ BACKBONE_TIMM = {
 }
 
 
+# Подпись семейства весов для лога: «бэкбон: vit_base_patch16_siglip_224 (веса SigLIP2 из чекпоинта)».
+FAMILY = {"siglip_base": "SigLIP", "siglip2_base": "SigLIP2", "clip_vitb16": "CLIP", "dinov2_vits14": "DINOv2"}
+
+
 def timm_names(ck_backbone: str, fallback: str) -> List[str]:
     """Имена timm для бэкбона из args["backbone"] чекпоинта; не объявлен — имя из EMBED_MODEL."""
     names = BACKBONE_TIMM.get(ck_backbone, [fallback])
@@ -124,15 +128,17 @@ class ReidCheckpointModel(EmbeddingModel):
         ck_backbone = str(cfg.get("backbone") or "")
         names = timm_names(ck_backbone, self.backbone_name)
         if ck_backbone and names[0] != self.backbone_name:
-            log.info("EMBED_MODEL задан как %s, но чекпоинт обучен на %s -> беру %s",
-                     self.backbone_name, ck_backbone, names[0])
+            log.debug("EMBED_MODEL задан как %s, чекпоинт обучен на %s -> беру %s",
+                      self.backbone_name, ck_backbone, names[0])
         # Имя модели — по чекпоинту: оно попадает в /health, ответы API, postprocess.json и JSON замера.
         self.name = f"reid:{names[0]}"
         backbone, used_name = self._create_backbone(timm, names, head_only)
         if len(names) > 1 and used_name != names[0]:
-            log.info("тег %s не разрешился на timm %s — беру архитектуру %s. Для чекпоинта полного "
-                     "дообучения это безопасно (веса приходят из файла, pretrained не используется).",
-                     names[0], timm.__version__, used_name)
+            log.debug("тег %s на timm %s не разрешается — архитектура %s; веса целиком из чекпоинта, "
+                      "pretrained не используется", names[0], timm.__version__, used_name)
+        log.info("бэкбон: %s (%s)", used_name,
+                 f"предобученный {names[0]}, голова из чекпоинта" if head_only
+                 else f"веса {FAMILY.get(ck_backbone, ck_backbone or used_name)} из чекпоинта")
         head = _ReidHead(backbone.num_features, hidden, out_dim, dropout)
 
         if head_only:

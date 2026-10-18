@@ -92,6 +92,8 @@ class ModelNameAndFreezeTest(unittest.TestCase):
         self.assertEqual(m.name, "reid:vit_base_patch16_siglip_224.v2_webli")
         self.assertFalse(m._model.training or m._head.training)
         self.assertTrue(any("устройство cpu" in line and "FP16 нет" in line for line in cm.output))
+        self.assertIn("INFO:case17.model:бэкбон: tiny (веса SigLIP2 из чекпоинта)", cm.output)
+        self.assertFalse([line for line in cm.output if "не разреш" in line or "EMBED_MODEL" in line])
         seen = []
         encode = m._encode
         with patch.object(m, "_encode", side_effect=lambda x: seen.append(torch.is_inference_mode_enabled())

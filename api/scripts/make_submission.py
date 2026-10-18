@@ -27,6 +27,7 @@ Q38): постобработка трогает только галерею — 
   make_submission.log   лог прогона (он же в stderr): веса и sha256, устройство, порог, время по этапам
 """
 import argparse
+import contextlib
 import csv
 import io
 import json
@@ -96,6 +97,7 @@ class MemoryStore:
 
     def __init__(self):
         self.rows = []
+        self.dba_updated = set()                       # id кадров, у которых g' переписан после вставки
 
     def ensure_pp_schema(self, dim, bg_dim):
         pass
@@ -107,6 +109,7 @@ class MemoryStore:
     def update_dba(self, pairs):
         for i, v in pairs:
             self.rows[i - 1]["embedding_dba"] = np.asarray(v, "float32")
+            self.dba_updated.add(int(i))
 
     def insert_pp(self, rows, dba_updates):
         ids = []
@@ -185,6 +188,33 @@ def setup_logging(out: Path) -> Path:
     logging.basicConfig(level=logging.INFO, format=LOG_FORMAT, force=True,
                         handlers=[logging.StreamHandler(sys.stderr), logging.FileHandler(path, "w", encoding="utf-8")])
     return path
+
+
+@contextlib.contextmanager
+def quiet(logger_name: str, level: int = logging.WARNING):
+    """Приглушить логгер на время блока: reload() пустого MemoryStore пишет «галерея 0 кадров» до индекса."""
+    lg = logging.getLogger(logger_name)
+    old = lg.level
+    lg.setLevel(level)
+    try:
+        yield
+    finally:
+        lg.setLevel(old)
+
+
+def log_gallery_index(pp, store: "MemoryStore", n_gallery: int) -> bool:
+    """Итог индекса галереи реальными числами; False — индекс видит не все кадры (сборку останавливаем)."""
+    n_dba = sum(r["embedding_dba"] is not None for r in store.rows)
+    parts = [f"постобработка по галерее: в индексе {len(pp.ids)} кадров из {n_gallery}"]
+    if pp.k:
+        parts.append(f"DBA k={pp.k}: g' у {n_dba}, пересчитан при добавлении соседей у {len(store.dba_updated)}")
+    if pp.use_bg:
+        parts.append(f"признак фона у {len(pp.bg)} из {len(pp.ids)} (τ {pp.tau:.5f})")
+    log.info("; ".join(parts))
+    ok = len(pp.ids) == n_gallery and (not pp.k or n_dba == n_gallery)
+    if not ok:
+        log.error("индекс галереи неполон: кадров %d, g' %d, ожидалось %d", len(pp.ids), n_dba, n_gallery)
+    return ok
 
 
 def model_label(weights: str) -> str:
@@ -269,7 +299,8 @@ def build(args: argparse.Namespace, out: Path) -> int:
                  dim, getattr(model, "device", "cpu"), "да" if getattr(model, "_fp16", False) else "нет")
 
     store = MemoryStore()
-    pp = pp_state.Postprocess(settings, dim, store) if pp_on else None
+    with quiet("case17.pp"):                    # нули пустого хранилища; итог — после индекса (log_gallery_index)
+        pp = pp_state.Postprocess(settings, dim, store) if pp_on else None
     need_frame = bool(pp is not None and pp.wants_frame)
 
     # ---- галерея: как /v1/gallery/bulk — порциями, DBA и признак фона считает Postprocess
@@ -290,6 +321,8 @@ def build(args: argparse.Namespace, out: Path) -> int:
         took["галерея в индекс"] += time.perf_counter() - t0
     log.info("галерея: кадры и эмбеддинги %.1f с, в индекс (DBA, фон) %.1f с",
              took.get("gallery", 0.0), took["галерея в индекс"])
+    if pp is not None and not log_gallery_index(pp, store, len(g_ids)):
+        return 1
 
     # ---- query: как /v1/search, каждый отдельно
     q_emb = np.zeros((len(q_ids), dim), "float32")
