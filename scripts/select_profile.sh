@@ -80,6 +80,7 @@ case "$MODE" in
     set_kv EMBED_MODEL "$CPU_MODEL"
     set_kv EMBED_DIM   "$CPU_DIM"
     set_kv REID_WEIGHTS "$CPU_WEIGHTS"
+    set_kv BAKE_BACKBONE 0             # a10 — полное дообучение, бэкбон с HF не нужен
     ok "CPU/GPU-safe production-профиль: clean student alpha=10, 512D"
     ;;
   gpu)
@@ -91,6 +92,7 @@ case "$MODE" in
       set_kv EMBED_MODEL "$GPU_MODEL_HEAD"
       set_kv EMBED_DIM   "$GPU_DIM"
       set_kv REID_WEIGHTS "$GPU_WEIGHTS"
+      set_kv BAKE_BACKBONE 1           # head-only: предобученный so400m нужен в образе
       ok "GPU-профиль: SigLIP so400m + обученная голова, 512D"
     else
       warn "GPU-профиль запрошен, но обученной головы под so400m ещё нет"

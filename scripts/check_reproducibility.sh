@@ -31,6 +31,8 @@ FAILED=0
 say()  { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 ok()   { printf '  \033[32mOK\033[0m   %s\n' "$*"; }
 bad()  { printf '  \033[31mFAIL\033[0m %s\n' "$*"; FAILED=1; }
+# sed -i переносимо: у GNU sed (Linux) суффикс не нужен, у BSD sed (macOS) обязателен — пишем через временный файл.
+sed_i() { local f="${@: -1}"; sed "${@:1:$#-1}" "$f" > "$f.tmp" && mv "$f.tmp" "$f"; }
 
 cleanup() {
   say "уборка"
@@ -96,8 +98,8 @@ then ok "весь python-код клона разбирается"; else bad "с
 
 say "3. Готовлю .env (как это сделал бы член жюри)"
 cp .env.example .env
-sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 16)|" .env
-sed -i "s|^DATA_HOST_DIR=.*|DATA_HOST_DIR=$EMPTY_DATA|"   .env
+sed_i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 16)|" .env
+sed_i "s|^DATA_HOST_DIR=.*|DATA_HOST_DIR=$EMPTY_DATA|"   .env
 grep -q '^DATA_HOST_DIR=' .env || echo "DATA_HOST_DIR=$EMPTY_DATA" >> .env
 ok "данные подменены пустой папкой $EMPTY_DATA — старт не должен от них зависеть"
 

@@ -2,7 +2,7 @@ name: case17
 
 services:
   db:
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:0.8.7-pg16
     container_name: case17-db
     restart: unless-stopped
     environment:
@@ -34,6 +34,7 @@ services:
       args:
         EMBED_MODEL: ${EMBED_MODEL:-reid:vit_base_patch16_siglip_224.webli}
         WEIGHTS_URL: ${WEIGHTS_URL:-}
+        BAKE_BACKBONE: ${BAKE_BACKBONE:-0}   # 1 — только для timm:/head-only профилей (api/Dockerfile)
     image: case17-api:local
     container_name: case17-api
     restart: unless-stopped

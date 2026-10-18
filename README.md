@@ -188,7 +188,7 @@ WEIGHTS_URL=<ссылка на clean_student_a10_ep28.pt> docker compose up -d -
 
 Без обоих сборка остановится с сообщением «укажите WEIGHTS_URL или выполните git lfs pull».
 На машине без NVIDIA (compose по умолчанию резервирует GPU): `docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d --build`.
-При запуске сеть не нужна: веса и бэкбон уже в образе.
+При запуске сеть не нужна: веса a10 уже в образе (предобученный бэкбон с HF a10 не нужен).
 
 Всё. Интерфейс — http://localhost:8080, Swagger — http://localhost:8000/docs.
 
@@ -199,10 +199,15 @@ docker compose ps             # все три сервиса healthy
 curl -s localhost:8000/ready
 ```
 
-Артефакты сдачи пересчитываются одной командой:
+Артефакты сдачи пересчитываются одной командой — в работающем стеке или без него, прямо на
+образе api (ответ организаторов Q41: images/ + CSV на входе, три файла на выходе; база и веб не
+нужны). Каталог датасета — `test_query.csv`, `test_gallery.csv`, `images/`:
 
 ```bash
 docker compose exec api python scripts/make_submission.py
+# без compose (образ case17-api:local — после docker compose build api):
+docker run --rm --gpus all --network none -v /путь/к/датасету:/data:ro -v "$PWD/artifacts":/artifacts \
+  case17-api:local python scripts/make_submission.py
 ```
 
 Интернет при инференсе не нужен: веса запекаются в образ на этапе сборки (из Git LFS
@@ -284,11 +289,15 @@ Production-профиль: ранжирование DBA k=1 без флагов,
 
 Предобученные веса:
 
-| Источник | Где используется | Лицензия |
-|---|---|---|
-| SigLIP 2 ViT-B/16 (`vit_base_patch16_siglip_224.v2_webli`, Google) | инициализация a10; учитель | Apache 2.0 |
-| SigLIP ViT-B/16 (`vit_base_patch16_siglip_224.webli`, Google; HF `timm/ViT-B-16-SigLIP`) | учитель (squash и base); запекается в образ при сборке (775 МБ), a10 его не использует — энкодер целиком из чекпоинта | Apache 2.0 |
-| CLIP ViT-B/16 (`vit_base_patch16_clip_224.openai`, OpenAI) | учитель | MIT |
+| Модель | Автор | URL | Версия | Где используется | Лицензия |
+|---|---|---|---|---|---|
+| SigLIP 2 ViT-B/16 | Google DeepMind (Tschannen et al., 2025) | https://huggingface.co/timm/ViT-B-16-SigLIP2 | timm `vit_base_patch16_siglip_224.v2_webli`; HF-ревизия `eee10eff6dd8cabae2d7f379d4e8cfcd352030aa` | инициализация a10; учитель | Apache 2.0 |
+| SigLIP ViT-B/16 | Google (Zhai et al., 2023) | https://huggingface.co/timm/ViT-B-16-SigLIP | timm `vit_base_patch16_siglip_224.webli`; HF-ревизия `41f575766f40e752fdd1383e9565b7f02388c1c4` | учитель (squash и base); в образ не запекается (`BAKE_BACKBONE=1` — только для timm:/head-only профилей) | Apache 2.0 |
+| CLIP ViT-B/16 | OpenAI (Radford et al., 2021) | https://huggingface.co/timm/vit_base_patch16_clip_224.openai | timm `vit_base_patch16_clip_224.openai`; HF-ревизия `977e3dd0ec55ab8da155f2fbeb6b5f54948b6e3d` | учитель | MIT (OpenAI CLIP) |
+| a10 (наша) | команда 17 | `weights/clean_student_a10_ep28.pt` (Git LFS) | sha256 `93114c5923869d01e92cd70c2c421f783d05ebdac5652a1f2dc919aa040bf6ce` | инференс | — |
+
+Ревизии HF — текущие на 18.10.2026 (у SigLIP совпадает с локальным кэшем, на котором считались
+учителя); прежние ревизии учителей в истории обучения не записаны.
 
 Библиотеки сервиса — ровно `api/requirements.txt`, образы — `api/Dockerfile`,
 `web/Dockerfile`, `docker-compose.yml`:
@@ -320,18 +329,55 @@ VERI-Wild) измерены как ориентир, но в решение не
 
 ---
 
-## 6. Производительность (п.7 ТЗ)
+## 6. Производительность (п.7 ТЗ, ответы Q30–Q36)
 
-Замеры справочные; финальные делает организатор на своём железе.
+Организатор меряет на NVIDIA RTX A5000, 24 ГБ, CUDA 12.2, в Docker через `--gpus all` (Q30) полный цикл
+`extract()` на одно ТС: чтение файла с диска, декодирование, кроп по bbox, препроцессинг, forward, L2;
+поиск по галерее не входит (Q31). latency_b1 — медиана 300 прогонов после 50 прогревочных с
+синхронизацией CUDA; throughput — лучший FPS из батчей 1 / 8 / 16 / 32 по ≥ 10 с. Баллы: latency
+≤ 40 мс и FPS ≥ 100 — полные, 40–80 мс и 50–100 FPS — линейно (Q34).
+
+Наш `extract()` — `api/app/extractor.py`, замер по этому протоколу — `api/scripts/bench_extract.py`
+(latency_b1 медиана и p95, FPS по батчам, пиковый VRAM, время загрузки весов, размер весов по
+расширениям из Q37, детерминизм, баллы по Q34). **Команда для замера на A5000:**
+
+```bash
+docker compose exec api python scripts/bench_extract.py --out /artifacts/bench_extract.json
+# или без compose:
+docker run --rm --gpus all --network none -v /путь/к/датасету:/data:ro -v "$PWD/artifacts":/artifacts \
+  case17-api:local python scripts/bench_extract.py --out /artifacts/bench_extract.json
+```
+
+Ускорения (разрешены Q36) — переменные окружения; качество — на галерее 361 / 546 запросах holdout
+полным циклом `extract()` (`research/extract_flags.py`, `research/honest_eval_results/extract_flags_a10.md`):
+
+| Флаг | По умолчанию | Косинус с эталоном, min | mAP@10 raw / DBA (без флага 0.8661 / 0.8835) | Решение |
+|---|---|---:|---:|---|
+| `REID_FP16=1` — forward в FP16 (autocast) | вкл. на CUDA | 0.99998 (MPS) | 0.8671 / 0.8834 | качество не меняется |
+| `EXTRACT_THREADS=4` — декодирование батча в потоках | 4 | 1.0 (бит в бит) | 0.8661 / 0.8835 | качество не меняется |
+| `EXTRACT_JPEG_DRAFT=1` — JPEG с уменьшением (PIL draft) | выкл. | 0.98167 | 0.8638 / 0.8875 | меняет векторы сильнее шума — выключен |
+
+Дымовой прогон на Маке (Apple M, arm64; **не замер**: 3 кадра, 3 прогона, 1 с на батч; FP16 на CUDA здесь
+недоступен — проверен на MPS, где autocast медленнее FP32; на Ampere FP16 считают тензорные ядра — выигрыш мерить на A5000):
+
+| Вариант | Устройство | FP16 | JPEG draft | Потоки | latency_b1, мс | FPS батч 1 / 8 / 16 / 32 |
+|---|---|---|---|---:|---:|---:|
+| без флагов | cpu | — | — | 1 | 69.6 | 14.1 / 16.0 / 16.8 / 17.1 |
+| потоки | cpu | — | — | 4 | 68.9 | 13.7 / 18.2 / 18.0 / 18.2 |
+| потоки + draft | cpu | — | вкл. | 4 | 71.0 | 15.2 / 19.1 / 18.8 / 19.3 |
+| GPU Мака, FP32 | mps | — | — | 4 | 32.0 | 31.6 / 38.3 / 38.2 / 39.6 |
+| GPU Мака, FP16 | mps | вкл. | — | 4 | 50.5 | 20.8 / 34.5 / 32.2 / 35.3 |
+| GPU Мака, FP16 + draft | mps | вкл. | вкл. | 4 | 44.6 | 22.6 / 37.9 / 38.2 / 39.2 |
+
+Отдельно чтение, декодирование и кроп кадра 1920×1080 — 5.4 мс без draft и 3.8 мс с draft (CPU, медиана).
+Детерминизм во всех вариантах — max|Δ| = 0 на двух прогонах. Загрузка весов — 1.4–1.7 с (Мак, локальный диск).
 
 | Метрика | Значение |
 |---|---|
-| Время формирования признака (батч=1) | **170 мс** — CPU, 2 vCPU (прежний студент, та же архитектура ViT-B/16) |
-| Пропускная способность | ~5.9 кадров/с — CPU, 2 vCPU, батч; без деградации памяти |
-| Офлайн-сборка артефактов a10 | ~14 кадров/с — CPU Apple M (arm64), батч 16, с чтением кадра из zip, кропом и поиском (`api/scripts/make_submission.py`) |
-| Суммарный размер весов | **362 МБ** (лимит 2048 МБ) |
-| RAM при инференсе | пик **~795 МБ**, OOM отсутствует |
-| Офлайн-режим | веса запечены, интернет не нужен |
+| Суммарный размер весов (Q37) | **362 МБ** в образе — только a10 (`/opt/weights`); бэкбон с HF не запекается. В репозитории ещё `weights/reid_current.pt` (5 МБ, история замеров, в образ не идёт) |
+| Прежние справочные CPU-замеры | 170 мс на кадр батч 1 и ~5.9 кадров/с — CPU, 2 vCPU (прежний студент, та же архитектура ViT-B/16) |
+| RAM при инференсе | пик **~795 МБ** (CPU, прежний студент), OOM отсутствует |
+| Офлайн-режим | веса в образе, `HF_HUB_OFFLINE=1`; a10 грузится без сети и без HF-кэша (проверено `docker run --network none`) |
 
 ---
 
