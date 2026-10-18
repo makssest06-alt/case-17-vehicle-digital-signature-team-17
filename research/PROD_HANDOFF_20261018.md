@@ -22,14 +22,21 @@ production KNN/постобработка/отказ — зона Глеба и 
 `build_clean_teacher.py`, `run_clean_retrain.sh`. Полная последовательность команд и
 known deviations — в README. `clean_teacher_emb.npy` (8639×512, sha `4ec0e9dc…`).
 
-## 3. Веса — загрузить на HF (нужно действие команды, LFS SourceCraft не вмещает)
+## 3. Веса — ЗАГРУЖЕНЫ на GitHub LFS (решение команды от 18.10: GitHub, не HF)
 
-Каталоги с весами (4 учителя + 4 студента, ~3.2 GB суммарно):
-- `/home/l1zard/diskD/bm_improve/clean_models/` (учителя)
-- `/home/l1zard/diskD/bm_improve/clean_student/` (a10 — кандидат; a2/a6/a25 — отклонённые）
+Runtime-кандидат в ветке: `weights/clean_student_a10_ep28.pt`
+ссылка: https://github.com/makssest06-alt/case-17-vehicle-digital-signature-team-17/raw/team17/finals-student-gpu-handoff/weights/clean_student_a10_ep28.pt
+(LFS: 379,734,230 bytes, sha256 `93114c5923869d01e92cd70c2c421f783d05ebdac5652a1f2dc919aa040bf6ce`,
+коммит `c4161d4`, `.gitattributes` трекает `*.pt`）
 
-Предлагаемый layout: `https://huggingface.co/datasets/<team>/lct2026-case17-models`
-(private), 文件 как есть + один MANIFEST.md с sha256. Ссылку на名学生 a10 вставить в README сервиса.
+Квоты free GitHub LFS: 1 GB storage / 1 GB bandwidth в месяц. Кандидат занял ~362 MB
+storage из 1 GB. Оставшиеся ~640 MB — учителя (~800 MB каждый) НЕ влезают: учителя
+остаются локально + Telegram (`/home/l1zard/diskD/bm_improve/clean_models/`, 4 файла +
+`ensemble/clean_teacher_emb.npy` sha `4ec0e9dc…`); при необходимости залить одного
+SigLIP2-учителя отдельно — предупредить Макса о bandwidth 1 GB/мес.
+
+Ссылку на веса кандидата вставить в README сервиса; при сборке Docker —
+`COPY weights/clean_student_a10_ep28.pt artifacts/reid_model.pt` (путь уточнить у Глеба).
 
 ## 4. Bench 4060 — полный цикл протокола Q31/Q34 (нативная прокси-оценка)
 
@@ -79,12 +86,14 @@ restricted per-query k-reciprocal (k1=6,k2=3,λ=0.3, top-50, без q@q.T) да�
 на их же сплите (0.7242→0.7411). Форма легальна по Q38. Их lenient сплит (750g)
 не сравнивается напрямую с нашим clean holdout.
 
-## 7. Остаток до сдачи (модельный трек)
+## 7. Остаток до сдачи (роли по состоянию 18.10 вечера)
 
 - [x] код обучения учителей + сборки эмбеддингов (эта ветка, bc29099)
 - [x] bench_extract.json на 4060 (нативная прокси + v1/v2/v3)
-- [ ] официальная: docker bench после PR#5
-- [ ] веса → HF (команда)
-- [ ] слайды (Макс: валидация, refusal по Q15, скорость — у �олгов заготовки)
+- [x] веса кандидата на GitHub LFS (c4161d4)
+- [ ] официальная bench: docker после PR#5
+- [ ] merge model branch в glebmain (Глеб, cherry-pick README+скрипты; reference модель уже в ветке)
+- [ ] слайды — Ростик (заготовки с картинками у него)
+- [ ] финальная сборка/сдача репо — Макс
 
 Все локальные числа: research/FINAL_WORK_REPORT.md и файлы под research/.
