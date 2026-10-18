@@ -89,7 +89,7 @@ def _validate_runtime_config() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _validate_runtime_config()
-    weights_check.check(settings.embed_model, settings.reid_weights_sha256)
+    app.state.weights_sha256, _ = weights_check.inspect(settings.embed_model, settings.reid_weights_sha256)
     t0 = time.time()
     log.info("загружаю модель %s ...", settings.embed_model)
     log.info(
@@ -238,14 +238,15 @@ def _prepare_frame(raw: bytes, x: int, y: int, w: int, h: int):
     return img, crop_with_pad(img, x, y, w, h, settings.bbox_pad)
 
 
-@app.get("/health", response_model=HealthResponse, tags=["служебные"])
+@app.get("/health", response_model=HealthResponse, response_model_exclude_none=True, tags=["служебные"])
 def health() -> HealthResponse:
-    """Живой ли процесс. Не трогает базу."""
+    """Живой ли процесс. Не трогает базу. weights_sha256 — посчитан при старте, без файла весов поля нет."""
     model = getattr(app.state, "model", None)
     return HealthResponse(
         status="ok",
         model=model.name if model is not None else settings.embed_model,
         dim=model.dim if model is not None else settings.embed_dim,
+        weights_sha256=getattr(app.state, "weights_sha256", None),
     )
 
 
