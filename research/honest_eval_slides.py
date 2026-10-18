@@ -146,7 +146,7 @@ def slides(pts: list) -> str:
     mixed = means(sc["modes"]["nodup"]["contracts"]["mixed (CSLS, 0.8025)"])
     art = means(sc["modes"]["nodup"]["contracts"]["artifacts (CSLS, 10-й процентиль)"])
     cgG, cgP = cg["galleries"], cg["presets"]
-    cg_fin, cg_fb = cgP[cg["final"]], cgP[cg["fallback"]]
+    cg_fin, cg_fb, cg_prev = cgP[cg["final"]], cgP[cg["fallback"]], cgP[cg["prev_final"]]
     pf = lambda p, g: f"{f3(p['per_gallery'][g]['F1'])} / {f3(p['per_gallery'][g]['TNR'])}"
     old = st["old_protocol"]
     ec = err["errors_by_category"]
@@ -219,9 +219,12 @@ def slides(pts: list) -> str:
         f" mAP@10, на 1111 +{f3(cgG['1111']['DBA']['mAP@10'] - cgG['1111']['raw']['mAP@10'])}.",
         f"- Сейчас без постобработки (raw 0.8025) F1 / TNR {f3(cg['current']['361']['F1'])} / "
         f"{f3(cg['current']['361']['TNR'])} на 361: чужому отвечает кадр его же машины с той же камеры.",
-        f"- Итог: ранжирование — DBA k=1 + фон (mAP@10 {f3(cgG['361'][cg['final']]['mAP@10'])} / "
+        f"- Итог: ранжирование — DBA k=1 без флагов (mAP@10 {f3(cgG['361'][cg['final']]['mAP@10'])} / "
         f"{f3(cgG['1111'][cg['final']]['mAP@10'])}); отказ — z100 без почти-дублей «фон ИЛИ рамка», порог "
         f"{cg_fin['threshold']:.2f}: F1 / TNR {pf(cg_fin, '361')} на 361 и {pf(cg_fin, '1111')} на 1111.",
+        f"- Фон в ранжировании убран: он уводил из top-1 кадр той же машины с той же камеры, а эталон засчитывает "
+        f"такой ответ верным (official_evaluate.py:290). С ним F1 / TNR {pf(cg_prev, '361')} и {pf(cg_prev, '1111')}, "
+        f"mAP@10 {f3(cgG['361'][cg['prev_final']]['mAP@10'])} / {f3(cgG['1111'][cg['prev_final']]['mAP@10'])}.",
         f"- Цена TNR: F1-оптимум без ограничения {f3(cg['free']['per_gallery']['361']['F1'])} / "
         f"{f3(cg['free']['per_gallery']['361']['TNR'])} и {f3(cg['free']['per_gallery']['1111']['F1'])} / "
         f"{f3(cg['free']['per_gallery']['1111']['TNR'])}. Запасной план без фона (если не хватит FPS): "

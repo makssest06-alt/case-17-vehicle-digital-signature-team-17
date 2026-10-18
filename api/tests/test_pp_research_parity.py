@@ -32,8 +32,9 @@ BOX = (40, 30, 120, 90)
 
 
 ANDREY = {"pp_dedup_sim_any": 0.94, "pp_dedup_sim": 0.85, "pp_dedup_iou": 0.7, "pp_dedup_center": float("inf")}
-# (ранжирование, отказ, пороги правила рамок); последняя — финальная схема: ранжирование bg, отказ bg OR рамка
-MODES = (("bg", "bg", {}), ("bbox", "bbox", {}), ("both", "both", {}), ("bg", "both", {}), ("bg", "both", ANDREY))
+# (ранжирование, отказ, пороги правила рамок); последняя — финальная схема: ранжирование без флагов, отказ bg OR рамка
+MODES = (("bg", "bg", {}), ("bbox", "bbox", {}), ("both", "both", {}), ("bg", "both", {}), ("bg", "both", ANDREY),
+         ("off", "both", {}))
 
 
 def settings(rank="bg", refusal="", rule=None):
@@ -75,7 +76,7 @@ def research_side(g, gbg, gbox, q, qbg, tau, rule, rank, refusal):
     fb = ss.pair_cos(qbg, gbg, top) > tau
     raw = np.take_along_axis(q @ g.T, top, 1)
     fx = dd.near_dup_flags(raw, np.array(BOX, float)[None, None, :], gbox[top], **rule)
-    pick = {"bg": fb, "bbox": fx, "both": fb | fx}
+    pick = {"off": np.zeros_like(fb), "bg": fb, "bbox": fx, "both": fb | fx}
     return ss.decide(top, cos, pick[rank], pick[refusal])
 
 
@@ -92,9 +93,14 @@ class ParityTest(unittest.TestCase):
             r = {"s_any": st.pp_dedup_sim_any, "s_hi": st.pp_dedup_sim, "t_iou": st.pp_dedup_iou,
                  "t_center": st.pp_dedup_center, "t_size": st.pp_dedup_size}
             self.ref[n] = research_side(self.g, self.gbg, self.gbox, self.q, self.qbg, self.tau, r, rank, refusal)
-            self.assertTrue(any(f.any() for f in self.ref[n]["flags"]), MODES[n])   # исключение реально срабатывает
-        self.assertNotEqual([list(o) for o in self.ref[0]["order"]], [list(o) for o in self.ref[1]["order"]])
+            if rank != "off":
+                self.assertTrue(any(f.any() for f in self.ref[n]["flags"]), MODES[n])   # исключение срабатывает
+        order = lambda n: [list(o) for o in self.ref[n]["order"]]
+        self.assertNotEqual(order(0), order(1))
         self.assertFalse(np.allclose(self.ref[0]["conf_z100"], self.ref[3]["conf_z100"]))   # отказ ≠ ранжирование
+        # финальная схема: фон не двигает порядок, а оценка отказа та же, что у (bg, both)
+        self.assertNotEqual(order(5), order(3))
+        np.testing.assert_allclose(self.ref[5]["conf_z100"], self.ref[3]["conf_z100"])
 
     def check(self, store, ids):
         for n, (rank, refusal, rule) in enumerate(MODES):

@@ -62,7 +62,7 @@ class Settings:
 
     # ---- постобработка: по умолчанию выключена, ответы как без неё (api/app/pp/state.py) ----
     pp_dba_k: int = _i("PP_DBA_K", 1)                                   # production: DBA по 1 соседу
-    pp_camera_penalty: str = _env("PP_CAMERA_PENALTY", "on").strip().lower()   # production: фон
+    pp_camera_penalty: str = _env("PP_CAMERA_PENALTY", "on").strip().lower()   # production: признак фона (для отказа)
     pp_camera_tau: float = _f("PP_CAMERA_TAU", 0.68127)   # косинус фона > τ — «та же камера» (cheap_bg_a10.md)
     pp_camera_topk: int = _i("PP_CAMERA_TOPK", 100)       # сколько кандидатов из базы проверять на камеру
     # Исключение почти-дублей: off | bbox (правило рамок: сходство + рамка) | bg (признак фона) | both (OR).
@@ -71,7 +71,7 @@ class Settings:
     #   PP_DEDUP         — сокращение для обоих (пусто/off — по PP_CAMERA_PENALTY=on → bg).
     # Пороги правила рамок — dedup_compare_a10.md.
     pp_dedup: str = _env("PP_DEDUP", "off").strip().lower()
-    pp_dedup_rank: str = _env("PP_DEDUP_RANK", "bg").strip().lower()          # production: фон в ранжировании
+    pp_dedup_rank: str = _env("PP_DEDUP_RANK", "off").strip().lower()         # production: без флагов (docs/refusal.md)
     pp_dedup_refusal: str = _env("PP_DEDUP_REFUSAL", "both").strip().lower()  # production: фон ИЛИ рамка в отказе
     pp_dedup_sim_any: float = _f("PP_DEDUP_SIM_ANY", float("inf"))   # сырой косинус ≥ — почти-дубль без рамки
     pp_dedup_sim: float = _f("PP_DEDUP_SIM", 0.84)         # сырой косинус ≥ (вместе с рамкой)
@@ -99,11 +99,13 @@ REFUSAL_PRESETS = {
     (0, "off", "off", "raw"): {"balanced": 0.8025, "strict": 0.8465,
                                "note": "legacy: сырой косинус без постобработки (2.2k без почти-дублей, Глеб)"},
     # research/closed_gallery.py --tag a10: 361 / 1111 как закрытый тест, протокол Андрея; итог —
-    # (1, "bg", "both", "z100"), запасной без фона — (1, "off", "bbox", "z100"); docs/refusal.md
+    # (1, "off", "both", "z100"), запасной без фона — (1, "off", "bbox", "z100"); docs/refusal.md
     (1, "bg", "bg", "z100"): {"balanced": 4.995, "strict": 9.9692,
         "note": "DBA + фон: 361/1111 как закрытый тест, F1 при TNR ≥ 0.70 на каждой (closed_gallery_a10.md)"},
+    (1, "off", "both", "z100"): {"balanced": 4.6506, "strict": 9.6847,
+        "note": "итог: DBA; отказ фон ИЛИ рамка (наши пороги): 361/1111 как закрытый тест, F1 при TNR ≥ 0.70 на каждой (closed_gallery_a10.md)"},
     (1, "bg", "both", "z100"): {"balanced": 4.6506, "strict": 9.6847,
-        "note": "итог: DBA + фон; отказ фон ИЛИ рамка (наши пороги): 361/1111 как закрытый тест, F1 при TNR ≥ 0.70 на каждой (closed_gallery_a10.md)"},
+        "note": "прежний итог: DBA + фон; отказ фон ИЛИ рамка (наши пороги): 361/1111 как закрытый тест, F1 при TNR ≥ 0.70 на каждой (closed_gallery_a10.md)"},
     (1, "off", "bbox", "z100"): {"balanced": 4.9039, "strict": 9.9144,
         "note": "запасной: DBA; отказ рамка (наши пороги): 361/1111 как закрытый тест, F1 при TNR ≥ 0.70 на каждой (closed_gallery_a10.md)"},
 }
