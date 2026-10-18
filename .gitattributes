@@ -1,4 +1,3 @@
-models/*.pt filter=lfs diff=lfs merge=lfs -text
 # Shell-скрипты всегда с LF, независимо от core.autocrlf на машине участника.
 # Без этого клон на Windows получает CRLF, и docker-entrypoint-initdb.d
 # не может исполнить 01_schema.sh ("cannot execute: required file not found"),

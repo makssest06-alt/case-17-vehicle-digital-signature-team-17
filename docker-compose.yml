@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-case17}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD не задан - создай .env из .env.example}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-case17}   # без .env — как DB_DSN по умолчанию (api/app/config.py); порт базы наружу не публикуется
       POSTGRES_DB: ${POSTGRES_DB:-case17}
       EMBED_DIM: ${EMBED_DIM:-512}
       PGDATA: /var/lib/postgresql/data/pgdata
@@ -26,9 +26,14 @@ services:
 
   api:
     build:
-      context: ./api
+      # Контекст — корень репозитория: образу нужны api/ и weights/clean_student_a10_ep28.pt
+      # (.dockerignore — белый список). Стадия weights в api/Dockerfile берёт веса оттуда,
+      # если это настоящий файл (git lfs pull), иначе качает по WEIGHTS_URL; sha256 сверяется всегда.
+      context: .
+      dockerfile: api/Dockerfile
       args:
         EMBED_MODEL: ${EMBED_MODEL:-reid:vit_base_patch16_siglip_224.webli}
+        WEIGHTS_URL: ${WEIGHTS_URL:-}
     image: case17-api:local
     container_name: case17-api
     restart: unless-stopped
@@ -44,7 +49,7 @@ services:
       db:
         condition: service_healthy
     environment:
-      DB_DSN: postgresql://${POSTGRES_USER:-case17}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-case17}
+      DB_DSN: postgresql://${POSTGRES_USER:-case17}:${POSTGRES_PASSWORD:-case17}@db:5432/${POSTGRES_DB:-case17}
       EMBED_MODEL: ${EMBED_MODEL:-reid:vit_base_patch16_siglip_224.webli}
       EMBED_DIM: ${EMBED_DIM:-512}
       INPUT_SIZE: ${INPUT_SIZE:-224}
@@ -54,16 +59,19 @@ services:
       # api/app/config.py (одно место); пустая переменная = значение оттуда.
       # Строгую точку тоже пробрасываем: иначе переключатель в вебе
       # показывает не тот порог, что стоит в .env.
-      # Production refusal/postprocess: DBA + правило Андрея (bbox OR фон) + z100.
-      # Значения соответствуют REFUSAL_PRESETS в api/app/config.py.
-      REFUSAL_SCORE: ${REFUSAL_SCORE:-z100}
-      SEARCH_THRESHOLD: ${SEARCH_THRESHOLD:-4.1592}
-      SEARCH_THRESHOLD_STRICT: ${SEARCH_THRESHOLD_STRICT:-7.3031}
-      PP_DBA_K: ${PP_DBA_K:-1}
-      PP_CAMERA_PENALTY: ${PP_CAMERA_PENALTY:-on}
+      # Режим отказа и постобработка: production-значения — только в api/app/config.py
+      # (одно место); пустая переменная = значение оттуда (docs/refusal.md).
+      REFUSAL_SCORE: ${REFUSAL_SCORE:-}
+      SEARCH_THRESHOLD: ${SEARCH_THRESHOLD:-}
+      SEARCH_THRESHOLD_STRICT: ${SEARCH_THRESHOLD_STRICT:-}
+      PP_DBA_K: ${PP_DBA_K:-}
+      PP_CAMERA_PENALTY: ${PP_CAMERA_PENALTY:-}
       PP_CAMERA_TAU: ${PP_CAMERA_TAU:-}
       PP_CAMERA_TOPK: ${PP_CAMERA_TOPK:-}
-      PP_DEDUP: ${PP_DEDUP:-both}
+      PP_DEDUP: ${PP_DEDUP:-}
+      PP_DEDUP_RANK: ${PP_DEDUP_RANK:-}
+      PP_DEDUP_REFUSAL: ${PP_DEDUP_REFUSAL:-}
+      PP_DEDUP_SIM_ANY: ${PP_DEDUP_SIM_ANY:-}
       PP_DEDUP_SIM: ${PP_DEDUP_SIM:-}
       PP_DEDUP_IOU: ${PP_DEDUP_IOU:-}
       PP_DEDUP_CENTER: ${PP_DEDUP_CENTER:-}
@@ -74,13 +82,16 @@ services:
       OMP_NUM_THREADS: "2"
       HF_HUB_OFFLINE: "1"
       HF_HOME: /opt/hfcache
-      REID_WEIGHTS: ${REID_WEIGHTS:-/models/clean_student_a10_ep28.pt}
+      REID_WEIGHTS: ${REID_WEIGHTS:-/opt/weights/clean_student_a10_ep28.pt}   # в образе (api/Dockerfile)
+      # Ожидаемый sha256 весов: при старте сверяется и пишется в лог; пусто — только записать.
+      REID_WEIGHTS_SHA256: ${REID_WEIGHTS_SHA256:-}
       # Режим кропа для чекпоинтов, которые не пишут tf_mode в args (студент).
       # Без проброса загрузчик возьмёт timm(base)-кроп и squash-модель
       # потеряет ~2 mAP. См. api/app/models/reid_checkpoint.py.
       REID_TF_MODE: ${REID_TF_MODE:-squash}
     volumes:
       - ${DATA_HOST_DIR:-./data}:/data:ro
+      # только для своих весов (REID_WEIGHTS=/models/<файл>); веса a10 — в образе
       - ${MODELS_HOST_DIR:-./weights}:/models:ro
       - ./artifacts:/artifacts
     ports:

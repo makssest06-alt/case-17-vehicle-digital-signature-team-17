@@ -3,8 +3,17 @@
 > **Исторический submission-документ.** Он сохранён для аудита исходной сдачи и
 > содержит старые метрики до clean retrain. Текущая production-конфигурация
 > `glebmain` описана в корневом `README.md`: clean student alpha=10, DBA/dedup,
-> `z100` refusal score и пороги `4.1592/7.3031`. Не использовать старые числа
+> `z100` refusal score и пороги `4.6506/9.6847`. Не использовать старые числа
 > из таблиц ниже как текущий runtime-контракт.
+>
+> Протокол старых чисел: модель — прежний студент `siglip2_distill_ensemble_ep28.pt`;
+> валидация — 150 машин, 361 gallery, 551 query, но на сплите до удаления пяти
+> exact-дублей train↔holdout. mAP@10 0.8961 / Rank-1 0.8639 / Rank-5 0.9637 у студента
+> и 0.8946 у ансамбля — с транздуктивной постобработкой qq-expand → k-reciprocal →
+> CSLS по другим query: её запрещает ответ организаторов Q38, в решении её больше нет
+> (без неё у студента 0.8859, `analysis/DISTILLATION_REPORT.md`). Порог raw 0.8025 и
+> метрики отказа ниже — legacy-режим без постобработки. Артефакты сдачи теперь
+> собираются моделью a10 (`README.md`, раздел 7).
 
 Кейс 17 · ЛЦТ 2026 · заказчик «Фалькон Тех»
 
@@ -170,8 +179,22 @@
 git clone <ссылка на репозиторий>
 cd case-17-vehicle-digital-signature-team-17
 cp .env.example .env          # при необходимости поменять POSTGRES_PASSWORD
-docker compose up -d
 ```
+
+Веса модели (`weights/clean_student_a10_ep28.pt`, 362 МБ) лежат в Git LFS и при сборке
+запекаются в образ. Два способа их получить — любой из них:
+
+```bash
+# 1) через Git LFS
+git lfs install && git lfs pull
+docker compose up -d
+
+# 2) без git-lfs: скачать при сборке по ссылке (sha256 сверяется, при несовпадении сборка падает)
+WEIGHTS_URL=<ссылка на clean_student_a10_ep28.pt> docker compose up -d --build
+```
+
+Без обоих сборка остановится с сообщением «укажите WEIGHTS_URL или выполните git lfs pull».
+При запуске сеть не нужна: веса и бэкбон уже в образе.
 
 Всё. Интерфейс — http://localhost:8080, Swagger — http://localhost:8000/docs.
 
@@ -529,7 +552,7 @@ submission. Мы посчитали три пункта mAP меньшей це�
 | Что | Где |
 |---|---|
 | Код инференса | `api/` |
-| Код обучения | `kaggle/train_reid.ipynb`, `research/finetune_clip.py` |
+| Код обучения | `research/finals_handoff/training/`, `analysis/train_reid.py`, `research/finetune_clip.py` (`kaggle/train_reid.ipynb` — в ветке `team17/finals-student-gpu-handoff`) |
 | Подготовка данных | `scripts/make_kaggle_archive.sh`, описание кропов в разделе 2.1 |
 | Фиксированный сплит валидации | `research/val_ids.txt` (150 машин, `seed=42`) |
 | Замеры и протокол | `research/results.md` |

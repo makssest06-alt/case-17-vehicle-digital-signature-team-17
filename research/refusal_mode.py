@@ -408,7 +408,8 @@ def main() -> int:
     ap.add_argument("--cache-dir", type=Path, default=se.DEFAULT_CACHE)
     ap.add_argument("--out-dir", type=Path, default=HERE / "honest_eval_results")
     ap.add_argument("--report", action="store_true", help="только собрать .md из JSON")
-    ap.add_argument("--docs", type=Path, default=HERE.parent / "docs" / "refusal.md")
+    ap.add_argument("--docs", type=Path, default=None,
+                    help="куда писать разбор; docs/refusal.md теперь пишет research/closed_gallery.py")
     a = ap.parse_args()
     stem = a.out_dir / f"refusal_mode_{a.tag}"
     if not a.report:
@@ -421,8 +422,9 @@ def main() -> int:
         stem.with_suffix(".json").write_text(json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8")
     res = json.loads(stem.with_suffix(".json").read_text(encoding="utf-8"))
     stem.with_suffix(".md").write_text(markdown(res), encoding="utf-8")
-    a.docs.write_text(docs_md(res), encoding="utf-8")
-    print(f"-> {stem}.md, {a.docs}")
+    if a.docs:
+        a.docs.write_text(docs_md(res), encoding="utf-8")
+    print(f"-> {stem}.md" + (f", {a.docs}" if a.docs else ""))
     return 0
 
 

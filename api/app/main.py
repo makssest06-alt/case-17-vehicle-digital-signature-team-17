@@ -15,7 +15,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from PIL import Image
 
-from . import db
+from . import db, weights_check
 from .config import settings
 from .imaging import ImageError, crop_with_pad, load_image, validate_bbox
 from .models.registry import build_model
@@ -64,9 +64,9 @@ def _validate_runtime_config() -> None:
         )
 
     if settings.embed_model.startswith("reid:"):
-        weights = Path(os.getenv("REID_WEIGHTS", "/models/clean_student_a10_ep28.pt"))
+        weights = Path(os.getenv("REID_WEIGHTS", "/opt/weights/clean_student_a10_ep28.pt"))
         # При прямом локальном запуске без compose используем checkout weights/;
-        # в контейнере production-путь /models остаётся источником истины.
+        # в контейнере веса лежат в образе, /opt/weights (api/Dockerfile).
         if not weights.is_file() and not os.getenv("REID_WEIGHTS"):
             local_weights = Path(__file__).resolve().parents[2] / "weights" / weights.name
             if local_weights.is_file():
@@ -89,6 +89,7 @@ def _validate_runtime_config() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _validate_runtime_config()
+    app.state.weights_sha256, _ = weights_check.inspect(settings.embed_model, settings.reid_weights_sha256)
     t0 = time.time()
     log.info("загружаю модель %s ...", settings.embed_model)
     log.info(
@@ -129,7 +130,8 @@ async def lifespan(app: FastAPI):
             log.info(
                 "постобработка: DBA k=%d, исключение почти-дублей=%s (τ фона=%.4f, правило %s, top-%d), "
                 "оценка отказа=%s, порог=%.4f",
-                settings.pp_dba_k, pp_state.dedup_mode(settings), settings.pp_camera_tau, app.state.pp.rule,
+                settings.pp_dba_k, f"ранжирование {pp_state.dedup_rank(settings)}, отказ {pp_state.dedup_refusal(settings)}",
+                settings.pp_camera_tau, app.state.pp.rule,
                 settings.pp_camera_topk, settings.refusal_score, settings.search_threshold,
             )
             _warn_threshold_preset()
@@ -199,7 +201,7 @@ def _custom_refusal() -> bool:
 def _warn_threshold_preset() -> None:
     from .config import REFUSAL_PRESETS
 
-    key = (settings.pp_dba_k, pp_state.dedup_mode(settings), settings.refusal_score)
+    key = pp_state.preset_key(settings)
     preset = REFUSAL_PRESETS.get(key)
     if preset is None:
         log.warning("для %s нет посчитанного порога (config.REFUSAL_PRESETS): SEARCH_THRESHOLD=%.4f не проверен", key,
@@ -236,14 +238,15 @@ def _prepare_frame(raw: bytes, x: int, y: int, w: int, h: int):
     return img, crop_with_pad(img, x, y, w, h, settings.bbox_pad)
 
 
-@app.get("/health", response_model=HealthResponse, tags=["служебные"])
+@app.get("/health", response_model=HealthResponse, response_model_exclude_none=True, tags=["служебные"])
 def health() -> HealthResponse:
-    """Живой ли процесс. Не трогает базу."""
+    """Живой ли процесс. Не трогает базу. weights_sha256 — посчитан при старте, без файла весов поля нет."""
     model = getattr(app.state, "model", None)
     return HealthResponse(
         status="ok",
         model=model.name if model is not None else settings.embed_model,
         dim=model.dim if model is not None else settings.embed_dim,
+        weights_sha256=getattr(app.state, "weights_sha256", None),
     )
 
 
@@ -300,7 +303,7 @@ def _config_custom() -> dict:
     """/v1/config при включённой постобработке или оценке отказа не raw."""
     from .config import REFUSAL_PRESETS
 
-    key = (settings.pp_dba_k, pp_state.dedup_mode(settings), settings.refusal_score)
+    key = pp_state.preset_key(settings)
     note = REFUSAL_PRESETS.get(key, {}).get("note", "порог для этого режима не посчитан")
     if note.startswith("предварительно: "):
         note = note[len("предварительно: "): ]
@@ -309,7 +312,8 @@ def _config_custom() -> dict:
         "dim": _model().dim,
         "explain_available": hasattr(_model(), "patch_saliency"),
         "refusal_score": settings.refusal_score,
-        "postprocess": {"dba_k": settings.pp_dba_k, "dedup": pp_state.dedup_mode(settings),
+        "postprocess": {"dba_k": settings.pp_dba_k, "dedup_rank": pp_state.dedup_rank(settings),
+                        "dedup_refusal": pp_state.dedup_refusal(settings),
                         "camera_penalty": settings.pp_camera_penalty, "camera_tau": settings.pp_camera_tau,
                         "camera_topk": settings.pp_camera_topk},
         "modes": {

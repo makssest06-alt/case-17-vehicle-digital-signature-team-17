@@ -40,20 +40,23 @@ def topk(s: np.ndarray, k: int) -> tuple:
     return top, np.take_along_axis(s, top, 1)
 
 
-def decide(top: np.ndarray, cos: np.ndarray, flags: np.ndarray) -> dict:
-    """Решение сервиса по готовым флагам исключения: порядок ответа (кандидаты с флагом — в
-    конце), флаги в этом порядке и оценки отказа raw / z100 по кандидатам без флага."""
+def decide(top: np.ndarray, cos: np.ndarray, flags: np.ndarray, flags_refusal: np.ndarray = None) -> dict:
+    """Решение сервиса по готовым флагам: порядок ответа (кандидаты с флагом ранжирования — в
+    конце), флаги в этом порядке и оценки отказа raw / z100 по кандидатам без флага отказа
+    (flags_refusal; по умолчанию те же флаги) — как Postprocess.search."""
+    flags_refusal = flags if flags_refusal is None else flags_refusal
     n = len(top)
     out = {"order": [], "flags": [], "cos": [], "conf_raw": np.full(n, -np.inf), "conf_z100": np.full(n, -np.inf)}
     for i in range(n):
         ok = np.isfinite(cos[i])
-        c, f, t = cos[i][ok], flags[i][ok], top[i][ok]
+        c, f, fr, t = cos[i][ok], flags[i][ok], flags_refusal[i][ok], top[i][ok]
         o = rr.rank(c, f)
         out["order"].append(t[o])
         out["flags"].append(f[o])
         out["cos"].append(c[o])
-        out["conf_raw"][i] = rr.refusal_score(c[o], f[o], "raw")
-        out["conf_z100"][i] = rr.refusal_score(c[o], f[o], "z100")
+        o2 = rr.rank(c, fr)
+        out["conf_raw"][i] = rr.refusal_score(c[o2], fr[o2], "raw")
+        out["conf_z100"][i] = rr.refusal_score(c[o2], fr[o2], "z100")
     return out
 
 

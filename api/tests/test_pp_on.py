@@ -32,8 +32,8 @@ def cfg(**kw):
     # Эти тесты явно выбирают отдельный PP-сценарий. Не наследуем production
     # default `both`, иначе проверка DBA/camera/bbox по отдельности смешивает
     # сразу два правила.
-    base = {"pp_dba_k": 0, "pp_camera_penalty": "off", "pp_dedup": "off",
-            "refusal_score": "raw", "search_threshold": 0.0}
+    base = {"pp_dba_k": 0, "pp_camera_penalty": "off", "pp_dedup": "off", "pp_dedup_rank": "",
+            "pp_dedup_refusal": "", "refusal_score": "raw", "search_threshold": 0.0}
     return dataclasses.replace(Settings(), **{**base, **kw})
 
 
@@ -209,7 +209,25 @@ class DedupTest(Harness):
 
     def test_camera_penalty_on_means_dedup_bg(self):
         self.start(pp_camera_penalty="on")
-        self.assertEqual((self.pp.dedup, self.pp.use_bg, self.pp.use_bbox), ("bg", True, False))
+        self.assertEqual((self.pp.dedup_rank, self.pp.dedup_refusal, self.pp.use_bg, self.pp.use_bbox),
+                         ("bg", "bg", True, False))
+
+    def test_refusal_only_dedup_keeps_ranking(self):
+        """Правило рамок только для отказа: почти-дубль остаётся первым в ответе, но не в оценке."""
+        self.start(pp_dedup_rank="off", pp_dedup_refusal="bbox", refusal_score="raw")
+        twin = self.make_twin((40, 30, 120, 90))
+        found, score = self.pp.search(self.query_vec(), 10, None, (40, 30, 120, 90))
+        self.assertEqual(found[0]["id"], twin)                               # ранжирование не тронуто
+        self.assertAlmostEqual(found[0]["confidence"], 1.0, places=4)
+        self.assertAlmostEqual(score, found[1]["confidence"], places=4)      # оценка — по следующему
+
+    def test_andrey_rule_similarity_alone(self):
+        """cos ≥ s_any — почти-дубль и без рамки (правило Андрея: 0.94 или 0.85 + IoU 0.7)."""
+        self.start(pp_dedup="bbox", pp_dedup_sim_any=0.94, pp_dedup_sim=0.85, pp_dedup_iou=0.7,
+                   pp_dedup_center=float("inf"))
+        twin = self.make_twin((300, 150, 20, 20))                            # рамка далеко, cos = 1
+        _, body = self.post("/v1/search", 1)
+        self.assertNotIn(twin, [c["id"] for c in body["candidates"]])
 
 
 class RefusalScoreTest(unittest.TestCase):
@@ -262,15 +280,17 @@ class ValidationTest(unittest.TestCase):
         main = sf.load_app()
         for kw in ({"pp_camera_penalty": "yes"}, {"pp_dba_k": -1}, {"refusal_score": "softmax"},
                    {"refusal_score": "raw", "search_threshold": 3.0}, {"pp_dedup": "iou"},
-                   {"pp_camera_penalty": "on", "pp_dedup": "bbox"}, {"pp_dedup_iou": 1.5}):
-            with self.subTest(kw), patch.object(main, "settings", cfg(**{"search_threshold": 0.8, **kw})):
+                   {"pp_camera_penalty": "on", "pp_dedup": "bbox"}, {"pp_dedup_iou": 1.5},
+                   {"pp_dedup_refusal": "rect"}, {"pp_dedup_rank": "all"}):
+            with self.subTest(kw), patch.object(main, "settings",
+                                                cfg(**{"search_threshold": 0.8, "embed_model": "resnet18", **kw})):
                 with self.assertRaises(RuntimeError):
                     main._validate_runtime_config()
 
     def test_z100_allows_threshold_above_one(self):
         main = sf.load_app()
-        with patch.object(main, "settings", cfg(refusal_score="z100", search_threshold=3.5,
-                                               search_threshold_strict=4.0)):
+        with patch.object(main, "settings", cfg(refusal_score="z100", search_threshold=3.5,      # веса не нужны
+                                               search_threshold_strict=4.0, embed_model="resnet18")):
             main._validate_runtime_config()
 
 

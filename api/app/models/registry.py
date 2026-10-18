@@ -30,9 +30,9 @@ def build_model(name: str, input_size: int = 224) -> EmbeddingModel:
 
         weights = os.getenv("REID_WEIGHTS")
         if not weights:
-            weights = "/models/clean_student_a10_ep28.pt"
-            # Прямой запуск из checkout без Docker/.env. В compose
-            # REID_WEIGHTS переопределяется на /models/clean_student_a10_ep28.pt.
+            weights = "/opt/weights/clean_student_a10_ep28.pt"
+            # Прямой запуск из checkout без Docker/.env. В образе REID_WEIGHTS —
+            # /opt/weights/clean_student_a10_ep28.pt (api/Dockerfile).
             local_weights = Path(__file__).resolve().parents[3] / "weights" / Path(weights).name
             if local_weights.is_file():
                 weights = str(local_weights)

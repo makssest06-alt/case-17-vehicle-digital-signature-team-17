@@ -108,17 +108,21 @@ def records_service(D, q_rows, g_rows, opened: set, bg: dict, conf: str, sp: dic
     raw = b["qv"] @ b["gv"].T
     s = bp.dba_scores(b, sp["dba_k"], clean=sp["mode"] == "nodup") if sp["dba_k"] else raw.copy()
     s = np.where(mask, -np.inf, s)
-    dedup = sp.get("dedup") or ("bg" if sp.get("camera") else "off")
-    top, cos = ss.topk(s, rr.needed_k(10, dedup != "off", sp["topk"], "z100"))
+    d_rank = sp.get("dedup_rank") or sp.get("dedup") or ("bg" if sp.get("camera") else "off")
+    d_ref = sp.get("dedup_refusal") or d_rank
+    modes = {d_rank, d_ref}
+    top, cos = ss.topk(s, rr.needed_k(10, modes != {"off"}, sp["topk"], "z100"))
     fin = np.isfinite(cos)
-    flags = np.zeros(cos.shape, bool)
-    if dedup in ("bg", "both"):
-        flags |= (ss.pair_cos(b["qbg"], b["gbg"], top) > sp["tau"]) & fin
-    if dedup in ("bbox", "both"):
+    fb = fx = np.zeros(cos.shape, bool)
+    if modes & {"bg", "both"}:
+        fb = (ss.pair_cos(b["qbg"], b["gbg"], top) > sp["tau"]) & fin
+    if modes & {"bbox", "both"}:
         qb = np.array([sp["boxes"][i] for i in b["Q"].index], dtype="float64")
         gb = np.array([sp["boxes"][i] for i in b["G"].index], dtype="float64")
-        flags |= dd.near_dup_flags(np.take_along_axis(raw, top, 1), qb[:, None, :], gb[top], **sp["rule"]) & fin
-    r = ss.decide(top, cos, flags)
+        fx = dd.near_dup_flags(np.take_along_axis(raw, top, 1), qb[:, None, :], gb[top], **sp["rule"]) & fin
+    pick = {"off": np.zeros(cos.shape, bool), "bg": fb, "bbox": fx, "both": fb | fx}
+    flags = pick[d_rank]
+    r = ss.decide(top, cos, flags, pick[d_ref])
     n = len(s)
     top1 = np.array([o[0] if len(o) else 0 for o in r["order"]])
     rows_ = np.arange(n)
@@ -163,8 +167,8 @@ def service_rule(a) -> dict:
     from app.config import Settings
 
     st = Settings()
-    return {"rule": {"s_hi": st.pp_dedup_sim, "t_iou": st.pp_dedup_iou, "t_center": st.pp_dedup_center,
-                     "t_size": st.pp_dedup_size},
+    return {"rule": {"s_any": st.pp_dedup_sim_any, "s_hi": st.pp_dedup_sim, "t_iou": st.pp_dedup_iou,
+                     "t_center": st.pp_dedup_center, "t_size": st.pp_dedup_size},
             "boxes": {r["image_id"]: r["box"] for r in pc.read_rows(a.data_dir)}}
 
 
