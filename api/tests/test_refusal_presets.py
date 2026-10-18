@@ -1,4 +1,4 @@
-"""REFUSAL_PRESETS в app/config.py совпадают с расчётом research/closed_gallery.py (протокол q15).
+"""REFUSAL_PRESETS в app/config.py совпадают с расчётом research/closed_gallery.py (протокол q17).
 
 Нужен только app.config (без fastapi). Если research/ рядом нет (образ сервиса) — пропуск.
     python -m unittest tests.test_refusal_presets -v      # из каталога api/
@@ -8,10 +8,10 @@ import json
 import unittest
 from pathlib import Path
 
-RESULT = Path(__file__).resolve().parents[2] / "research" / "honest_eval_results" / "closed_gallery_a10_q15.json"
+RESULT = Path(__file__).resolve().parents[2] / "research" / "honest_eval_results" / "closed_gallery_a10_q17.json"
 
 
-@unittest.skipUnless(RESULT.exists(), "нет research/honest_eval_results/closed_gallery_a10_q15.json")
+@unittest.skipUnless(RESULT.exists(), "нет research/honest_eval_results/closed_gallery_a10_q17.json")
 class RefusalPresetsTest(unittest.TestCase):
     def test_presets_match_research(self):
         from app.config import REFUSAL_PRESETS

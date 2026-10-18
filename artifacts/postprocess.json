@@ -15,13 +15,13 @@
   },
   "refusal": {
     "score": "z100",
-    "threshold": 4.432,
+    "threshold": 4.3475,
     "preset": {
-      "balanced": 4.432,
-      "note": "итог: DBA; отказ фон ИЛИ рамка (наши пороги): 361 и 1111 (+750 кадров обучающих машин), без кадров теста; 0.7·F1 + 0.3·TNR (closed_gallery_a10_q15.md)"
+      "balanced": 4.3475,
+      "note": "итог: DBA; отказ фон ИЛИ рамка (наши пороги): 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (closed_gallery_a10_q17.md)"
     },
-    "accepted": 821,
-    "refused": 289,
+    "accepted": 845,
+    "refused": 265,
     "candidates_rule": "принятый query — top-10 как в ответе /v1/search, confidence — косинус кандидата"
   },
   "consistency": {

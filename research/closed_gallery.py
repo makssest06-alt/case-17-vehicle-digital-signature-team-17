@@ -55,12 +55,15 @@ RULES = {"ours": {"s_any": float("inf"), "s_hi": 0.84, "t_iou": 0.6, "t_center":
 #   большая галерея — 361 + 750 кадров обучающих машин (по кадру на пару машина-камера), кадров теста нет.
 # andrey — прежний протокол (head_to_head.py): 4 ротации по 25 % машин (~13 % запросов без пары), F1 при
 #   TNR ≥ 0.70, большая галерея — 361 + 750 кадров test gallery.
-PROTOCOLS = {"q15": {"rotations": 8, "open_width": 3, "objective": "q15", "galleries": ("361", "1111tr")},
-             "andrey": {"rotations": 4, "open_width": 1, "objective": "f1", "galleries": ("361", "1111", "2.2k", "10.8k")}}
+# q17 — буквально по ответу Q17: у 20 % машин (5 ротаций) в галерее не остаётся ни одного кадра.
+PROTOCOLS = {"q15": {"rotations": 8, "open_width": 3, "objective": "q15", "galleries": ("361", "1111tr"), "open": "keep_cam"},
+             "q17": {"rotations": 5, "open_width": 1, "objective": "q15", "galleries": ("361", "1111tr"), "open": "drop"},
+             "andrey": {"rotations": 4, "open_width": 1, "objective": "f1", "galleries": ("361", "1111", "2.2k", "10.8k"),
+                        "open": "keep_cam"}}
 N_TRAIN_DISTRACTORS, DISTRACTOR_SEED = 750, 2026
 OLD = {"threshold": 4.6506, "strict": 9.6847, "fallback": 4.9039, "fallback_strict": 9.9144}   # пресеты до 18.10
 # задаются в main() по --protocol
-GALLERIES, MAIN, ROTATIONS, OPEN_W, OBJECTIVE = PROTOCOLS["q15"]["galleries"], ("361", "1111tr"), 8, 3, "q15"
+GALLERIES, MAIN, ROTATIONS, OPEN_W, OBJECTIVE, OPEN_MODE = PROTOCOLS["q15"]["galleries"], ("361", "1111tr"), 8, 3, "q15", "keep_cam"
 GALLERY_TITLE = {"361": "361", "1111": "1111 (+750 test gallery)", "1111tr": "1111 (+750 кадров обучающих машин)",
                  "2.2k": "2.2k", "10.8k": "10.8k"}
 FINAL = "итог: DBA; отказ фон ИЛИ рамка (наши пороги)"
@@ -170,8 +173,9 @@ def evaluate_refusal(recs: list, qfold: np.ndarray, thresholds=None, key: str = 
 def main() -> int:
     ap = bp.data_args(argparse.ArgumentParser())
     ap.add_argument("--tag", required=True)
-    ap.add_argument("--protocol", choices=tuple(PROTOCOLS), default="q15",
-                    help="q15 — текущий (0.7·F1 + 0.3·TNR, ~20 %% без пары, без кадров теста); andrey — прежний")
+    ap.add_argument("--protocol", choices=tuple(PROTOCOLS), default="q17",
+                    help="q15 — основной (0.7·F1 + 0.3·TNR, ~20 %% запросов без пары, без кадров теста); q17 — 20 %% машин "
+                         "целиком без кадров в галерее; andrey — прежний")
     ap.add_argument("--report", action="store_true")
     a = ap.parse_args()
     set_protocol(a.protocol)
@@ -181,16 +185,19 @@ def main() -> int:
         out_json.write_text(json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8")
     res = json.loads(out_json.read_text(encoding="utf-8"))
     (a.out_dir / f"closed_gallery_{a.tag}.md").write_text(report_md(res), encoding="utf-8")
-    if a.protocol == "q15":                          # docs/refusal.md — только по текущему протоколу
-        (HERE.parent / "docs" / "refusal.md").write_text(docs_md(res), encoding="utf-8")
-    print(f"-> {a.out_dir / f'closed_gallery_{a.tag}.md'}" + (", docs/refusal.md" if a.protocol == "q15" else ""))
+    if a.protocol == "q17":                          # docs/refusal.md — только по основному протоколу
+        alt = a.out_dir / "closed_gallery_a10_q15.json"  # с почти-дублем своей камеры (Q22) — для сравнения
+        alt = json.loads(alt.read_text(encoding="utf-8")) if alt.exists() else None
+        (HERE.parent / "docs" / "refusal.md").write_text(docs_md(res, alt), encoding="utf-8")
+    print(f"-> {a.out_dir / f'closed_gallery_{a.tag}.md'}" + (", docs/refusal.md" if a.protocol == "q17" else ""))
     return 0
 
 
 def set_protocol(name: str) -> None:
-    global GALLERIES, MAIN, ROTATIONS, OPEN_W, OBJECTIVE
+    global GALLERIES, MAIN, ROTATIONS, OPEN_W, OBJECTIVE, OPEN_MODE
     p = PROTOCOLS[name]
     GALLERIES, ROTATIONS, OPEN_W, OBJECTIVE = p["galleries"], p["rotations"], p["open_width"], p["objective"]
+    OPEN_MODE = p["open"]
     MAIN = GALLERIES[:2]
 
 
@@ -243,6 +250,7 @@ def run(a) -> dict:
              "10.8k": lambda: D.valid(D.distractors("test_all+train_seen"))}     # тест читается только в andrey
     res = {"tag": a.tag, "tau": tau, "rules": RULES, "n_queries": len(qids), "galleries": {},
            "protocol": {"rotations": ROTATIONS, "open_width": OPEN_W, "objective": OBJECTIVE, "main": list(MAIN),
+                        "open": OPEN_MODE,
                         "galleries": list(GALLERIES), "distractor_seed": DISTRACTOR_SEED}}
     recs_all = {}
     checked = False
@@ -259,8 +267,8 @@ def run(a) -> dict:
             fl[f"dup_{name}"] = dd.near_dup_flags(raw, qbox[:, None, :], gbox[None, :, :], **rule)
         for x, y in (("bg", "dup_ours"), ("bg", "dup_andrey")):
             fl[f"{x}|{y}"] = fl[x] | fl[y]
-        keeps = [np.array([not (open_in(perm, v, r) and c != keep_cam.get(v)) for v, c in zip(gv, gc)])
-                 for r in range(ROTATIONS)]
+        keeps = [np.array([not (open_in(perm, v, r) and (OPEN_MODE == "drop" or c != keep_cam.get(v)))
+                           for v, c in zip(gv, gc)]) for r in range(ROTATIONS)]
         gres = {"N": len(gids)}
         junk = (gv[None, :] == qv[:, None]) & (gc[None, :] == qc[:, None])
         pos = (gv[None, :] == qv[:, None]) & (gc[None, :] != qc[:, None])
@@ -453,8 +461,9 @@ def report_md(res: dict) -> str:
     return "\n".join(L) + "\n"
 
 
-def docs_md(res: dict) -> str:
-    """docs/refusal.md — протокол q15: галереи 361 и 361 + 750 кадров обучающих машин, без кадров теста."""
+def docs_md(res: dict, alt: dict = None) -> str:
+    """docs/refusal.md — протокол q17 (alt — q15 для сравнения): галереи 361 и 361 + 750 кадров обучающих машин,
+    без кадров теста."""
     G, P, fin, prev, fb = res["galleries"], res["presets"], res["final"], res["prev_final"], res["fallback"]
     F, B, sc, pr = P[fin], P[fb], res["score_choice"], res["protocol"]
     g1, g2 = pr["main"]
@@ -471,10 +480,14 @@ def docs_md(res: dict) -> str:
          f"{G[g1][fin]['flags_on_true_pairs']:.1%} настоящих пар; фон не идёт — см. «Кадр той же камеры в top-1».".replace(
              "%", " %"), "",
          "## Правило выбора порога — оценка организаторов", "",
-         "- Режим отказа оценивается как **10 % × (0.7·F1 + 0.3·TNR)** — ответ организаторов Q15; в закрытом тесте "
-         "**20 % запросов без пары** — Q17. Текст ответов — в таблице организаторов (ссылка и список тем — "
-         "`research/finals_handoff/README.md`, раздел про ТЗ и ответы); формула Q15 — по пересказу команды "
-         "(`research/local_postprocess/experiments_2026-10-17/README.md` ветки `andrew-postprocess-throughput`).",
+         "Источник — таблица ответов организаторов «Вопросы и ответы Бизнес 7. Фалькон Тех», лист «Объединённые "
+         "вопросы участников»; номера — оттуда.", "",
+         "- Балл за режим кандидатов — **10 % × (0.7·F1 + 0.3·TNR)** (Q14, Q15). F1 и TNR — micro по запросам, по "
+         "суммарной матрице ошибок (Q25); решение по запросу — верхний кандидат по confidence (Q19, Q23); "
+         "TNR = TN / (TN + FP) только по запросам без пары (Q19). Отказ — нет строк query в `candidates.csv` (Q18, "
+         "Q20); confidence — любая шкала, монотонная по уверенности (Q20, Q26).",
+         "- В закрытом тесте у **20 % query соответствующего ТС в gallery нет**; калибровать порог — на своём "
+         "val-сплите из `train.csv` с ~20 % отложенных ID без пары (Q17, Q6).",
          "- Порог — максимум среднего 0.7·F1 + 0.3·TNR по двум галереям, вне фолда; в конфиг — медиана по фолдам × "
          f"ротациям. Без пары в протоколе {open_pct} запросов.",
          f"- **Данные теста при подборе порога не использовались**: ни кадры, ни метки. Галереи — {g1} кадр holdout и "
@@ -542,10 +555,14 @@ def docs_md(res: dict) -> str:
           f"→ галерея); большая галерея — {g1} + 750 кадров обучающих машин: первый кадр пары машина-камера, 750 пар "
           f"случайно (сид {pr['distractor_seed']}), без кадров из групп побайтных дублей полных кадров "
           "(`leak_audit.json`). Машин из запросов среди них нет.",
-          f"- Отказ «как сервис»: {pr['rotations']} ротаций; в каждой у {pr['open_width']}/{pr['rotations']} машин в "
-          "галерее остаётся кадр одной камеры (самой частой среди их запросов) — их запросы с этой камеры без пары, но "
-          f"с почти-дублем; каждая машина без пары в {pr['open_width']} ротациях из {pr['rotations']}. Без пары "
-          f"{open_pct} запросов (у прежних 4 ротаций по 25 % машин — 13 %).",
+          (f"- Без пары — как в Q17: {pr['rotations']} ротаций, в каждой у {pr['open_width']}/{pr['rotations']} "
+           "машин в галерее не остаётся ни одного кадра — все их запросы без пары; каждая машина без пары в "
+           f"{pr['open_width']} ротации из {pr['rotations']}. Без пары {open_pct} запросов."
+           if pr.get("open") == "drop" else
+           f"- Отказ «как сервис»: {pr['rotations']} ротаций; в каждой у {pr['open_width']}/{pr['rotations']} машин в "
+           "галерее остаётся кадр одной камеры (самой частой среди их запросов) — их запросы с этой камеры без пары, но "
+           f"с почти-дублем; каждая машина без пары в {pr['open_width']} ротациях из {pr['rotations']}. Без пары "
+           f"{open_pct} запросов."),
           f"- Порог вне фолда (2 фолда по машинам): на фолде выбора — максимум среднего 0.7·F1 + 0.3·TNR на {g1} и "
           f"{g2}; в конфиг — медиана по {2 * pr['rotations']} порогам (фолды × ротации), проверка — на отложенных "
           f"фолдах с ней. Пороги по фолдам: {', '.join(f'{x:.2f}' for x in F['fold_thresholds'])}.", "",
@@ -572,6 +589,14 @@ def docs_md(res: dict) -> str:
           f"{' / '.join(f3(pg(F, g2)[k]) for k in ('strict_F1', 'strict_TNR', 'strict_recall', 'strict_Q15'))} |", "",
           f"Требование «TNR ≥ 0.70» на {g2} даёт порог {f1r['threshold']:.2f} и отдаёт полноту; оценка организаторов "
           "весит F1 больше, чем TNR, поэтому её максимум — ниже по порогу.", "",
+          *(["## С почти-дублем своей камеры (Q22)", "",
+             "У запроса без пары в галерее остаётся кадр его машины с той же камеры — почти-дубль, который отказ "
+             f"выбрасывает (протокол Андрея: {alt['protocol']['rotations']} ротаций по {alt['protocol']['open_width']}/"
+             f"{alt['protocol']['rotations']} машин, `closed_gallery_a10_q15.md`). Порог по тому же правилу — "
+             f"{alt['presets'][fin]['threshold']:.4f} (строгий {alt['presets'][fin]['strict']:.4f}):", "",
+             f"| Порог | F1 / TNR / полнота / 0.7·F1+0.3·TNR {g1} | то же {g2} |", "|---|---:|---:|",
+             f"| {alt['presets'][fin]['threshold']:.4f} (выбран на этом протоколе) | {m4(alt['presets'][fin], g1)} | "
+             f"{m4(alt['presets'][fin], g2)} |", ""] if alt else []),
           f"## Почему на {g2} TNR ниже", "",
           f"Отвлекатели — машины, которые модель видела при обучении. У запроса без пары лучший кандидат оценки отказа "
           f"(почти-дубли выброшены) — такой кадр в {pct(G[g2][fin]['open_best_distractor'])} случаев, его средний скор "
@@ -585,17 +610,20 @@ def docs_md(res: dict) -> str:
           f"{m4(B, g1)} на {g1} и {m4(B, g2)} на {g2} против {m4(F, g1)} и {m4(F, g2)} у итога (F1 / TNR / полнота / "
           f"оценка); mAP@10 {mp(fb)} — то же ранжирование. Правило рамок стоит 0.04 мс на запрос против 1.4 мс у фона.", "",
           "## Воспроизвести", "", "```bash",
-          f"python research/closed_gallery.py --data-dir <данные> --env REID_WEIGHTS=<веса a10> --tag {res['tag']} --zip dataset.zip",
+          "# с почти-дублем своей камеры (Q22) — сначала, его числа идут в раздел выше:",
+          "python research/closed_gallery.py --data-dir <данные> --env REID_WEIGHTS=<веса a10> --zip dataset.zip --protocol q15 --tag a10_q15",
+          f"python research/closed_gallery.py --data-dir <данные> --env REID_WEIGHTS=<веса a10> --zip dataset.zip --tag {res['tag']}",
           "# прежний протокол (4 ротации, F1 при TNR ≥ 0.70, 361 + 750 test gallery) — пороги 4.6506 / 9.6847:",
           "python research/closed_gallery.py ... --protocol andrey --tag a10",
           "```", "", f"Пишет `closed_gallery_{res['tag']}.json` / `.md` и этот файл; пороги для `REFUSAL_PRESETS` — в "
           "JSON, ключ `config_presets`. Около минуты на готовых эмбеддингах.", "",
           "## Оговорки", "",
-          "- 150 машин holdout: на фолд ~55 запросов без пары, шаг TNR ~0.02; разброс порогов по фолдам ~1 единица z.",
+          "- 150 машин holdout: на фолд ~55 запросов без пары, шаг TNR ~0.02; разброс порогов по фолдам ~0.5–1 единица z.",
           "- Отвлекатели большой галереи — обучающие машины (модель их видела), см. выше.",
           "- Эмбеддинги — из готовых JPEG-кропов; у Андрея свой кэш, числа сходятся до 0.003 mAP@10.",
-          "- Предположение протокола: в закрытой галерее у запроса без пары есть кадр его машины с той же камеры.",
-          "- Формула Q15 и доля Q17 — по пересказу команды; текст ответов организаторов в репозитории не хранится.", ""]
+          "- Закрытый тест: у запроса без пары машины в галерее нет (Q17) — основной протокол; запрос, у которого "
+          "единственный позитив — кадр своей камеры (Q22), — раздел выше.",
+          "- Таблица ответов организаторов в репозитории не хранится; номера ответов — по ней.", ""]
     return "\n".join(L)
 
 
