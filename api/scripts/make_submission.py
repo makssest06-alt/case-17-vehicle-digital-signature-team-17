@@ -4,8 +4,10 @@
     docker compose exec api python scripts/make_submission.py        # DATA_DIR: test_*.csv + images/
     python api/scripts/make_submission.py --zip dataset.zip --out artifacts   # прямо из архива датасета
 
-Кадр идёт как в /v1/search: полный кадр + bbox из test_*.csv -> validate_bbox -> кроп
-с запасом BBOX_PAD -> модель (EMBED_MODEL, REID_WEIGHTS). Галерея добавляется как в
+Кадр идёт как в /v1/search: полный кадр + bbox из test_*.csv -> кроп с запасом BBOX_PAD -> модель
+(EMBED_MODEL, REID_WEIGHTS). Одна строка CSV не останавливает прогон (imaging.fit_bbox): рамка за кадром
+обрезается по границам, пустая или уже 2 px — весь кадр, нечитаемый кадр — серый 224×224; каждый случай —
+WARNING / ERROR с image_id, итог — строкой в конце лога. Строк в embeddings.npy ровно столько, сколько в CSV (Q27). Галерея добавляется как в
 /v1/gallery/bulk: app.pp.state.Postprocess (DBA по PP_DBA_K соседям, признак фона кадра).
 Поиск — Postprocess.search: ранжирование PP_DEDUP_RANK, оценка отказа REFUSAL_SCORE по
 кандидатам без почти-дублей PP_DEDUP_REFUSAL, порог SEARCH_THRESHOLD. Вместо pgvector —
@@ -27,6 +29,7 @@ Q38): постобработка трогает только галерею — 
   make_submission.log   лог прогона (он же в stderr): веса и sha256, устройство, порог, время по этапам
 """
 import argparse
+import collections
 import contextlib
 import csv
 import io
@@ -45,7 +48,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # api/ — пак
 
 from app import weights_check                           # noqa: E402
 from app.config import REFUSAL_PRESETS, settings      # noqa: E402
-from app.imaging import ImageError, crop_with_pad, load_image, validate_bbox  # noqa: E402
+from app.imaging import crop_with_pad, fit_bbox, gray_frame, load_image  # noqa: E402
 from app.models.registry import build_model             # noqa: E402
 from app.pp import rerank as pp_rerank                  # noqa: E402
 from app.pp import state as pp_state                    # noqa: E402
@@ -55,10 +58,6 @@ LOG_FORMAT = "%(asctime)s %(levelname)s %(message)s"      # как в app/main.p
 log = logging.getLogger("case17.submission")
 
 
-class FrameError(Exception):
-    """Кадр не прочитан или bbox вне кадра; в тексте — image_id, чтобы найти строку в test_*.csv."""
-
-
 class Frames:
     """Кадры и разметка датасета: каталог (test_*.csv, images/) или dataset.zip того же устройства."""
 
@@ -66,6 +65,7 @@ class Frames:
         self.zip = zipfile.ZipFile(zip_path) if zip_path else None
         self.data_dir = data_dir
         self.images = images or data_dir / "images"
+        self.fixes = collections.Counter()               # clipped / full / unread — итог в конце лога
 
     def rows(self, name: str, path: str = None) -> list:
         if path:
@@ -83,13 +83,33 @@ class Frames:
         return (self.images / f"{image_id}.jpg").read_bytes()
 
     def load(self, row: dict, need_frame: bool, split: str = ""):
-        """-> (полный кадр или None, кроп) — как _prepare / _prepare_frame в app/main.py."""
+        """-> (полный кадр или None, кроп, рамка) — как _prepare / _prepare_frame в app/main.py, но без остановки:
+        рамка за кадром обрезается, вырожденная — весь кадр, нечитаемый кадр — серый (imaging.fit_bbox)."""
+        iid, bbox = row["image_id"], row["bbox"]
         try:
-            img = load_image(self.raw(row["image_id"]), settings.max_upload_bytes)
-            validate_bbox(img, *row["bbox"])
-        except (ImageError, OSError, KeyError) as exc:     # KeyError — нет кадра в zip
-            raise FrameError(f"{split} image_id {row['image_id']}, bbox {row['bbox']}: {exc}") from exc
-        return (img if need_frame else None), crop_with_pad(img, *row["bbox"], settings.bbox_pad)
+            img = load_image(self.raw(iid), settings.max_upload_bytes)
+        except Exception as exc:                          # битый файл, не тот формат, нет на диске или в zip
+            img = gray_frame(settings.input_size)
+            box = (0, 0, img.width, img.height)
+            self.fixes["unread"] += 1
+            log.error("%s image_id %s: кадр не прочитан (%s) — эмбеддинг по серому кадру %d×%d", split, iid, exc,
+                      img.width, img.height)
+        else:
+            box, status = fit_bbox(img.width, img.height, *bbox)
+            if status == "clipped":
+                self.fixes["clipped"] += 1
+                log.warning("%s image_id %s: рамка %s выходит за кадр %d×%d — обрезана до %s", split, iid, bbox,
+                            img.width, img.height, box)
+            elif status == "full":
+                self.fixes["full"] += 1
+                log.warning("%s image_id %s: рамка %s после обрезки по кадру %d×%d пустая или уже 2 px — беру весь "
+                            "кадр %s", split, iid, bbox, img.width, img.height, box)
+        return (img if need_frame else None), crop_with_pad(img, *box, settings.bbox_pad), box
+
+    def fixes_line(self) -> str:
+        f = self.fixes
+        return (f"кадры: рамок обрезано {f['clipped']}, заменено на весь кадр {f['full']}, "
+                f"не прочитано {f['unread']}")
 
 
 class MemoryStore:
@@ -139,7 +159,7 @@ class MemoryStore:
 
 
 def embed_rows(model, frames: Frames, rows: list, batch: int, label: str, need_frame: bool, took: dict):
-    """Порциями по batch: (векторы порции, кадры порции или None, строки порции).
+    """Порциями по batch: (векторы порции, кадры порции или None, строки порции, рамки после fit_bbox).
 
     took[label] — секунды на чтение кадров и модель, без того, что вызывающий делает с порцией.
     """
@@ -148,10 +168,10 @@ def embed_rows(model, frames: Frames, rows: list, batch: int, label: str, need_f
         t0 = time.perf_counter()
         chunk = rows[start:start + batch]
         loaded = [frames.load(r, need_frame, label) for r in chunk]
-        vecs = model.embed_batch([c for _, c in loaded]) if model is not None else None
+        vecs = model.embed_batch([c for _, c, _ in loaded]) if model is not None else None
         spent += time.perf_counter() - t0
         took[label] = spent
-        yield vecs, [f for f, _ in loaded], chunk
+        yield vecs, [f for f, _, _ in loaded], chunk, [b for _, _, b in loaded]
         done = start + len(chunk)
         if done % (batch * 10) == 0 or done == len(rows):
             log.info("%s: %d/%d, %.1f кадров/с", label, done, len(rows), done / max(spent, 1e-9))
@@ -306,16 +326,17 @@ def build(args: argparse.Namespace, out: Path) -> int:
     # ---- галерея: как /v1/gallery/bulk — порциями, DBA и признак фона считает Postprocess
     g_emb = np.zeros((len(g_ids), dim), "float32")
     gid_by_store, took["галерея в индекс"] = {}, 0.0
-    for n, (vecs, frs, chunk) in enumerate(embed_rows(model, frames, g_rows, args.batch, "gallery", need_frame, took)):
+    for n, (vecs, frs, chunk, boxes) in enumerate(embed_rows(model, frames, g_rows, args.batch, "gallery", need_frame,
+                                                             took)):
         t0 = time.perf_counter()
         s = n * args.batch
         vecs = vecs if vecs is not None else saved[len(q_ids) + s:len(q_ids) + s + len(chunk)]
         g_emb[s:s + len(chunk)] = vecs
-        items = [(None, r["image_id"], r["bbox"], v, f) for r, v, f in zip(chunk, vecs, frs)]
+        items = [(None, r["image_id"], b, v, f) for r, b, v, f in zip(chunk, boxes, vecs, frs)]
         if pp is not None:
             new_ids = pp.add_many(items)
         else:
-            new_ids = store.insert_pp([(None, r["image_id"], r["bbox"], v, None, None) for r, v in zip(chunk, vecs)],
+            new_ids = store.insert_pp([(None, r["image_id"], b, v, None, None) for r, b, v in zip(chunk, boxes, vecs)],
                                       [])
         gid_by_store.update({i: r["image_id"] for i, r in zip(new_ids, chunk)})
         took["галерея в индекс"] += time.perf_counter() - t0
@@ -327,14 +348,15 @@ def build(args: argparse.Namespace, out: Path) -> int:
     # ---- query: как /v1/search, каждый отдельно
     q_emb = np.zeros((len(q_ids), dim), "float32")
     answers, scores, took["поиск"] = [], [], 0.0
-    for n, (vecs, frs, chunk) in enumerate(embed_rows(model, frames, q_rows, args.batch, "query", need_frame, took)):
+    for n, (vecs, frs, chunk, boxes) in enumerate(embed_rows(model, frames, q_rows, args.batch, "query", need_frame,
+                                                             took)):
         t0 = time.perf_counter()
         s = n * args.batch
         vecs = vecs if vecs is not None else saved[s:s + len(chunk)]
         q_emb[s:s + len(chunk)] = vecs
-        for r, v, f in zip(chunk, vecs, frs):
+        for b, v, f in zip(boxes, vecs, frs):
             if pp is not None:
-                found, score = pp.search(v, TOP_K, f, r["bbox"])
+                found, score = pp.search(v, TOP_K, f, b)
             else:                                       # как _search_custom / db.search без постобработки
                 found = store.search_pp(v, pp_rerank.needed_k(TOP_K, False, 0, settings.refusal_score),
                                         "embedding", 0)
@@ -404,6 +426,9 @@ def build(args: argparse.Namespace, out: Path) -> int:
             "note": "доля query, где top-1 submission.csv (по DBA-галерее) отличается от top-1 по косинусу "
                     "векторов embeddings.npy (без постобработки)",
         },
+        "frame_fixes": {"clipped": frames.fixes["clipped"], "full_frame": frames.fixes["full"],
+                        "unread_gray": frames.fixes["unread"],
+                        "note": "рамка за кадром обрезана / пустая — весь кадр / кадр не прочитан — серый 224×224"},
         "reproduce": "docker compose exec api python scripts/make_submission.py "
                      "(или python api/scripts/make_submission.py --zip dataset.zip --out artifacts)",
     }
@@ -417,6 +442,7 @@ def build(args: argparse.Namespace, out: Path) -> int:
     log.info("candidates.csv   %s  %s ≥ %s", out / "candidates.csv", settings.refusal_score, args.threshold)
     log.info("принято query: %d, отказов: %d (%.1f%%)", accepted, refused, refused / max(len(q_ids), 1) * 100)
     log.info("top-1 submission ≠ top-1 по embeddings.npy: %.2f%% query", 100 * mismatch)
+    log.log(logging.WARNING if sum(frames.fixes.values()) else logging.INFO, frames.fixes_line())
     return 0
 
 
@@ -428,9 +454,6 @@ def main() -> int:
     t0 = time.perf_counter()
     try:
         rc = build(args, out)
-    except FrameError as exc:
-        log.error("кадр не обработан: %s — сборка остановлена, артефакты не перезаписаны", exc)
-        rc = 1
     except Exception:
         log.exception("сборка упала — артефакты не перезаписаны или записаны не полностью")
         rc = 1

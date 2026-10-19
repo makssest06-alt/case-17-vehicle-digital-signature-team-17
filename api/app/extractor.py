@@ -14,11 +14,17 @@
                         масштаба, при котором кроп не меньше INPUT_SIZE по обеим сторонам; по умолчанию выкл.;
   EXTRACT_THREADS=N     декодирование и кроп батча в N потоков (по умолчанию 4); на результат не влияет.
 Без EXTRACT_JPEG_DRAFT кроп совпадает с сервисом и офлайн-скриптом пиксель в пиксель.
+
+Как офлайн-сборка (scripts/make_submission.py), кадр не роняет extract(): рамка за кадром обрезается по
+границам, пустая или уже 2 px — весь кадр, нечитаемый кадр — серый INPUT_SIZE×INPUT_SIZE (imaging.fit_bbox).
+Каждый такой кадр — одна строка WARNING / ERROR (один раз на кадр, замер гоняет кадры по кругу); счёт —
+в describe()["frame_fixes"].
 """
 import io
 import logging
 import math
 import os
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -28,7 +34,7 @@ import numpy as np
 from PIL import Image
 
 from .config import settings
-from .imaging import crop_with_pad, validate_bbox
+from .imaging import crop_with_pad, fit_bbox, gray_frame
 from .models.registry import build_model
 
 log = logging.getLogger("case17.extractor")
@@ -46,6 +52,8 @@ class Extractor:
         self.draft = _flag("EXTRACT_JPEG_DRAFT", "0") in ("1", "true", "yes", "on") if draft is None else draft
         self.threads = max(1, int(_flag("EXTRACT_THREADS", "4")) if threads is None else threads)
         self.load_s = None
+        self.fixes = {"clipped": 0, "full": 0, "unread": 0}          # кадров, не повторов
+        self._seen, self._lock = set(), threading.Lock()
 
     def load(self) -> float:
         """Загрузить веса; -> секунды (время загрузки весов, Q31 — справочно)."""
@@ -59,16 +67,45 @@ class Extractor:
         return self.load_s
 
     # ------------------------------------------------------------------ кадр -> кроп
+    def _note(self, kind: str, name: str, msg: str, *args) -> None:
+        """Счёт и одна строка лога на кадр: clipped / full — WARNING, unread — ERROR."""
+        with self._lock:
+            if (kind, name) in self._seen:
+                return
+            self._seen.add((kind, name))
+            self.fixes[kind] += 1
+        log.log(logging.ERROR if kind == "unread" else logging.WARNING, "extract(): %s: " + msg, name, *args)
+
+    def _note_fit(self, status: str, name: str, bbox, box, W: int, H: int) -> None:
+        """Отметить обрезку рамки — после того, как кадр декодирован (битый кадр — только «не прочитан»)."""
+        if status == "clipped":
+            self._note("clipped", name, "рамка %s выходит за кадр %d×%d — обрезана до %s", bbox, W, H, box)
+        elif status == "full":
+            self._note("full", name, "рамка %s после обрезки по кадру %d×%d пустая или уже 2 px — беру весь кадр",
+                       bbox, W, H)
+
     def crop(self, src: Source, bbox: Sequence[int]) -> Image.Image:
-        raw = src if isinstance(src, (bytes, bytearray)) else Path(src).read_bytes()
-        im = Image.open(io.BytesIO(raw))
-        W, H = im.size
-        x, y, w, h = (int(v) for v in bbox)
-        if not self.draft or im.format != "JPEG":
+        name = "<bytes>" if isinstance(src, (bytes, bytearray)) else Path(src).stem
+        bbox = tuple(int(v) for v in bbox)
+        try:
+            raw = src if isinstance(src, (bytes, bytearray)) else Path(src).read_bytes()
+            im = Image.open(io.BytesIO(raw))
+            if self.draft and im.format == "JPEG":
+                return self._crop_draft(im, bbox, name)
             img = im.convert("RGB")
-            validate_bbox(img, x, y, w, h)
-            return crop_with_pad(img, x, y, w, h, settings.bbox_pad)
-        validate_bbox(im, x, y, w, h)
+        except Exception as exc:                          # битый файл, не тот формат, файла нет
+            img = gray_frame(settings.input_size)
+            self._note("unread", name, "кадр не прочитан (%s) — эмбеддинг по серому кадру %d×%d", exc,
+                       img.width, img.height)
+            return crop_with_pad(img, 0, 0, img.width, img.height, settings.bbox_pad)
+        box, status = fit_bbox(img.width, img.height, *bbox)
+        self._note_fit(status, name, bbox, box, img.width, img.height)
+        return crop_with_pad(img, *box, settings.bbox_pad)
+
+    def _crop_draft(self, im: Image.Image, bbox: Tuple[int, int, int, int], name: str) -> Image.Image:
+        """JPEG декодируется сразу с уменьшением: кроп считается в координатах исходного кадра."""
+        W, H = im.size
+        (x, y, w, h), status = fit_bbox(W, H, *bbox)
         px, py = int(round(w * settings.bbox_pad)), int(round(h * settings.bbox_pad))
         box = (max(0, x - px), max(0, y - py), min(W, x + w + px), min(H, y + h + py))
         side = min(box[2] - box[0], box[3] - box[1])
@@ -76,6 +113,7 @@ class Extractor:
         if r > 1:
             im.draft("RGB", (math.ceil(W / r), math.ceil(H / r)))
         img = im.convert("RGB")
+        self._note_fit(status, name, bbox, (x, y, w, h), W, H)
         sx, sy = img.width / W, img.height / H
         return img.crop((int(round(box[0] * sx)), int(round(box[1] * sy)),
                          int(round(box[2] * sx)), int(round(box[3] * sy))))
@@ -101,4 +139,4 @@ class Extractor:
         return {"model": getattr(m, "name", settings.embed_model), "dim": getattr(m, "dim", None),
                 "device": str(getattr(m, "device", "cpu")), "fp16": bool(getattr(m, "_fp16", False)),
                 "jpeg_draft": self.draft, "threads": self.threads, "tf_mode": getattr(m, "tf_mode", None),
-                "load_s": self.load_s}
+                "load_s": self.load_s, "frame_fixes": dict(self.fixes)}

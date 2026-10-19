@@ -167,6 +167,9 @@ def main() -> int:
     log.info("итог: latency_b1 %.2f мс, лучший FPS %.1f (батч %d), VRAM %s МБ, детерминизм max|Δ| %g, "
              "баллы %.2f из 20 (Q34)", lat_ms, fps[best_b], best_b, res["peak_vram_MB"],
              res["determinism_max_abs_diff"], res["performance_pct_of_20"])
+    fx = res["frame_fixes"]
+    log.log(logging.WARNING if sum(fx.values()) else logging.INFO, "кадры: рамок обрезано %d, заменено на весь "
+            "кадр %d, не прочитано %d", fx["clipped"], fx["full"], fx["unread"])
     print(json.dumps(res, ensure_ascii=False, indent=2))
     if a.out:
         Path(a.out).write_text(json.dumps(res, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

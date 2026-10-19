@@ -28,5 +28,11 @@
     "top1_mismatch_pct": 3.78,
     "note": "доля query, где top-1 submission.csv (по DBA-галерее) отличается от top-1 по косинусу векторов embeddings.npy (без постобработки)"
   },
+  "frame_fixes": {
+    "clipped": 0,
+    "full_frame": 0,
+    "unread_gray": 0,
+    "note": "рамка за кадром обрезана / пустая — весь кадр / кадр не прочитан — серый 224×224"
+  },
   "reproduce": "docker compose exec api python scripts/make_submission.py (или python api/scripts/make_submission.py --zip dataset.zip --out artifacts)"
 }

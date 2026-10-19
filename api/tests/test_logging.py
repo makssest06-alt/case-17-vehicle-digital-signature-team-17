@@ -1,5 +1,5 @@
-"""Логирование и фиксация весов: подпись модели по чекпоинту, eval() и forward под inference_mode, image_id
-в ошибке кадра, лог make_submission в файл, чистый JSON в stdout у bench_extract.
+"""Логирование и фиксация весов: подпись модели по чекпоинту, eval() и forward под inference_mode,
+лог make_submission в файл, чистый JSON в stdout у bench_extract. Кадры с плохой рамкой — test_frame_fixes.py.
 
     python -m unittest tests.test_logging -v      # из каталога api/
 """
@@ -111,16 +111,6 @@ class SubmissionLogTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.dir, True)
         (self.dir / "images").mkdir()
         Image.new("RGB", (40, 30)).save(self.dir / "images" / "q1.jpg")
-
-    def test_bad_bbox_and_missing_frame_name_image_id(self):
-        frames = self.ms.Frames(self.dir)
-        with self.assertRaises(self.ms.FrameError) as cm:
-            frames.load({"image_id": "q1", "bbox": (30, 20, 20, 20)}, False, "query")
-        self.assertIn("image_id q1", str(cm.exception))
-        self.assertIn("выходит за границы кадра", str(cm.exception))
-        with self.assertRaises(self.ms.FrameError) as cm:
-            frames.load({"image_id": "nope", "bbox": (0, 0, 5, 5)}, False, "gallery")
-        self.assertIn("gallery image_id nope", str(cm.exception))
 
     def test_log_goes_to_file_in_main_py_format(self):
         path = self.ms.setup_logging(self.dir)
