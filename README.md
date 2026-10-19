@@ -321,11 +321,11 @@ z100 выбирали раньше — на прежнем протоколе, �
 
 | Компонент | Версия | Лицензия |
 |---|---|---|
-| Python (образ `python:3.11-slim`) | 3.11 | PSF |
+| Python (образ `python:3.11.17-slim`) | 3.11.17 | PSF |
 | torch | 2.5.1+cu124 | BSD-3-Clause |
 | torchvision | 0.20.1+cu124 | BSD-3-Clause |
 | timm | 1.0.12 | Apache 2.0 |
-| huggingface_hub | ≥ 0.23, < 1.0 | Apache 2.0 |
+| huggingface_hub | 0.36.2 | Apache 2.0 |
 | fastapi | 0.115.6 | MIT |
 | uvicorn[standard] | 0.34.0 | BSD-3-Clause |
 | python-multipart | 0.0.20 | Apache 2.0 |
@@ -333,8 +333,8 @@ z100 выбирали раньше — на прежнем протоколе, �
 | numpy | 2.1.3 | BSD-3-Clause |
 | psycopg[binary,pool] | 3.2.3 | LGPL-3.0 |
 | pgvector (Python) | 0.3.6 | MIT |
-| PostgreSQL + pgvector (образ `pgvector/pgvector:pg16`) | 16 | PostgreSQL License |
-| nginx (образ `nginx:1.27-alpine`) | 1.27 | BSD-2-Clause |
+| PostgreSQL + pgvector (образ `pgvector/pgvector:0.8.7-pg16`) | 16 / pgvector 0.8.7 | PostgreSQL License |
+| nginx (образ `nginx:1.27.5-alpine`) | 1.27.5 | BSD-2-Clause |
 
 Данные: только датасет заказчика; обучение — на `train.csv`. Тестовая выборка не участвует
 ни в обучении, ни в подборе порогов: порог отказа — на галереях 361 и 1111 (361 + 750 кадров
