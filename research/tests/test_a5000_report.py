@@ -56,7 +56,7 @@ class ReportTests(unittest.TestCase):
             "top1": {"share": 1.0}, "accepted": {}, "confidence": {}, "embeddings": {}, "sha256": {}}), encoding="utf-8")
         md = self.run_report()
         self.assertIn("make_submission a10 в контейнере на GPU (FP16): sha256 совпали у 1 из 3 (submission.csv)", md)
-        self.assertIn("| a10 | 8 | 19.00 (21.00) | 120.0 (32) | 700 | 362 | 20.00 | 0.7586 / 0.9302 | 0.881 / 0.756 |", md)
+        self.assertIn("| a10 | 8 | 19.00 (21.00) | 120.0 (32) | 700 | 362 | 20.00 | 0.8562 / 0.9294 | 0.933 / 0.891 |", md)
         self.assertIn("| l75 | 4 | 45.00 (47.00) | 70.0 (32) | 2400 | 362 | 12.75 | 0.77 / 0.93 | 0.900 / 0.800 |", md)
         self.assertIn("| l75 | 8 | ошибка: CUDA out of memory", md)
         self.assertIn("10 % × latency_score + 10 % × throughput_score", md)
