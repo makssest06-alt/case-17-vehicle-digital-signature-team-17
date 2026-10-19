@@ -409,6 +409,15 @@ docker run --rm --gpus all --network none -v /путь/к/датасету:/data
   case17-api:local python scripts/bench_extract.py --out /artifacts/bench_extract.json
 ```
 
+Сравнение a10 и другой модели на арендованной A5000 одним заходом — `research/a5000_session.sh`: окружение
+(GPU, драйвер, CUDA, модель и число ядер CPU — у a10 узкое место в декодировании на CPU, у жюри 2× Xeon Gold
+6338, Q30), образ как у жюри, проверка GPU в контейнере, этот же замер для обеих моделей при EXTRACT_THREADS
+4 / 8 / 16 и пересчёт порогов новой модели (раздел 4.3); итог — одна таблица в `session.md` и `session.json`:
+
+```bash
+L75_WEIGHTS=/путь/l75.pt DATA_DIR=/путь/к/данным DATASET_ZIP=/путь/dataset.zip ./research/a5000_session.sh
+```
+
 Ускорения (разрешены Q36) — переменные окружения; качество — на галерее 361 / 546 запросах holdout
 полным циклом `extract()` (`research/extract_flags.py`, `research/honest_eval_results/extract_flags_a10.md`):
 
