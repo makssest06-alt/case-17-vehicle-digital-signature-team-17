@@ -40,8 +40,10 @@ import honest_eval as he  # noqa: E402
 MODEL_ENV = ("EMBED_MODEL", "REID_WEIGHTS", "INPUT_SIZE", "EMBED_DIM", "REID_TF_MODE", "EMBED_TTA_FLIP",
              "REID_FP16", "REID_DEVICE")
 GAL = {"361": "361", "1111tr": "1111"}
-PRESETS = {"итог": ((1, "off", "both", "raw"), cg.FINAL), "запасной без фона": ((1, "off", "bbox", "raw"), cg.FALLBACK),
-           "итог, z100": ((1, "off", "both", "z100"), cg.FINAL),
+# итог с 20.10 — «DBA» без исключения почти-дублей (cg.PRODUCTION); итог 18.10 — запасной (docs/refusal.md)
+PRESETS = {"итог": ((1, "off", "off", "raw"), cg.PRODUCTION), "итог 18.10": ((1, "off", "both", "raw"), cg.FINAL),
+           "запасной без фона": ((1, "off", "bbox", "raw"), cg.FALLBACK),
+           "итог, z100": ((1, "off", "off", "z100"), cg.PRODUCTION), "итог 18.10, z100": ((1, "off", "both", "z100"), cg.FINAL),
            "запасной, z100": ((1, "off", "bbox", "z100"), cg.FALLBACK)}
 RULE_ENV = (("s_hi", "PP_DEDUP_SIM"), ("t_iou", "PP_DEDUP_IOU"), ("t_center", "PP_DEDUP_CENTER"),
             ("t_size", "PP_DEDUP_SIZE"))
@@ -161,7 +163,8 @@ def main() -> int:
         presets[name] = {"key": list(key), "balanced": cp["balanced"], "strict": cp["strict"],
                          "note": f"{a.tag}: {variant}, {key[3]}: {how}"}
     fin = presets["итог"]
-    report = {"итог": metrics(res, cg.FINAL, res["presets"]), "запасной без фона": metrics(res, cg.FALLBACK, res["presets"])}
+    report = {"итог": metrics(res, cg.PRODUCTION, res["presets"]), "итог 18.10": metrics(res, cg.FINAL, res["presets"]),
+              "запасной без фона": metrics(res, cg.FALLBACK, res["presets"])}
     env_lines = [f"{k}={v}" for k, v in model.items() if k in MODEL_ENV and k not in ("REID_FP16", "REID_DEVICE")]
     env_lines.insert(next(i for i, l in enumerate(env_lines) if l.startswith("REID_WEIGHTS=")) + 1,
                      f"# в контейнере REID_WEIGHTS=/models/{w.name} (том ./weights) или /opt/weights/{w.name} (в образе)")
@@ -177,7 +180,7 @@ def main() -> int:
     say("\n".join(config_lines))
     say("\n=== .env (или environment сервиса api в docker-compose.yml) ===")
     say("\n".join(env_lines))
-    say("\n=== Протокол Q17 (без данных теста): итог — DBA k=1, отказ raw без почти-дублей «фон ИЛИ рамка» ===")
+    say("\n=== Протокол Q17 (без данных теста): итог — DBA k=1, отказ raw без исключения почти-дублей ===")
     say("| Галерея | mAP@10 (без DBA) | F1 | TNR | полнота | 0.7·F1 + 0.3·TNR | строгий: TNR / полнота |")
     say("|---|---:|---:|---:|---:|---:|---:|")
     for g, m in report["итог"].items():

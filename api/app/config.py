@@ -48,23 +48,25 @@ class Settings:
     #           среди ста ближайших; меньше зависит от размера галереи.
     # Production — raw: на протоколе по ответу Q17 оценка организаторов 0.7·F1 + 0.3·TNR у raw выше и с
     # порогом по своей галерее, и при переносе 361 <-> 1111; z100 — пресет по выбору (docs/refusal.md).
+    # Отказ по умолчанию (с 20.10) — без исключения почти-дублей: пресет «DBA», на протоколе Q17 он лучше прежнего
+    # итога при любой трактовке кадра своей камеры наверху (docs/refusal.md); прежний итог — запасной пресет.
     # После выбора постобработки меняется одно число — SEARCH_THRESHOLD (и STRICT
     # для строгого режима); посчитанные значения — REFUSAL_PRESETS ниже.
     refusal_score: str = _env("REFUSAL_SCORE", "raw")
     # Две рабочие точки, обе посчитаны на распределении, в котором работает
     # сервис (галерея не фильтруется по камере: camera_id на вход не подаётся).
     #   сбалансированная — максимум оценки организаторов 0.7·F1 + 0.3·TNR (Q15);
-    #   строгая — минимальный порог с TNR >= 0.98: из шестидесяти чужих
-    #             запросов ошибочно принимается примерно один.
+    #   строгая — наименьший порог с TNR >= 0.98 на обеих галереях на фолде выбора;
+    #             вне фолда TNR 0.989 на 361 и 0.959 на 1111 (docs/refusal.md).
     # Выбор между ними — продуктовое решение, а не техническое, поэтому он
     # вынесен в интерфейс, а не зашит в код.
-    search_threshold: float = _f("SEARCH_THRESHOLD", 0.7586)
-    search_threshold_strict: float = _f("SEARCH_THRESHOLD_STRICT", 0.9302)
+    search_threshold: float = _f("SEARCH_THRESHOLD", 0.8562)
+    search_threshold_strict: float = _f("SEARCH_THRESHOLD_STRICT", 0.9294)
     search_margin: float = _f("SEARCH_MARGIN", 0.0)
 
     # ---- постобработка: по умолчанию выключена, ответы как без неё (api/app/pp/state.py) ----
     pp_dba_k: int = _i("PP_DBA_K", 1)                                   # production: DBA по 1 соседу
-    pp_camera_penalty: str = _env("PP_CAMERA_PENALTY", "on").strip().lower()   # production: признак фона (для отказа)
+    pp_camera_penalty: str = _env("PP_CAMERA_PENALTY", "on").strip().lower()   # признак фона считается и хранится; в отказе — у запасного пресета
     pp_camera_tau: float = _f("PP_CAMERA_TAU", 0.68127)   # косинус фона > τ — «та же камера» (cheap_bg_a10.md)
     pp_camera_topk: int = _i("PP_CAMERA_TOPK", 100)       # сколько кандидатов из базы проверять на камеру
     # Исключение почти-дублей: off | bbox (правило рамок: сходство + рамка) | bg (признак фона) | both (OR).
@@ -74,7 +76,7 @@ class Settings:
     # Пороги правила рамок — dedup_compare_a10.md.
     pp_dedup: str = _env("PP_DEDUP", "off").strip().lower()
     pp_dedup_rank: str = _env("PP_DEDUP_RANK", "off").strip().lower()         # production: без флагов (docs/refusal.md)
-    pp_dedup_refusal: str = _env("PP_DEDUP_REFUSAL", "both").strip().lower()  # production: фон ИЛИ рамка в отказе
+    pp_dedup_refusal: str = _env("PP_DEDUP_REFUSAL", "off").strip().lower()   # production: без исключения (both — запасной)
     pp_dedup_sim_any: float = _f("PP_DEDUP_SIM_ANY", float("inf"))   # сырой косинус ≥ — почти-дубль без рамки
     pp_dedup_sim: float = _f("PP_DEDUP_SIM", 0.84)         # сырой косинус ≥ (вместе с рамкой)
     pp_dedup_iou: float = _f("PP_DEDUP_IOU", 0.6)          # IoU рамок в координатах кадра ≥
@@ -101,10 +103,13 @@ REFUSAL_PRESETS = {
     (0, "off", "off", "raw"): {"balanced": 0.8025, "strict": 0.8465,
                                "note": "legacy: сырой косинус без постобработки (2.2k без почти-дублей, Глеб)"},
     # research/closed_gallery.py --tag a10_q17 (протокол q17 — как в ответе Q17): 361 и 361 + 750 кадров обучающих
-    # машин, без кадров теста; у 20 % машин в галерее нет ни одного кадра; максимум 0.7·F1 + 0.3·TNR (Q15). Итог —
-    # (1, "off", "both", "raw"), запасной без фона — (1, "off", "bbox", "raw"); z100 — те же ключи с "z100".
+    # машин, без кадров теста; у 20 % машин в галерее нет ни одного кадра; максимум 0.7·F1 + 0.3·TNR (Q15). Итог
+    # с 20.10 — (1, "off", "off", "raw"), «DBA» без исключения почти-дублей; запасные — (1, "off", "both", "raw")
+    # (итог 18.10: отказ фон ИЛИ рамка) и (1, "off", "bbox", "raw") без фона; z100 — те же ключи с "z100".
     # docs/refusal.md. До 18.10 (z100, F1 при TNR ≥ 0.70, большая галерея с test gallery): итог 4.6506 / 9.6847,
     # запасной 4.9039 / 9.9144.
+    (1, "off", "off", "raw"): {"balanced": 0.8562, "strict": 0.9294,
+        "note": "итог: DBA, отказ без исключения почти-дублей, raw: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (closed_gallery_a10_q17.md)"},
     (1, "bg", "bg", "raw"): {"balanced": 0.7594, "strict": 0.9301,
         "note": "DBA + фон, raw: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (closed_gallery_a10_q17.md)"},
     (1, "off", "both", "raw"): {"balanced": 0.7586, "strict": 0.9302,
@@ -113,6 +118,8 @@ REFUSAL_PRESETS = {
         "note": "прежний итог: DBA + фон; отказ фон ИЛИ рамка (наши пороги), raw: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (closed_gallery_a10_q17.md)"},
     (1, "off", "bbox", "raw"): {"balanced": 0.7572, "strict": 0.9305,
         "note": "запасной: DBA; отказ рамка (наши пороги), raw: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (closed_gallery_a10_q17.md)"},
+    (1, "off", "off", "z100"): {"balanced": 4.4294, "strict": 9.0723,
+        "note": "итог: DBA, отказ без исключения почти-дублей, z100: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (closed_gallery_a10_q17.md)"},
     (1, "bg", "bg", "z100"): {"balanced": 4.3703, "strict": 8.8099,
         "note": "DBA + фон, z100: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (closed_gallery_a10_q17.md)"},
     (1, "off", "both", "z100"): {"balanced": 4.3475, "strict": 8.8469,

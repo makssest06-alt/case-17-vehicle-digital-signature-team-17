@@ -37,11 +37,22 @@ class RefusalPresetsTest(unittest.TestCase):
     def test_current_service_point_untouched(self):
         from app.config import REFUSAL_PRESETS, Settings
 
-        cur = REFUSAL_PRESETS[(1, "off", "both", "raw")]                  # production: итог
+        cur = REFUSAL_PRESETS[(1, "off", "off", "raw")]                   # production: «DBA» (с 20.10)
         s = Settings()
         self.assertEqual((cur["balanced"], cur["strict"]), (s.search_threshold, s.search_threshold_strict))
         from app.pp import state
-        self.assertEqual(state.preset_key(s), (1, "off", "both", "raw"))    # пресет по умолчанию — ключ итога
+        self.assertEqual(state.preset_key(s), (1, "off", "off", "raw"))     # пресет по умолчанию — ключ «DBA»
+
+    def test_dba_presets_match_research(self):
+        """«DBA» в closed_gallery_a10_q17.json ещё нет в config_presets (их писал прежний генератор) — сверка по presets."""
+        from app.config import REFUSAL_PRESETS
+
+        res = json.loads(RESULT.read_text(encoding="utf-8"))
+        for formula, key in (("raw", "presets"), ("z100", "presets_alt")):
+            with self.subTest(formula):
+                p = res[key]["DBA"]
+                got = REFUSAL_PRESETS[(1, "off", "off", formula)]
+                self.assertEqual((got["balanced"], got["strict"]), (round(p["threshold"], 4), round(p["strict"], 4)))
 
 
 if __name__ == "__main__":

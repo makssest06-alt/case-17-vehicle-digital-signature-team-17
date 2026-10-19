@@ -11,7 +11,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 JURY_CPU = "2× Intel Xeon Gold 6338, 128 логических CPU (ответ Q30)"
 A10_REF = REPO / "research" / "honest_eval_results" / "closed_gallery_a10_q17.json"
-FINAL_KEY = "(1, 'off', 'both', 'raw')"
+PROD, PROD_KEY = "DBA", "(1, 'off', 'off', 'raw')"     # отказ по умолчанию (research/closed_gallery.py PRODUCTION)
 Q34 = ("Баллы скорости — наша оценка на нашем замере по формуле ответа Q34: 10 % × latency_score + "
        "10 % × throughput_score (задержка и FPS поровну — так в Q34; ≤ 40 мс и ≥ 100 FPS — полный балл, "
        "40–80 мс и 50–100 FPS — линейно). Организаторы меряют сами, на своём CPU.")
@@ -38,10 +38,12 @@ def refusal(out: Path) -> dict:
                       "tau": r["tau"], "rule": r["rule"], "source": "пересчёт этого захода (recalibrate_l75.json)"}
     a = load(A10_REF)
     if a:
-        cp, pg = a["config_presets"][FINAL_KEY], a["presets"][a["final"]]["per_gallery"]
+        p = a["presets"][PROD]                       # config_presets «DBA» пишет только новый генератор
+        cp = a["config_presets"].get(PROD_KEY) or {"balanced": round(p["threshold"], 4), "strict": round(p["strict"], 4)}
+        pg = p["per_gallery"]
         res["a10"] = {"threshold": cp["balanced"], "strict": cp["strict"], "Q15_361": pg["361"]["Q15"],
-                      "Q15_1111": pg["1111tr"]["Q15"], "mAP_361": a["galleries"]["361"][a["final"]]["mAP@10"],
-                      "mAP_1111": a["galleries"]["1111tr"][a["final"]]["mAP@10"], "tau": a["tau"],
+                      "Q15_1111": pg["1111tr"]["Q15"], "mAP_361": a["galleries"]["361"][PROD]["mAP@10"],
+                      "mAP_1111": a["galleries"]["1111tr"][PROD]["mAP@10"], "tau": a["tau"],
                       "rule": a["rules"]["ours"], "source": "пресет конфига (closed_gallery_a10_q17.json)"}
     return res
 

@@ -31,7 +31,7 @@ class PostprocessOffTest(unittest.TestCase):
         self.assertTrue(state.enabled(s))
         self.assertEqual((s.pp_dba_k, state.dedup_rank(s), state.dedup_refusal(s), s.refusal_score,
                           s.search_threshold, s.search_threshold_strict),
-                         (1, "off", "both", "raw", 0.7586, 0.9302))
+                         (1, "off", "off", "raw", 0.8562, 0.9294))
 
     def test_empty_compose_variables_mean_config_defaults(self):
         """docker-compose.yml пробрасывает ${X:-}: пустая строка — значение из config.py."""
@@ -51,7 +51,7 @@ class PostprocessOffTest(unittest.TestCase):
             importlib.reload(config)
         self.assertEqual((s.search_threshold, s.search_threshold_strict, s.refusal_score, s.pp_dba_k,
                           s.pp_camera_penalty, s.pp_dedup, s.pp_dedup_rank, s.pp_dedup_refusal),
-                         (0.7586, 0.9302, "raw", 1, "on", "off", "off", "both"))
+                         (0.8562, 0.9294, "raw", 1, "on", "off", "off", "off"))
 
     def test_responses_and_db_calls_match_golden(self):
         golden = json.loads((HERE / "data" / "golden_pp_off.json").read_text(encoding="utf-8"))
