@@ -11,10 +11,13 @@
 Ускорения (разрешены ответом Q36), переменные окружения:
   REID_FP16=1           forward в FP16 (autocast) — на CUDA по умолчанию включён (app/models/reid_checkpoint.py);
   EXTRACT_JPEG_DRAFT=1  JPEG декодируется сразу с уменьшением (PIL draft: 1/2, 1/4, 1/8) — до наименьшего
-                        масштаба, при котором кроп не меньше INPUT_SIZE по обеим сторонам; по умолчанию выкл.;
+                        масштаба, при котором кроп не меньше INPUT_SIZE по обеим сторонам;
   EXTRACT_JPEG_DRAFT=2  то же, но уменьшение не больше 1/2 — медленнее "1", но почти не трогает векторы;
-  EXTRACT_THREADS=N     декодирование и кроп батча в N потоков (по умолчанию 4); на результат не влияет.
-Без EXTRACT_JPEG_DRAFT кроп совпадает с сервисом и офлайн-скриптом пиксель в пиксель.
+                        по умолчанию включён этот режим (bench на A5000 + Threadripper 3955WX: 141 FPS
+                        против 86 без draft, качество −0.003/−0.005 mAP@10 — extract_flags_soup150s2);
+  EXTRACT_JPEG_DRAFT=0  полный декод (кроп совпадает с офлайн-скриптом пиксель в пиксель);
+  EXTRACT_THREADS=N     декодирование и кроп батча в N потоков (по умолчанию 16 — у жюри 2× Xeon Gold 6338,
+                        Q30; на результат не влияет).
 
 Как офлайн-сборка (scripts/make_submission.py), кадр не роняет extract(): рамка за кадром обрезается по
 границам, пустая или уже 2 px — весь кадр, нечитаемый кадр — серый INPUT_SIZE×INPUT_SIZE (imaging.fit_bbox).
@@ -50,11 +53,11 @@ def _flag(name: str, default: str) -> str:
 class Extractor:
     def __init__(self, model=None, draft=None, threads: int = None):
         self.model = model or build_model(settings.embed_model, settings.input_size)
-        # draft: "0" — выкл; "1" — максимальное уменьшение (до 1/8); "2"/"half" — не больше 1/2
-        raw = (_flag("EXTRACT_JPEG_DRAFT", "0") if draft is None else str(draft)).strip().lower()
+        # draft: "0" — выкл; "1" — максимальное уменьшение (до 1/8); "2"/"half" — не больше 1/2 (прод-дефолт)
+        raw = (_flag("EXTRACT_JPEG_DRAFT", "2") if draft is None else str(draft)).strip().lower()
         self.draft = raw not in ("0", "false", "no", "off")
         self.draft_max = 2 if raw in ("2", "half") else 8
-        self.threads = max(1, int(_flag("EXTRACT_THREADS", "4")) if threads is None else threads)
+        self.threads = max(1, int(_flag("EXTRACT_THREADS", "16")) if threads is None else threads)
         self.load_s = None
         self.fixes = {"clipped": 0, "full": 0, "unread": 0}          # кадров, не повторов
         self._seen, self._lock = set(), threading.Lock()
