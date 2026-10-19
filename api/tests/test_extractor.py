@@ -12,7 +12,7 @@ from PIL import Image
 
 from app.config import settings
 from app.extractor import Extractor
-from app.imaging import ImageError, crop_with_pad, load_image
+from app.imaging import crop_with_pad, load_image
 from tests.service_fakes import FakeModel
 
 FRAME = (1920, 1080)
@@ -43,10 +43,18 @@ class ExtractorTest(unittest.TestCase):
         self.assertGreaterEqual(min(small.size), settings.input_size)
         self.assertAlmostEqual(small.width / full.width, 0.5, delta=0.01)
 
-    def test_bad_bbox_rejected_in_both_paths(self):
+    def test_bbox_outside_frame_clipped_in_both_paths(self):
+        raw = jpeg(2)
         for draft in (False, True):
-            with self.assertRaises(ImageError):
-                Extractor(model=FakeModel(), draft=draft).crop(jpeg(2), (1800, 900, 400, 400))
+            ex = Extractor(model=FakeModel(), draft=draft)
+            with self.assertLogs("case17.extractor", "WARNING") as cm:
+                got = ex.crop(raw, (1800, 900, 400, 400))
+                ex.crop(raw, (1800, 900, 400, 400))                   # второй раз — без новой строки
+            want = Extractor(model=FakeModel(), draft=draft).crop(raw, (1800, 900, 120, 180))
+            self.assertTrue(np.array_equal(np.asarray(got), np.asarray(want)))
+            self.assertEqual(len(cm.output), 1)
+            self.assertIn("обрезана до (1800, 900, 120, 180)", cm.output[0])
+            self.assertEqual(ex.describe()["frame_fixes"], {"clipped": 1, "full": 0, "unread": 0})
 
     def test_file_path_and_threads_do_not_change_vectors(self):
         with tempfile.TemporaryDirectory() as d:

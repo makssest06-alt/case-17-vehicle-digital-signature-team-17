@@ -365,11 +365,11 @@ DATA_DIR=/путь/к/данным DATASET_ZIP=/путь/dataset.zip ./research/
 
 | Компонент | Версия | Лицензия |
 |---|---|---|
-| Python (образ `python:3.11-slim`) | 3.11 | PSF |
+| Python (образ `python:3.11.17-slim`) | 3.11.17 | PSF |
 | torch | 2.5.1+cu124 | BSD-3-Clause |
 | torchvision | 0.20.1+cu124 | BSD-3-Clause |
 | timm | 1.0.12 | Apache 2.0 |
-| huggingface_hub | ≥ 0.23, < 1.0 | Apache 2.0 |
+| huggingface_hub | 0.36.2 | Apache 2.0 |
 | fastapi | 0.115.6 | MIT |
 | uvicorn[standard] | 0.34.0 | BSD-3-Clause |
 | python-multipart | 0.0.20 | Apache 2.0 |
@@ -377,12 +377,13 @@ DATA_DIR=/путь/к/данным DATASET_ZIP=/путь/dataset.zip ./research/
 | numpy | 2.1.3 | BSD-3-Clause |
 | psycopg[binary,pool] | 3.2.3 | LGPL-3.0 |
 | pgvector (Python) | 0.3.6 | MIT |
-| PostgreSQL + pgvector (образ `pgvector/pgvector:pg16`) | 16 | PostgreSQL License |
-| nginx (образ `nginx:1.27-alpine`) | 1.27 | BSD-2-Clause |
+| PostgreSQL + pgvector (образ `pgvector/pgvector:0.8.7-pg16`) | 16 / pgvector 0.8.7 | PostgreSQL License |
+| nginx (образ `nginx:1.27.5-alpine`) | 1.27.5 | BSD-2-Clause |
 
-Данные: только датасет заказчика; обучение — на `train.csv`. Тестовая выборка в
-обучении не участвовала; в подборе порога — только 750 кадров test gallery без меток
-как отвлекатели в галерее 1111 (раздел 4.2).
+Данные: только датасет заказчика; обучение — на `train.csv`. Тестовая выборка не участвует
+ни в обучении, ни в подборе порогов: порог отказа — на галереях 361 и 1111 (361 + 750 кадров
+обучающих машин), у 20 % машин пары нет (Q17); порог фона и правило рамок — на парах
+обучающих машин (раздел 4.2, `docs/refusal.md`).
 
 **Закрытые/проприетарные данные не используются.** Обучение только на данных
 заказчика поверх открытых бэкбонов. Специализированные ReID-датасеты (VeRi-776,
@@ -408,6 +409,8 @@ docker compose exec api python scripts/bench_extract.py --out /artifacts/bench_e
 docker run --rm --gpus all --network none -v /путь/к/датасету:/data:ro -v "$PWD/artifacts":/artifacts \
   case17-api:local python scripts/bench_extract.py --out /artifacts/bench_extract.json
 ```
+
+Ход замера (загрузка модели, sha256 весов, этапы и их итоги) идёт в stderr, в stdout — только итоговый JSON.
 
 Ускорения (разрешены Q36) — переменные окружения; качество — на галерее 361 / 546 запросах holdout
 полным циклом `extract()` (`research/extract_flags.py`, `research/honest_eval_results/extract_flags_a10.md`):
@@ -465,8 +468,13 @@ L75_WEIGHTS=/путь/l75.pt DATA_DIR=/путь/к/данным DATASET_ZIP=/п�
 полный кадр + bbox → кроп → a10 → DBA k=1 по галерее → отказ raw без почти-дублей
 (фон ИЛИ рамка), порог 0.7586. Каждый query обрабатывается отдельно, другие query
 не используются. Принято 859 query, отказов 251 (22.6%). Параметры, sha256 весов и
-счёт — в `artifacts/postprocess.json`. Проверка происхождения
-(`scripts/validate_submission.py`, 26 проверок): `submission.csv` воспроизводится
+счёт — в `artifacts/postprocess.json`. Лог прогона — `make_submission.log` в том же каталоге и в stderr,
+формат как у сервиса: путь и sha256 весов, устройство, FP16, порог и пресет, время по этапам, принято и
+отказов; в git не входит. Одна строка CSV прогон не останавливает: рамка за кадром обрезается
+по границам, пустая или уже 2 px — берётся весь кадр, нечитаемый кадр — серый 224×224; каждый случай —
+WARNING / ERROR с image_id, итог — последней строкой лога и в `postprocess.json` (`frame_fixes`);
+строк в `embeddings.npy` ровно столько, сколько в CSV (Q27). Так же ведёт себя `extract()`. Проверка происхождения
+(`scripts/validate_submission.py`, 27 проверок): `submission.csv` воспроизводится
 из `embeddings.npy` (DBA k=1 по галерее) точь-в-точь на всех 1110 запросах; top-1
 по векторам без DBA расходится с ним у 3.8% query.
 

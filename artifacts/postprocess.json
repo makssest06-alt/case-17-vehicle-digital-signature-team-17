@@ -1,5 +1,5 @@
 {
-  "model": "reid:vit_base_patch16_siglip_224.webli",
+  "model": "reid:vit_base_patch16_siglip_224.v2_webli",
   "weights": "clean_student_a10_ep28.pt",
   "weights_sha256": "93114c5923869d01e92cd70c2c421f783d05ebdac5652a1f2dc919aa040bf6ce",
   "crop": "bbox + 10% запаса (app/imaging.crop_with_pad), REID_TF_MODE=squash, TTA flip=False",
@@ -27,6 +27,12 @@
   "consistency": {
     "top1_mismatch_pct": 3.78,
     "note": "доля query, где top-1 submission.csv (по DBA-галерее) отличается от top-1 по косинусу векторов embeddings.npy (без постобработки)"
+  },
+  "frame_fixes": {
+    "clipped": 0,
+    "full_frame": 0,
+    "unread_gray": 0,
+    "note": "рамка за кадром обрезана / пустая — весь кадр / кадр не прочитан — серый 224×224"
   },
   "reproduce": "docker compose exec api python scripts/make_submission.py (или python api/scripts/make_submission.py --zip dataset.zip --out artifacts)"
 }
