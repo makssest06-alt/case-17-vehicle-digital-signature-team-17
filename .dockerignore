@@ -2,6 +2,6 @@
 # Белый список: демону уходят только api/ и веса; data/, .git, research/ и остальное — нет.
 *
 !api/
-!weights/clean_student_a10_ep28.pt
+!weights/clean_student_large_150_ep150.pt
 **/__pycache__
 **/*.pyc

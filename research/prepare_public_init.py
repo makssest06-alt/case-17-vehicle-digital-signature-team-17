@@ -14,6 +14,8 @@ def main() -> None:
     parser.add_argument("--backbone", required=True)
     parser.add_argument("--seed", type=int, required=True)
     parser.add_argument("--tf-mode", choices=("timm", "squash"), required=True)
+    parser.add_argument("--input-size", type=int, default=224,
+                        help="родное разрешение бэкбона (siglip_large — 256)")
     args = parser.parse_args()
 
     payload = torch.load(args.source, map_location="cpu", weights_only=False)
@@ -29,7 +31,7 @@ def main() -> None:
         "loss": "arcface",
         "seed": args.seed,
         "tf_mode": args.tf_mode,
-        "input_size": 224,
+        "input_size": args.input_size,
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
     torch.save({"model": model, "args": metadata}, args.out)

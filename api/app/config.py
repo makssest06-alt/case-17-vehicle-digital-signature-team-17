@@ -26,11 +26,12 @@ class Settings:
     db_dsn: str = os.getenv("DB_DSN", "postgresql://case17:case17@db:5432/case17")
 
     # модель
-    # Production по умолчанию — clean student alpha=10.  Явный EMBED_MODEL
-    # по-прежнему позволяет запускать диагностические профили.
-    embed_model: str = os.getenv("EMBED_MODEL", "reid:vit_base_patch16_siglip_224.webli")
+    # Production этой ветки — clean student ViT-L/16@256 (150 эпох, seed 7):
+    # clean mAP@10 0.9005, expanded 0.6467 (a10 из glebmain: 0.8666 / 0.5569).
+    # Явный EMBED_MODEL по-прежнему позволяет запускать диагностические профили.
+    embed_model: str = os.getenv("EMBED_MODEL", "reid:vit_large_patch16_siglip_256")
     embed_dim: int = _i("EMBED_DIM", 512)
-    input_size: int = _i("INPUT_SIZE", 224)
+    input_size: int = _i("INPUT_SIZE", 256)
     # Усреднение оригинала и отражения (test-time augmentation): вдвое дороже,
     # даёт +2.17 mAP — замер в research/results.md.
     tta_flip: bool = _b("EMBED_TTA_FLIP", False)
@@ -58,28 +59,28 @@ class Settings:
     #             запросов ошибочно принимается примерно один.
     # Выбор между ними — продуктовое решение, а не техническое, поэтому он
     # вынесен в интерфейс, а не зашит в код.
-    search_threshold: float = _f("SEARCH_THRESHOLD", 0.7586)
-    search_threshold_strict: float = _f("SEARCH_THRESHOLD_STRICT", 0.9302)
+    search_threshold: float = _f("SEARCH_THRESHOLD", 0.8249)
+    search_threshold_strict: float = _f("SEARCH_THRESHOLD_STRICT", 0.9356)
     search_margin: float = _f("SEARCH_MARGIN", 0.0)
 
     # ---- постобработка: по умолчанию выключена, ответы как без неё (api/app/pp/state.py) ----
     pp_dba_k: int = _i("PP_DBA_K", 1)                                   # production: DBA по 1 соседу
     pp_camera_penalty: str = _env("PP_CAMERA_PENALTY", "on").strip().lower()   # production: признак фона (для отказа)
-    pp_camera_tau: float = _f("PP_CAMERA_TAU", 0.68127)   # косинус фона > τ — «та же камера» (cheap_bg_a10.md)
+    pp_camera_tau: float = _f("PP_CAMERA_TAU", 0.68062)   # косинус фона > τ — «та же камера» (recalibrate_l150.json)
     pp_camera_topk: int = _i("PP_CAMERA_TOPK", 100)       # сколько кандидатов из базы проверять на камеру
     # Исключение почти-дублей: off | bbox (правило рамок: сходство + рамка) | bg (признак фона) | both (OR).
     #   PP_DEDUP_RANK    — какие кандидаты уходят в конец ранжирования;
     #   PP_DEDUP_REFUSAL — какие не учитываются в оценке отказа (пусто — как ранжирование);
     #   PP_DEDUP         — сокращение для обоих (пусто/off — по PP_CAMERA_PENALTY=on → bg).
-    # Пороги правила рамок — dedup_compare_a10.md.
+    # Пороги правила рамок — recalibrate_l150.json (research/recalibrate_for_model.py --tag l150).
     pp_dedup: str = _env("PP_DEDUP", "off").strip().lower()
     pp_dedup_rank: str = _env("PP_DEDUP_RANK", "off").strip().lower()         # production: без флагов (docs/refusal.md)
     pp_dedup_refusal: str = _env("PP_DEDUP_REFUSAL", "both").strip().lower()  # production: фон ИЛИ рамка в отказе
     pp_dedup_sim_any: float = _f("PP_DEDUP_SIM_ANY", float("inf"))   # сырой косинус ≥ — почти-дубль без рамки
-    pp_dedup_sim: float = _f("PP_DEDUP_SIM", 0.84)         # сырой косинус ≥ (вместе с рамкой)
+    pp_dedup_sim: float = _f("PP_DEDUP_SIM", 0.83)         # сырой косинус ≥ (вместе с рамкой)
     pp_dedup_iou: float = _f("PP_DEDUP_IOU", 0.6)          # IoU рамок в координатах кадра ≥
     pp_dedup_center: float = _f("PP_DEDUP_CENTER", 0.3)    # сдвиг центра в долях среднего размера рамки ≤
-    pp_dedup_size: float = _f("PP_DEDUP_SIZE", float("inf"))   # |log| отношения сторон ≤ (inf — не проверять)
+    pp_dedup_size: float = _f("PP_DEDUP_SIZE", 0.3)        # |log| отношения сторон ≤ (inf — не проверять)
 
     # загрузка файлов
     max_upload_mb: int = _i("MAX_UPLOAD_MB", 20)
@@ -99,28 +100,20 @@ class Settings:
 REFUSAL_PRESETS = {
     # (PP_DBA_K, исключение в ранжировании, исключение в отказе, REFUSAL_SCORE): {...}
     (0, "off", "off", "raw"): {"balanced": 0.8025, "strict": 0.8465,
-                               "note": "legacy: сырой косинус без постобработки (2.2k без почти-дублей, Глеб)"},
-    # research/closed_gallery.py --tag a10_q17 (протокол q17 — как в ответе Q17): 361 и 361 + 750 кадров обучающих
-    # машин, без кадров теста; у 20 % машин в галерее нет ни одного кадра; максимум 0.7·F1 + 0.3·TNR (Q15). Итог —
+                               "note": "legacy: сырой косинус без постобработки (2.2k без почти-дублей, Глеб; калибровано под a10)"},
+    # research/closed_gallery.py --tag l150 через research/recalibrate_for_model.py --tag l150
+    # (протокол q17 — как в ответе Q17): 361 и 361 + 750 кадров обучающих машин, без кадров теста;
+    # у 20 % машин в галерее нет ни одного кадра; максимум 0.7·F1 + 0.3·TNR (Q15). Итог —
     # (1, "off", "both", "raw"), запасной без фона — (1, "off", "bbox", "raw"); z100 — те же ключи с "z100".
-    # docs/refusal.md. До 18.10 (z100, F1 при TNR ≥ 0.70, большая галерея с test gallery): итог 4.6506 / 9.6847,
-    # запасной 4.9039 / 9.9144.
-    (1, "bg", "bg", "raw"): {"balanced": 0.7594, "strict": 0.9301,
-        "note": "DBA + фон, raw: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (closed_gallery_a10_q17.md)"},
-    (1, "off", "both", "raw"): {"balanced": 0.7586, "strict": 0.9302,
-        "note": "итог: DBA; отказ фон ИЛИ рамка (наши пороги), raw: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (closed_gallery_a10_q17.md)"},
-    (1, "bg", "both", "raw"): {"balanced": 0.7586, "strict": 0.9302,
-        "note": "прежний итог: DBA + фон; отказ фон ИЛИ рамка (наши пороги), raw: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (closed_gallery_a10_q17.md)"},
-    (1, "off", "bbox", "raw"): {"balanced": 0.7572, "strict": 0.9305,
-        "note": "запасной: DBA; отказ рамка (наши пороги), raw: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (closed_gallery_a10_q17.md)"},
-    (1, "bg", "bg", "z100"): {"balanced": 4.3703, "strict": 8.8099,
-        "note": "DBA + фон, z100: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (closed_gallery_a10_q17.md)"},
-    (1, "off", "both", "z100"): {"balanced": 4.3475, "strict": 8.8469,
-        "note": "итог: DBA; отказ фон ИЛИ рамка (наши пороги), z100: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (closed_gallery_a10_q17.md)"},
-    (1, "bg", "both", "z100"): {"balanced": 4.3612, "strict": 8.8469,
-        "note": "прежний итог: DBA + фон; отказ фон ИЛИ рамка (наши пороги), z100: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (closed_gallery_a10_q17.md)"},
-    (1, "off", "bbox", "z100"): {"balanced": 4.3542, "strict": 8.8363,
-        "note": "запасной: DBA; отказ рамка (наши пороги), z100: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (closed_gallery_a10_q17.md)"},
+    # research/honest_eval_results/recalibrate_l150.json.
+    (1, "off", "both", "raw"): {"balanced": 0.8249, "strict": 0.9356,
+        "note": "итог: DBA; отказ фон ИЛИ рамка (наши пороги), raw: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (recalibrate_l150.json)"},
+    (1, "off", "bbox", "raw"): {"balanced": 0.8248, "strict": 0.9356,
+        "note": "запасной: DBA; отказ рамка (наши пороги), raw: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (recalibrate_l150.json)"},
+    (1, "off", "both", "z100"): {"balanced": 4.4359, "strict": 7.7432,
+        "note": "итог: DBA; отказ фон ИЛИ рамка (наши пороги), z100: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (recalibrate_l150.json)"},
+    (1, "off", "bbox", "z100"): {"balanced": 4.5663, "strict": 7.7276,
+        "note": "запасной: DBA; отказ рамка (наши пороги), z100: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (recalibrate_l150.json)"},
 }
 
 

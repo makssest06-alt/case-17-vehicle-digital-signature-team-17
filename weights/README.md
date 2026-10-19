@@ -1,3 +1,4 @@
-Прод — `clean_student_a10_ep28.pt` (Git LFS, 379 734 230 байт): при сборке запекается в образ, `/opt/weights` (`api/Dockerfile`).
-sha256 `93114c5923869d01e92cd70c2c421f783d05ebdac5652a1f2dc919aa040bf6ce` — сверяется при сборке (`WEIGHTS_SHA256`) и при старте (`/health`).
-Остальное (`reid_current.pt` — прежняя head-only модель) — только для истории замеров в `research/`, сервис его не берёт.
+Прод этой ветки — `clean_student_large_150_ep150.pt` (ViT-L/16@256, 1 273 134 679 байт): при сборке запекается в образ, `/opt/weights` (`api/Dockerfile`); в git не лежит — скачивается из GitHub Release `weights-l150` по `WEIGHTS_URL` по умолчанию.
+sha256 `6937d1163e239bcfd8ee76fe00da12a9d60becc89563b8fc5a475dc72df13d52` — сверяется при сборке (`WEIGHTS_SHA256`) и при старте (`/health`).
+`reid_current.pt` — прежняя head-only модель, только для истории замеров в `research/`, сервис его не берёт.
+Базовый кандидат a10 (ViT-B@224, 362 МБ) — в ветке `glebmain` (Release `weights-a10`).

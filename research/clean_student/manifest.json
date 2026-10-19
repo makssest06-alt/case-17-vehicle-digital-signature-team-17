@@ -5,7 +5,7 @@
   "holdout_query": 550,
   "holdout_gallery": 357,
   "exact_duplicate_pairs_removed": 5,
-  "runtime_student": "clean_student_a10_ep28.pt",
+  "runtime_student": "clean_student_large_150_ep150.pt",
   "teachers": [
     "siglip2_clean_retrain_ep28.pt",
     "siglip1_clean_ep28.pt",
@@ -22,7 +22,23 @@
     "rank1_clean": 0.8305709023941068,
     "rank5_clean": 0.9465930018416207
   },
+  "student_large_150": {
+    "file": "clean_student_large_150_ep150.pt",
+    "alpha": 10,
+    "backbone": "siglip_large",
+    "input_size": 256,
+    "epochs": 150,
+    "seed": 7,
+    "tf_mode": "squash",
+    "tta": false,
+    "mAP10_clean": 0.9005,
+    "rank1_clean": 0.8821,
+    "rank5_clean": 0.9484,
+    "mAP10_expanded": 0.6467,
+    "note": "официальный evaluate.py; обучение — research/run_clean_student_large.sh, протокол и логи вне репо (bm_improve/large_scale/notes.md)"
+  },
   "sha256": {
+    "clean_student_large_150_ep150.pt": "6937d1163e239bcfd8ee76fe00da12a9d60becc89563b8fc5a475dc72df13d52",
     "clean_student_a10_ep28.pt": "93114c5923869d01e92cd70c2c421f783d05ebdac5652a1f2dc919aa040bf6ce",
     "clean_student_a25_ep28.pt": "b2f823aec636f58c6ee95da7729db82d67c24d2d3d7486ebf629b991270d6eb6",
     "clip_clean_ep28.pt": "a11ca8cd6eca53616712d014d1574ca48cc7028b6f53b2cc3b830d412f7854f9",
@@ -30,5 +46,5 @@
     "siglip1_clean_ep28.pt": "7c201bab224b2e0d348c25218d903132d19555618b8a5802d44f92f4ecdc9e54",
     "siglip2_clean_retrain_ep28.pt": "82964358a515a40c5ac684265924398cee23b329f4f8fc45b8af1557175225e2"
   },
-  "note": "Teacher and student files are added through Git LFS; verify hashes after checkout."
+  "note": "Teacher and student files are added through Git LFS; verify hashes after checkout. l150 (1.21 ГБ) в LFS не влезает — ассет GitHub Release weights-l150."
 }

@@ -45,6 +45,11 @@ REGISTRY = {
         model_name="vit_base_patch16_siglip_224.v2_webli",
         license_note="Apache 2.0 (Google SigLIP 2); данные WebLI внутренние",
     ),
+    "siglip_large": BackboneSpec(
+        key="siglip_large", kind="timm", dim=1024, input_size=256,
+        model_name="vit_large_patch16_siglip_256",
+        license_note="Apache 2.0 (Google SigLIP 1); данные WebLI внутренние",
+    ),
     # --- лёгкие бэкбоны для дистилляции в real-time модель ---
     "resnet18": BackboneSpec(
         key="resnet18", kind="timm", dim=512, input_size=224,

@@ -88,6 +88,7 @@ class FullModel(torch.nn.Module):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--backbone", default="siglip2_base")
+    ap.add_argument("--input-size", type=int, default=224)
     ap.add_argument("--init-from", default="", help="локальный case17-чекпоинт; пусто = pretrained timm")
     ap.add_argument("--teacher", required=True)
     ap.add_argument("--rows-csv", required=True)
@@ -126,11 +127,11 @@ def main():
     print("device", device, flush=True)
 
     spec_base = backbones.get(a.backbone)
-    spec = dataclasses.replace(spec_base, input_size=224)
+    spec = dataclasses.replace(spec_base, input_size=a.input_size)
     init = (torch.load(a.init_from, map_location="cpu", weights_only=False)
             if a.init_from else None)
     _, _, encoder = backbones.build_encoder(spec_base, pretrained=init is None,
-                                            input_size=224)
+                                            input_size=a.input_size)
     if init is not None:
         enc_sd = {k[len("encoder."):]: v for k, v in init["model"].items()
                   if k.startswith("encoder.")}
@@ -201,7 +202,7 @@ def main():
                       f"cos={cos.mean().item():.3f} s/step="
                       f"{(time.perf_counter()-t0)/step:.2f}", flush=True)
         if save_epochs is None or ep + 1 in save_epochs:
-            checkpoint_args = {**vars(a), "tf_mode": "squash", "input_size": 224}
+            checkpoint_args = {**vars(a), "tf_mode": "squash", "input_size": a.input_size}
             torch.save({"model": model.state_dict(), "margin": margin.state_dict(),
                         "args": checkpoint_args},
                        out / f"{a.tag}_ep{ep+1}.pt")

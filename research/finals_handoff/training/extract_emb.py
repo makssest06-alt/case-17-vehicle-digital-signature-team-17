@@ -43,7 +43,7 @@ def load_model(ckpt_path, device):
     a = ck.get("args", {})
     spec_base = backbones.get(a.get("backbone", "siglip_base"))
     # чекпоинт мог быть обучен на нестандартном разрешении — берём его же
-    size = a.get("size") or spec_base.input_size
+    size = a.get("size") or a.get("input_size") or spec_base.input_size
     spec = dataclasses.replace(spec_base, input_size=size)
     # Веса целиком придут из чекпоинта, качать pretrained из интернета не нужно.
     _, _, encoder = backbones.build_encoder(spec_base, pretrained=False,
