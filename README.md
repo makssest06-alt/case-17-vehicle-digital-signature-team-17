@@ -211,8 +211,8 @@ docker run --rm --gpus all --network none -v /путь/к/датасету:/data
   case17-api:local python scripts/make_submission.py
 ```
 
-Интернет при инференсе не нужен: веса запекаются в образ на этапе сборки (из Git LFS
-в `weights/` или по `WEIGHTS_URL`, со сверкой sha256).
+Интернет при инференсе не нужен: веса запекаются в образ на этапе сборки (по `WEIGHTS_URL` —
+по умолчанию ассет GitHub Release weights-a10 — или из `weights/` после `git lfs pull`, со сверкой sha256).
 
 ### API
 
