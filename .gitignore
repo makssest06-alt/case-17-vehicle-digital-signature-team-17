@@ -89,3 +89,6 @@ research/results/ann/*
 
 # honest-eval: таблицы результатов коммитятся, глобальное *.csv не трогаем
 !research/honest_eval_results/*.csv
+
+# Заходы research/a5000_session.sh — отчёты и логи с локальными путями
+research/a5000_session/

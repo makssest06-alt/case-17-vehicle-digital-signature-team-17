@@ -440,6 +440,15 @@ docker run --rm --gpus all --network none -v /путь/к/датасету:/data
 | RAM при инференсе | пик **~795 МБ** (CPU, прежний студент), OOM отсутствует |
 | Офлайн-режим | веса в образе, `HF_HUB_OFFLINE=1`; a10 грузится без сети и без HF-кэша (проверено `docker run --network none`) |
 
+Сравнение a10 и другой модели на арендованной A5000 одним заходом — `research/a5000_session.sh`: окружение
+(GPU, драйвер, CUDA, модель и число ядер CPU — у a10 узкое место в декодировании на CPU, у жюри 2× Xeon Gold
+6338, Q30), образ как у жюри, проверка GPU в контейнере, `bench_extract.py` для обеих моделей при EXTRACT_THREADS
+4 / 8 / 16 и пересчёт порогов новой модели (раздел 4.3); итог — одна таблица в `session.md` и `session.json`:
+
+```bash
+L75_WEIGHTS=/путь/l75.pt DATA_DIR=/путь/к/данным DATASET_ZIP=/путь/dataset.zip ./research/a5000_session.sh
+```
+
 ---
 
 ## 7. Артефакты сдачи (п.8 ТЗ)
