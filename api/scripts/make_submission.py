@@ -12,8 +12,8 @@ WARNING / ERROR с image_id, итог — строкой в конце лога.
 Поиск — Postprocess.search: ранжирование PP_DEDUP_RANK, оценка отказа REFUSAL_SCORE по
 кандидатам без почти-дублей PP_DEDUP_REFUSAL, порог SEARCH_THRESHOLD. Вместо pgvector —
 точный поиск в памяти (MemoryStore). Настройки — те же переменные окружения, что у сервиса
-(api/app/config.py), поэтому по умолчанию это production: a10, DBA k=1, отказ raw
-без почти-дублей «фон ИЛИ рамка», порог 0.7586 (docs/refusal.md).
+(api/app/config.py), поэтому по умолчанию это production этой ветки: DBA k=1, отказ raw
+по лучшему кандидату без исключения почти-дублей (пресет «DBA»), порог SEARCH_THRESHOLD (docs/refusal.md).
 
 Каждый query обрабатывается отдельно, другие query не используются (ответ организаторов
 Q38): постобработка трогает только галерею — статичную базу.

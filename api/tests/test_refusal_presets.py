@@ -15,13 +15,18 @@ class RefusalPresetsTest(unittest.TestCase):
     def test_presets_match_research(self):
         from app.config import REFUSAL_PRESETS
 
-        computed = json.loads(RESULT.read_text(encoding="utf-8"))["config_presets"]
+        res = json.loads(RESULT.read_text(encoding="utf-8"))
+        computed = res["config_presets"]
         self.assertGreater(len(computed), 0)
         for key, got in REFUSAL_PRESETS.items():
             if key == (0, "off", "off", "raw"):
                 continue                        # legacy-пресет до постобработки, калиброван под a10
             with self.subTest(key):
-                want = computed[repr(key)]
+                if key[1:3] == ("off", "off"):  # «DBA»: прежний генератор не писал его в config_presets — по presets
+                    p = res["presets" if key[3] == "raw" else "presets_alt"]["DBA"]
+                    want = {"balanced": round(p["threshold"], 4), "strict": round(p["strict"], 4)}
+                else:
+                    want = computed[repr(key)]
                 self.assertEqual((got["balanced"], got["strict"]), (want["balanced"], want["strict"]))
 
     def test_dedup_rule_matches_calibration(self):
@@ -35,11 +40,11 @@ class RefusalPresetsTest(unittest.TestCase):
     def test_current_service_point_untouched(self):
         from app.config import REFUSAL_PRESETS, Settings
 
-        cur = REFUSAL_PRESETS[(1, "off", "both", "raw")]                  # production: итог
+        cur = REFUSAL_PRESETS[(1, "off", "off", "raw")]                   # production: «DBA»
         s = Settings()
         self.assertEqual((cur["balanced"], cur["strict"]), (s.search_threshold, s.search_threshold_strict))
         from app.pp import state
-        self.assertEqual(state.preset_key(s), (1, "off", "both", "raw"))    # пресет по умолчанию — ключ итога
+        self.assertEqual(state.preset_key(s), (1, "off", "off", "raw"))     # пресет по умолчанию — ключ «DBA»
 
 
 if __name__ == "__main__":
