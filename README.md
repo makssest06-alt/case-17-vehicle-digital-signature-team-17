@@ -297,6 +297,50 @@ z100 выбирали раньше — на прежнем протоколе, �
 данные теста не использовались** — ни кадры, ни метки, ни госномер. Строгий порог — для случаев, когда
 ложное совпадение дороже пропуска. Запасной без фона — raw 0.7572 / 0.9305.
 
+### 4.3 Смена модели: пороги и веса
+
+Порог отказа (raw 0.7586, строгий 0.9302), порог фона τ 0.68127 и правило почти-дублей (косинус ≥ 0.84,
+IoU рамок ≥ 0.6, сдвиг центра ≤ 0.3) подобраны под a10: это косинусы её векторов. Для другой модели их
+нужно пересчитать — одной командой, тем же кодом и по тому же протоколу (Q17, без данных теста):
+
+```bash
+EMBED_MODEL=reid:vit_large_patch16_siglip_256 REID_WEIGHTS=/путь/l75.pt INPUT_SIZE=256 \
+DATA_DIR=/путь/к/данным DATASET_ZIP=/путь/dataset.zip ./research/recalibrate_for_model.sh l75
+```
+
+- `DATA_DIR` — `train.csv`, `test_query.csv` и `test_gallery.csv` (из них читается только таблица рамок) и
+  `crops/train/`, если есть (так считались пороги a10); без `crops/` кадры берутся из `DATASET_ZIP` и режутся
+  кодом сервиса. Эмбеддинги 9556 кадров `train.csv` считает код сервиса — на GPU в FP16, если есть CUDA, с
+  кэшем в `~/lct-case17/cache/honest_eval`; повторный запуск идёт из кэша. Кадры теста не читаются.
+- Скрипт (`research/recalibrate_for_model.py`) печатает пресет для `REFUSAL_PRESETS` в `api/app/config.py`,
+  строки `.env` и таблицу mAP@10, F1, TNR и 0.7·F1 + 0.3·TNR на 361 и 1111, сверяет их с текущим конфигом и
+  пишет всё в `research/honest_eval_results/recalibrate_<имя>.json`. На a10 он даёт прежние числа: 0.7586 /
+  0.9302, τ 0.68127, рамки 0.84 / 0.6 / 0.3, формула 0.881 / 0.756.
+
+Что поменять в сервисе:
+
+| Где | Что |
+|---|---|
+| Модель | `EMBED_MODEL`, `REID_WEIGHTS`, `INPUT_SIZE`; `EMBED_DIM` — если размерность выхода другая; `REID_TF_MODE` — режим кропа, на котором модель обучена (у a10 `squash`) |
+| Пороги | `SEARCH_THRESHOLD`, `SEARCH_THRESHOLD_STRICT`, `PP_CAMERA_TAU`, `PP_DEDUP_SIM`, `PP_DEDUP_IOU`, `PP_DEDUP_CENTER`, `PP_DEDUP_SIZE` — в `.env` или умолчаниями в `api/app/config.py`; туда же строки `REFUSAL_PRESETS` из вывода скрипта (по ним сервис пишет в лог, что порог не посчитан для текущей постобработки) |
+| Артефакты сдачи | пересобрать `api/scripts/make_submission.py` и проверить `scripts/validate_submission.py` |
+| Скорость | `api/scripts/bench_extract.py` на новой модели (Q31, Q34): ViT-L в несколько раз тяжелее ViT-B |
+
+Что меняется в весах:
+
+- **Попробовать без пересборки образа:** положить файл в `./weights/` и задать `REID_WEIGHTS=/models/<файл>` —
+  том `./weights:/models` из `docker-compose.yml`.
+- **В образ (сдача, работа без сети):** имя `clean_student_a10_ep28.pt` зашито в `api/Dockerfile` (`COPY`,
+  `fetch_weights.sh`, `ENV REID_WEIGHTS`), `.dockerignore` (белый список), `docker-compose.yml` (`REID_WEIGHTS`),
+  `.env.example`, `.gitattributes` (LFS) и `scripts/check_reproducibility.sh` — заменить на новое.
+- **sha256:** новый — в `WEIGHTS_SHA256` (аргумент сборки в `api/Dockerfile`; не совпал — сборка падает) и в
+  `REID_WEIGHTS_SHA256` (сверка при старте сервиса); sha256 и размер файла скрипт печатает первой строкой.
+- **Размер:** лимит весов — 2 ГБ (Q34, Q37). ViT-L/16 — около 300 млн параметров, в FP32 это ~1.2 ГБ (a10 —
+  94 млн, 362 МБ). В бесплатный Git LFS (1 ГБ на весь репозиторий, a10 уже занимает 362 МБ) такой файл не
+  войдёт — только ассет GitHub Release.
+- **`WEIGHTS_URL`:** ссылка на новый файл с фиксированным тегом релиза (Q39); в README (раздел 5) — URL, автор,
+  размер и sha256 модели.
+
 ---
 
 ## 5. Внешние ресурсы

@@ -230,16 +230,19 @@ def open_in(perm: dict, v, r: int) -> bool:
     return v in perm and (perm[v] % ROTATIONS - r) % ROTATIONS < OPEN_W
 
 
-def run(a) -> dict:
+def run(a, tau: float = None, rule: dict = None, D=None, bg: dict = None) -> dict:
+    """tau, rule (правило рамок «наши»: s_hi, t_iou, t_center, t_size), D и bg задаёт
+    research/recalibrate_for_model.py — пересчёт под другую модель; по умолчанию — значения конфига (a10)."""
     import pseudo_camera as pc
     from app.config import Settings
 
-    tau = Settings().pp_camera_tau
-    D = he.Data(a)
+    tau = Settings().pp_camera_tau if tau is None else tau
+    rules = RULES if rule is None else {**RULES, "ours": {"s_any": float("inf"), **rule}}
+    D = he.Data(a) if D is None else D
     qrows, grows = D.valid(D.qry), D.valid(D.gal)
     assert (len(qrows), len(grows)) == (546, 361), (len(qrows), len(grows))
     boxes = {r["image_id"]: r["box"] for r in pc.read_rows(a.data_dir)}
-    bg = tvg.service_bg(D, a)
+    bg = tvg.service_bg(D, a) if bg is None else bg
     Q = he.frame(qrows)
     qids = list(Q.index)
     qv, qc = Q.vehicle_id.to_numpy(), Q.camera_id.to_numpy()
@@ -258,7 +261,7 @@ def run(a) -> dict:
     extra = {"361": lambda: [], "1111tr": lambda: tr750, "750tr": lambda: [tr750[i] for i in sub],
              "1111": lambda: D.valid(D.distractors("test_gallery")), "2.2k": lambda: D.valid(D.distractors("test_all")),
              "10.8k": lambda: D.valid(D.distractors("test_all+train_seen"))}     # тест читается только в andrey
-    res = {"tag": a.tag, "tau": tau, "rules": RULES, "n_queries": len(qids), "galleries": {},
+    res = {"tag": a.tag, "tau": tau, "rules": rules, "n_queries": len(qids), "galleries": {},
            "protocol": {"rotations": ROTATIONS, "open_width": OPEN_W, "objective": OBJECTIVE, "main": list(MAIN),
                         "open": OPEN_MODE,
                         "galleries": list(GALLERIES), "distractor_seed": DISTRACTOR_SEED}}
@@ -273,8 +276,8 @@ def run(a) -> dict:
         s = {"raw": raw, "dba": q @ dba(g, k=1, weights="cos").T}
         gbox = np.array([boxes[i] for i in gids], dtype="float64")
         fl = {"none": np.zeros(raw.shape, bool), "bg": (qbg @ np.stack([bg[i] for i in gids]).T) > tau}
-        for name, rule in RULES.items():
-            fl[f"dup_{name}"] = dd.near_dup_flags(raw, qbox[:, None, :], gbox[None, :, :], **rule)
+        for name, r_ in rules.items():
+            fl[f"dup_{name}"] = dd.near_dup_flags(raw, qbox[:, None, :], gbox[None, :, :], **r_)
         for x, y in (("bg", "dup_ours"), ("bg", "dup_andrey")):
             fl[f"{x}|{y}"] = fl[x] | fl[y]
         keeps = [np.array([not (open_in(perm, v, r) and (OPEN_MODE == "drop" or c != keep_cam.get(v)))
