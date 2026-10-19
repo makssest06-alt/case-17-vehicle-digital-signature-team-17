@@ -153,10 +153,13 @@ Production-профиль: ранжирование DBA k=1 без флагов,
 1. **Учителя** на чистых строках обучения (без пяти exact-дублей train↔holdout):
    `research/run_clean_retrain.sh` — SigLIP 1 squash, SigLIP 1 base и CLIP через `train_reid.py`
    (30 эпох, чекпоинт эпохи 28). SigLIP 2-учитель (`siglip2_clean_retrain_ep28.pt`) в скрипте не
-   записан — тот же `train_reid.py` с `--backbone siglip2_base`.
+   записан — тот же `train_reid.py` с `--backbone siglip2_base`; точная команда (строки, гиперпараметры,
+   выходной sha) — `research/finals_handoff/TEACHER_PIPELINE_README.md`, шаг 1.
 2. **Эмбеддинги учителя** — взвешенный ансамбль четырёх (веса 0.364 / 0.232 / 0.182 / 0.222,
-   `manifest.json`) на тех же строках, как в `analysis/distill_teacher.py`; отдельный скрипт этого
-   шага в ветке обучения не сохранился.
+   `manifest.json`) на тех же строках, что в шаге 1: `research/build_clean_teacher.py`
+   (веса/tf_mode/TTA — из содержимого config, пример `research/clean_teacher_config.example.json`),
+   выход `clean_teacher_emb.npy` 8639×512 float32, sha256 `4ec0e9dc…b60e86d1`
+   (команда — `research/finals_handoff/TEACHER_PIPELINE_README.md`, шаг 2).
 3. **Студент**: `research/run_clean_student_sweep.sh` — `train_distill.py`, SigLIP 2 ViT-B/16,
    squash, `loss = ArcFace + Triplet + α·(1 − cos)`; в скрипте прогон α = 2, 6, 50, a10 — те же
    аргументы с `--alpha 10 --tag clean_student_a10`, чекпоинт эпохи 28.
