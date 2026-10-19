@@ -1,8 +1,12 @@
 # Clean retrain artifacts
 
 These files are the result of the full retrain after removing five exact JPEG
-duplicates between train and holdout. They are **research handoff artifacts**,
-not yet wired into the active service configuration.
+duplicates between train and holdout. The alpha=10 student is the production model of the service
+(root `README.md`, sections 2.3 and 2.7); teacher and alpha=25 weights are research artifacts.
+
+The weight files are not stored in this directory: `clean_student_a10_ep28.pt` is
+`weights/clean_student_a10_ep28.pt` (Git LFS) and the GitHub Release `weights-a10`; the other
+checkpoints are not in the repository (see `manifest.json`).
 
 ## Models
 
@@ -13,7 +17,7 @@ not yet wired into the active service configuration.
 - `clean_student_a25_ep28.pt`: clean student alpha=25
 - `clean_student_a10_ep28.pt`: selected clean student alpha=10
 
-The alpha=10 student is the intended runtime candidate. Teacher weights are retained for
+The alpha=10 student is the production runtime model. Teacher weights are retained for
 reproducibility and future ablations; do not load them in the production service.
 
 ## Clean holdout metrics
@@ -33,9 +37,8 @@ Official evaluator, raw cosine, same cleaned holdout (550 query / 357 gallery,
 | clean student alpha=25 | 0.8614 | 0.8306 | 0.9337 |
 | **clean student alpha=10** | **0.8666** | **0.8306** | **0.9466** |
 
-The student improves the old student on this clean holdout. It is not yet
-accepted for production until the expanded-gallery stress protocol and runtime
-checks are complete.
+The student improves the old student on this clean holdout. It is the production
+model now (thresholds and protocol — `docs/refusal.md`).
 
 ## Expanded-gallery stress result
 
@@ -43,7 +46,7 @@ This **source-domain stress proxy** uses 550 queries and 8996 gallery rows:
 **357 cleaned holdout gallery rows + 8639 clean-training rows**. The
 clean-training rows were used during training and have vehicle IDs disjoint
 from holdout queries; this is not organizer data. Exactly 7 queries are
-excluded from ranking (543 scored). The clean student gets raw cosine mAP@10
+excluded from ranking (543 scored). The alpha=25 clean student gets raw cosine mAP@10
 `0.5492`; fixed k-reciprocal without the old CSLS stage gets `0.7275`. The old
 full CSLS pipeline gets `0.6986`. This confirms the postprocessing stage is a
 separate generalization bottleneck.

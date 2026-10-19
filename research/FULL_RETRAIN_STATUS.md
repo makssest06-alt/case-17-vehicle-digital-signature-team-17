@@ -1,5 +1,8 @@
 # Full Retrain Status
 
+> **Historical status.** The retrain is done: see `research/clean_student/` and the root `README.md`,
+> sections 2.3 and 2.7.
+
 The full retrain is intentionally staged. The old `teacher_emb.npy` is not used:
 it was generated from the old 8644-row training set with five exact train/holdout
 duplicate images.

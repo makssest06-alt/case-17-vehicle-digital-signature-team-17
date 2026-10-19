@@ -98,6 +98,11 @@
 - **PK-сэмплер** (P=8, K=4): для batch-hard triplet нужны «свои» в батче.
 - **Cross-camera**: позитивы в батче берутся с разных камер — позитив не лёгкий.
 
+Префикс `reid:` в `EMBED_MODEL=reid:vit_base_patch16_siglip_224.webli` выбирает загрузку ReID-чекпоинта:
+архитектура и все веса берутся из чекпоинта a10 (`args.backbone = siglip2_base`, SigLIP 2), имя после `reid:` —
+запасное, если чекпоинт бэкбон не объявил. Поэтому `/health` и `artifacts/postprocess.json`
+называют модель `reid:vit_base_patch16_siglip_224.v2_webli` (`api/app/models/reid_checkpoint.py`).
+
 ### 2.3 Дистилляция (ключевой шаг)
 
 Текущая production-модель — **clean student alpha=10**, обученная после удаления
@@ -141,6 +146,13 @@ Production-профиль: ранжирование DBA k=1 без флагов,
 0.7·F1 + 0.3·TNR (Q15) вне фолда на галереях 361 и 361 + 750 кадров обучающих машин, 20 % машин без пары
 (Q17), без кадров теста (`docs/refusal.md`). z100 — пресет по выбору (`REFUSAL_SCORE=z100`, 4.3475 / 8.8469). Штраф по фону в
 ранжировании убран: эталон засчитывает верным ответ кадром той же машины с той же камеры.
+
+`camera_id` на инференсе не используется (Q2): в `test_query.csv` и `test_gallery.csv` его нет,
+`api/scripts/make_submission.py` читает из CSV только `image_id, x, y, w, h`, массовый импорт сервиса
+(`/v1/gallery/bulk-import`) — их же и необязательный `vehicle_id`. «Фон» — признак из пикселей
+самого кадра вне рамки машины (`api/app/pp/background.py`); имена `PP_CAMERA_*` — про признак «та же камера»,
+посчитанный по фону. `camera_id` из `train.csv` нужен только при обучении и при калибровке порогов на
+обучающих машинах (`api/app/pp/dedup.py`).
 
 ---
 
@@ -188,7 +200,7 @@ docker compose up -d --build
 
 Если `git lfs install && git lfs pull` уже сделан — возьмётся файл из `weights/`,
 скачивание не понадобится. Свой источник: `WEIGHTS_URL=<ссылка> docker compose up -d --build`.
-На машине без NVIDIA (compose по умолчанию резервирует GPU): `docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d --build`.
+На машине без NVIDIA (compose по умолчанию резервирует GPU; нужен Docker Compose ≥ 2.24 — тег `!reset` в `docker-compose.cpu.yml`): `docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d --build`.
 При запуске сеть не нужна: веса a10 уже в образе (предобученный бэкбон с HF a10 не нужен).
 
 Всё. Интерфейс — http://localhost:8080, Swagger — http://localhost:8000/docs.
@@ -225,6 +237,7 @@ docker run --rm --gpus all --network none -v /путь/к/датасету:/data
 | GET | `/v1/gallery` | содержимое галереи |
 | DELETE | `/v1/gallery/{id}` | удалить запись |
 | POST | `/v1/explain` | карта вклада участков кадра (интерпретируемость) |
+| GET | `/v1/config` | рабочие точки порога (сбалансированный и строгий) и параметры постобработки — их берёт веб-интерфейс |
 | GET | `/health` | жив ли процесс |
 | GET | `/ready` | модель загружена и база отвечает |
 
@@ -242,7 +255,9 @@ docker run --rm --gpus all --network none -v /путь/к/датасету:/data
 
 | Конфигурация | mAP@10 | Rank-1 | Rank-5 | Веса |
 |---|---:|---:|---:|---:|
-| **Clean student alpha=10** | **0.8661** | **0.8287** | **0.9448** | **~362 МБ** |
+| **Clean student alpha=10** | **0.8661** | **0.8294** | **0.9437** | **~362 МБ** |
+
+Источник — `research/honest_eval_results/honest_eval_a10_suite.json`, `old_protocol.raw` (551 query в зачёте).
 
 Production (a10 + DBA k=1 по галерее) в протоколе закрытого теста — 546 query, галереи 361 и
 1111 (361 + 750 кадров обучающих машин, по кадру на пару машина-камера; кадров теста нет): mAP@10
@@ -258,7 +273,8 @@ train↔holdout (тот же размер: 551 query / 361 gallery), поэто�
 0.8961–0.8965 / 0.8639 / 0.9637 — с транздуктивной постобработкой qq-expand →
 k-reciprocal → CSLS: она использует другие query, что запрещено ответом
 организаторов Q38, и в решении больше не применяется. Скорость прежнего студента —
-170 мс/кадр на CPU (2 потока), head-only заглушки — 668 мс/кадр, mAP@10 0.6454.
+170 мс/кадр на CPU (2 потока), head-only заглушки — 668 мс/кадр, mAP 0.6454 (полный, без усечения до 10;
+`research/results/service_path_extras.json`).
 
 ### 4.2 Режим отказа и порог
 
@@ -336,7 +352,8 @@ DATA_DIR=/путь/к/данным DATASET_ZIP=/путь/dataset.zip ./research/
 - **В образ (сдача, работа без сети):** имя `clean_student_a10_ep28.pt` зашито в `api/Dockerfile` (`COPY`,
   `fetch_weights.sh`, `ENV REID_WEIGHTS`), `.dockerignore` (белый список), `docker-compose.yml` (`REID_WEIGHTS`),
   `.env.example`, `.gitattributes` (LFS) и `scripts/check_reproducibility.sh` — заменить на новое.
-- **sha256:** новый — в `WEIGHTS_SHA256` (аргумент сборки в `api/Dockerfile`; не совпал — сборка падает) и в
+- **sha256:** новый — в `WEIGHTS_SHA256` (аргумент сборки в `api/Dockerfile`; `docker-compose.yml` его не
+  пробрасывает — менять `ARG WEIGHTS_SHA256` в `api/Dockerfile`; не совпал — сборка падает) и в
   `REID_WEIGHTS_SHA256` (сверка при старте сервиса); sha256 и размер файла скрипт печатает первой строкой.
 - **Размер:** лимит весов — 2 ГБ (Q34, Q37). ViT-L/16 — около 300 млн параметров, в FP32 это ~1.2 ГБ (a10 —
   94 млн, 362 МБ). В бесплатный Git LFS (1 ГБ на весь репозиторий, a10 уже занимает 362 МБ) такой файл не
@@ -358,7 +375,7 @@ DATA_DIR=/путь/к/данным DATASET_ZIP=/путь/dataset.zip ./research/
 | SigLIP 2 ViT-B/16 | Google DeepMind (Tschannen et al., 2025) | https://huggingface.co/timm/ViT-B-16-SigLIP2 | timm `vit_base_patch16_siglip_224.v2_webli`; HF-ревизия `eee10eff6dd8cabae2d7f379d4e8cfcd352030aa` | инициализация a10; учитель | Apache 2.0 |
 | SigLIP ViT-B/16 | Google (Zhai et al., 2023) | https://huggingface.co/timm/ViT-B-16-SigLIP | timm `vit_base_patch16_siglip_224.webli`; HF-ревизия `41f575766f40e752fdd1383e9565b7f02388c1c4` | учитель (squash и base); в образ не запекается (`BAKE_BACKBONE=1` — только для timm:/head-only профилей) | Apache 2.0 |
 | CLIP ViT-B/16 | OpenAI (Radford et al., 2021) | https://huggingface.co/timm/vit_base_patch16_clip_224.openai | timm `vit_base_patch16_clip_224.openai`; HF-ревизия `977e3dd0ec55ab8da155f2fbeb6b5f54948b6e3d` | учитель | MIT (OpenAI CLIP) |
-| a10 (наша) | команда 17 | `weights/clean_student_a10_ep28.pt` (Git LFS) | sha256 `93114c5923869d01e92cd70c2c421f783d05ebdac5652a1f2dc919aa040bf6ce` | инференс | — |
+| a10 (наша) | команда 17 | https://github.com/makssest06-alt/case-17-vehicle-digital-signature-team-17/releases/download/weights-a10/clean_student_a10_ep28.pt (Release `weights-a10`; та же копия — `weights/clean_student_a10_ep28.pt` в Git LFS) | sha256 `93114c5923869d01e92cd70c2c421f783d05ebdac5652a1f2dc919aa040bf6ce`, 379 734 230 байт | инференс | — |
 
 Ревизии HF — текущие на 18.10.2026 (у SigLIP совпадает с локальным кэшем, на котором считались
 учителя); прежние ревизии учителей в истории обучения не записаны.
@@ -415,7 +432,7 @@ docker run --rm --gpus all --network none -v /путь/к/датасету:/data
 
 Ход замера (загрузка модели, sha256 весов, этапы и их итоги) идёт в stderr, в stdout — только итоговый JSON.
 
-**Официальный замер на RTX 4060 Laptop в Docker** — этот же `bench_extract.py` в образе `case17-api:local`
+**Замер по протоколу организаторов (Q31) на RTX 4060 Laptop в Docker, справочно** — этот же `bench_extract.py` в образе `case17-api:local`
 (torch 2.5.1+cu124, FP16, `--gpus all`), 256 кадров `test_query.csv` по кругу; файлы — в ветке
 `team17/finals-student-gpu-handoff`, `research/bench_4060_official/docker/` (коммит `d281527`):
 
@@ -428,7 +445,9 @@ docker run --rm --gpus all --network none -v /путь/к/датасету:/data
 Детерминизм — max|Δ| = 0, веса — 362 МБ. Это ноутбучная 4060, а не стенд жюри: замер на A5000 (Q30) ещё впереди
 (`research/a5000_session.sh`, ниже).
 
-Ускорения (разрешены Q36) — переменные окружения; качество — на галерее 361 / 546 запросах holdout
+Ускорения (разрешены Q36) — переменные окружения (`docker-compose.yml` их в контейнер не пробрасывает, строка
+в `.env` на них не действует — задавать при запуске: `docker compose exec -e EXTRACT_THREADS=8 api …` или
+`docker run -e …`); качество — на галерее 361 / 546 запросах holdout
 полным циклом `extract()` (`research/extract_flags.py`, `research/honest_eval_results/extract_flags_a10.md`):
 
 | Флаг | По умолчанию | Косинус с эталоном, min | mAP@10 raw / DBA (без флага 0.8661 / 0.8835) | Решение |
@@ -459,7 +478,8 @@ docker run --rm --gpus all --network none -v /путь/к/датасету:/data
 | RAM при инференсе | пик **~795 МБ** (CPU, прежний студент), OOM отсутствует |
 | Офлайн-режим | веса в образе, `HF_HUB_OFFLINE=1`; a10 грузится без сети и без HF-кэша (проверено `docker run --network none`) |
 
-Масштабируемость поиска — `research/ANN.md`: FAISS HNSW на галерее 10⁶ — 0.41 мс на запрос против 137.18 мс точного перебора, mAP 62.48 против 62.74 (замер 20.09).
+Масштабируемость поиска — `research/ANN.md`: FAISS HNSW на галерее 10⁶ — 0.41 мс на запрос против 137.18 мс точного перебора, mAP 62.48 против 62.74 (в процентах, на галерее с дистракторами; замер 20.09 на прежней head-only модели
+SigLIP base + голова, `research/ann_benchmark.py`; на a10 не перемерялся).
 
 Сравнение a10 и другой модели на арендованной A5000 одним заходом — `research/a5000_session.sh`: окружение
 (GPU, драйвер, CUDA, модель и число ядер CPU — у a10 узкое место в декодировании на CPU, у жюри 2× Xeon Gold
@@ -500,6 +520,9 @@ WARNING / ERROR с image_id, итог — последней строкой ло
 docker compose exec api python scripts/make_submission.py              # DATA_DIR: test_*.csv + images/
 python api/scripts/make_submission.py --zip dataset.zip --out artifacts   # или прямо из архива датасета
 ```
+
+Обе команды перезаписывают `artifacts/`. Запуск на хосте (вторая строка) требует пакетов из
+`api/requirements.txt` и настоящего файла весов: `git lfs pull` или `REID_WEIGHTS=<путь>`.
 
 ---
 

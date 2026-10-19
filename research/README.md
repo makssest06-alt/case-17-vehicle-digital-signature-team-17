@@ -4,6 +4,9 @@
 подготовка полного дообучения. Результаты — в [results.md](results.md),
 лицензии — в [LICENSES.md](LICENSES.md).
 
+> Пути `/opt/case17/app` (корень клона), `/opt/case17/data` и `/opt/case17/models` ниже — сервер команды;
+> у себя замените их на путь клона, данных и весов.
+
 ## Окружения
 
 ```bash
@@ -46,7 +49,7 @@ python research/honest_eval.py --data-dir /opt/case17/data --suite --tag maxim_v
   (+ тест и кадры обучающих машин). 150 машин holdout, 5 фолдов по 30 машин, 25 %
   машин фолда без пары (TNR), режимы `official` и «без почти-дублей».
 - Результат: `research/honest_eval_results/honest_eval_<tag>_suite.md`
-  (+ `.json`, `_folds.csv`). Для текущего студента —
+  (+ `.json`, `_folds.csv`). Для a10 — `honest_eval_a10_suite.md`, для прежнего студента —
   `honest_eval_student_suite.md`, для профиля compose без `.env` —
   `compose_default_check.md`.
 - Время на CPU: первый прогон считает ~11.4 тыс. кропов (студент SigLIP-B ~17
@@ -57,7 +60,7 @@ python research/honest_eval.py --data-dir /opt/case17/data --suite --tag maxim_v
   (k-reciprocal на 10.8k — минуты на фолд и 3–4 ГБ памяти); `/v1/search` так не
   отвечает, это справка.
 - `--source frames --zip dataset.zip` — кроп из полного кадра функциями сервиса
-  (`app/imaging.py`), как отвечает `/v1/embed`.
+  (`api/app/imaging.py`), как отвечает `/v1/embed`.
 
 Порог отказа вне фолда на «чистом» режиме: `python research/calibrate_refusal_folds.py
 --data-dir /opt/case17/data [--env ...]` → `refusal_folds.json`.
