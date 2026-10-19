@@ -173,24 +173,21 @@ Production-профиль: ранжирование DBA k=1 без флагов,
 ## 3. Запуск одной командой
 
 ```bash
-git clone -b glebmain <ссылка на репозиторий>   # решение — в ветке glebmain
+git clone https://github.com/makssest06-alt/case-17-vehicle-digital-signature-team-17.git   # ветка по умолчанию — glebmain, в ней решение
 cd case-17-vehicle-digital-signature-team-17
 cp .env.example .env          # необязательно: без .env берутся значения по умолчанию
 ```
 
-Веса модели (`weights/clean_student_a10_ep28.pt`, 362 МБ) лежат в Git LFS и при сборке
-запекаются в образ. Два способа их получить — любой из них:
+Веса модели (`weights/clean_student_a10_ep28.pt`, 362 МБ) при сборке запекаются в образ.
+Ничего настраивать не нужно: без git-lfs они скачаются при сборке из GitHub Release
+(weights-a10) по `WEIGHTS_URL` по умолчанию, sha256 сверяется (при несовпадении сборка падает):
 
 ```bash
-# 1) через Git LFS
-git lfs install && git lfs pull
-docker compose up -d
-
-# 2) без git-lfs: скачать при сборке по ссылке (sha256 сверяется, при несовпадении сборка падает)
-WEIGHTS_URL=<ссылка на clean_student_a10_ep28.pt> docker compose up -d --build
+docker compose up -d --build
 ```
 
-Без обоих сборка остановится с сообщением «укажите WEIGHTS_URL или выполните git lfs pull».
+Если `git lfs install && git lfs pull` уже сделан — возьмётся файл из `weights/`,
+скачивание не понадобится. Свой источник: `WEIGHTS_URL=<ссылка> docker compose up -d --build`.
 На машине без NVIDIA (compose по умолчанию резервирует GPU): `docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d --build`.
 При запуске сеть не нужна: веса a10 уже в образе (предобученный бэкбон с HF a10 не нужен).
 

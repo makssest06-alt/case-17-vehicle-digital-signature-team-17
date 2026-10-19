@@ -6,8 +6,8 @@ FROM python:3.11.17-slim AS weights
 # Настоящий файл из weights/ остаётся как есть, ничего не качается. LFS-указатель или
 # файла нет (шаблон weight[s]/… тогда ничего не копирует) — скачивается по WEIGHTS_URL.
 # sha256 сверяется всегда (api/scripts/fetch_weights.sh).
-# WEIGHTS_URL пуст: где публиковать веса, решает команда; до тех пор — git lfs pull.
-ARG WEIGHTS_URL=""
+# WEIGHTS_URL по умолчанию — ассет GitHub Release weights-a10 (публичный, без LFS-квоты).
+ARG WEIGHTS_URL="https://github.com/makssest06-alt/case-17-vehicle-digital-signature-team-17/releases/download/weights-a10/clean_student_a10_ep28.pt"
 ARG WEIGHTS_SHA256=93114c5923869d01e92cd70c2c421f783d05ebdac5652a1f2dc919aa040bf6ce
 COPY weight[s]/clean_student_a10_ep28.p[t] /opt/weights/
 COPY api/scripts/fetch_weights.sh /usr/local/bin/fetch_weights.sh

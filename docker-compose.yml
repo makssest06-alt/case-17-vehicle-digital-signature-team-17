@@ -33,7 +33,7 @@ services:
       dockerfile: api/Dockerfile
       args:
         EMBED_MODEL: ${EMBED_MODEL:-reid:vit_base_patch16_siglip_224.webli}
-        WEIGHTS_URL: ${WEIGHTS_URL:-}
+        WEIGHTS_URL: ${WEIGHTS_URL:-https://github.com/makssest06-alt/case-17-vehicle-digital-signature-team-17/releases/download/weights-a10/clean_student_a10_ep28.pt}   # по умолчанию — ассет GitHub Release weights-a10 (api/Dockerfile)
         BAKE_BACKBONE: ${BAKE_BACKBONE:-0}   # 1 — только для timm:/head-only профилей (api/Dockerfile)
     image: case17-api:local
     container_name: case17-api

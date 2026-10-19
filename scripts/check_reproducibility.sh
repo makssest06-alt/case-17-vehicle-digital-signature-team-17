@@ -118,7 +118,13 @@ case "$WEIGHTS_ABS" in
     elif [ -n "$URL" ]; then
       ok "в клоне $W — LFS-указатель; веса скачаются при сборке по WEIGHTS_URL"
     else
-      bad "в клоне $W — LFS-указатель, WEIGHTS_URL не задан: сборка остановится (git lfs pull или WEIGHTS_URL)"
+      # дефолт — ассет GitHub Release в docker-compose.yml / api/Dockerfile
+      DEF_URL=$(grep -oE 'WEIGHTS_URL: \$\{WEIGHTS_URL:-[^}]+\}' docker-compose.yml | sed -E 's/.*:-([^}]+)\}/\1/' || true)
+      if [ -n "$DEF_URL" ]; then
+        ok "в клоне $W — LFS-указатель; веса скачаются при сборке по WEIGHTS_URL по умолчанию (Release-ассет в docker-compose.yml)"
+      else
+        bad "в клоне $W — LFS-указатель, WEIGHTS_URL не задан: сборка остановится (git lfs pull или WEIGHTS_URL)"
+      fi
     fi
     ;;
   *)
