@@ -7,7 +7,7 @@
     "path": "app.pp.state.Postprocess — тот же код, что в сервисе; другие query не используются",
     "PP_DBA_K": 1,
     "PP_DEDUP_RANK": "off",
-    "PP_DEDUP_REFUSAL": "both",
+    "PP_DEDUP_REFUSAL": "off",
     "PP_CAMERA_TAU": 0.68062,
     "PP_DEDUP_SIM": 0.83,
     "PP_DEDUP_IOU": 0.6,
@@ -15,13 +15,13 @@
   },
   "refusal": {
     "score": "raw",
-    "threshold": 0.8249,
+    "threshold": 0.8737,
     "preset": {
-      "balanced": 0.8249,
-      "note": "итог: DBA; отказ фон ИЛИ рамка (наши пороги), raw: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (recalibrate_l150.json)"
+      "balanced": 0.8737,
+      "note": "итог: DBA, отказ без исключения почти-дублей, raw: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (closed_gallery_l150.json)"
     },
-    "accepted": 814,
-    "refused": 296,
+    "accepted": 948,
+    "refused": 162,
     "candidates_rule": "принятый query — top-10 как в ответе /v1/search, confidence — косинус кандидата"
   },
   "consistency": {
