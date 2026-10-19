@@ -5,7 +5,8 @@
   "holdout_query": 550,
   "holdout_gallery": 357,
   "exact_duplicate_pairs_removed": 5,
-  "runtime_student": "clean_student_large_150_ep150.pt",
+  "runtime_student": "soup150s2.pt",
+  "runtime_recipe": "model soup l150 + s2 (среднее весов), research/make_soup.py",
   "teachers": [
     "siglip2_clean_retrain_ep28.pt",
     "siglip1_clean_ep28.pt",
@@ -37,7 +38,21 @@
     "mAP10_expanded": 0.6467,
     "note": "официальный evaluate.py; обучение — research/run_clean_student_large.sh, протокол и логи вне репо (bm_improve/large_scale/notes.md)"
   },
+  "soup150s2": {
+    "file": "soup150s2.pt",
+    "recipe": "model soup: среднее весов clean_student_large_150_ep150.pt (seed 7) и clean_student_large_s2_ep75.pt (seed 42), research/make_soup.py",
+    "backbone": "siglip_large",
+    "input_size": 256,
+    "tf_mode": "squash",
+    "tta": false,
+    "mAP10_clean": 0.9133,
+    "rank1_clean": 0.9024,
+    "rank5_clean": 0.9466,
+    "mAP10_expanded": 0.6592,
+    "note": "production этой ветки; официальный evaluate.py; протокол и логи вне репо (bm_improve/large_scale/notes.md)"
+  },
   "sha256": {
+    "soup150s2.pt": "64e2f1897b593d9de7100fd6449058f0fad57f98de0bcbdfe4c546c5a6a21553",
     "clean_student_large_150_ep150.pt": "6937d1163e239bcfd8ee76fe00da12a9d60becc89563b8fc5a475dc72df13d52",
     "clean_student_a10_ep28.pt": "93114c5923869d01e92cd70c2c421f783d05ebdac5652a1f2dc919aa040bf6ce",
     "clean_student_a25_ep28.pt": "b2f823aec636f58c6ee95da7729db82d67c24d2d3d7486ebf629b991270d6eb6",
@@ -46,5 +61,5 @@
     "siglip1_clean_ep28.pt": "7c201bab224b2e0d348c25218d903132d19555618b8a5802d44f92f4ecdc9e54",
     "siglip2_clean_retrain_ep28.pt": "82964358a515a40c5ac684265924398cee23b329f4f8fc45b8af1557175225e2"
   },
-  "note": "Teacher and student files are added through Git LFS; verify hashes after checkout. l150 (1.21 ГБ) в LFS не влезает — ассет GitHub Release weights-l150."
+  "note": "Teacher and student files are added through Git LFS; verify hashes after checkout. soup150s2 и l150 (по ~1.2 ГБ) в LFS не влезают — ассеты GitHub Release weights-soup150s2 / weights-l150."
 }

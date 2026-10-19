@@ -26,14 +26,14 @@ services:
 
   api:
     build:
-      # Контекст — корень репозитория: образу нужны api/ и weights/clean_student_large_150_ep150.pt
+      # Контекст — корень репозитория: образу нужны api/ и weights/soup150s2.pt
       # (.dockerignore — белый список). В git весов нет (1.21 ГБ): стадия weights в api/Dockerfile
       # качает их по WEIGHTS_URL; sha256 сверяется всегда.
       context: .
       dockerfile: api/Dockerfile
       args:
         EMBED_MODEL: ${EMBED_MODEL:-reid:vit_large_patch16_siglip_256}
-        WEIGHTS_URL: ${WEIGHTS_URL:-https://github.com/makssest06-alt/case-17-vehicle-digital-signature-team-17/releases/download/weights-l150/clean_student_large_150_ep150.pt}   # по умолчанию — ассет GitHub Release weights-l150 (api/Dockerfile)
+        WEIGHTS_URL: ${WEIGHTS_URL:-https://github.com/makssest06-alt/case-17-vehicle-digital-signature-team-17/releases/download/weights-soup150s2/soup150s2.pt}   # по умолчанию — ассет GitHub Release weights-soup150s2 (api/Dockerfile)
         BAKE_BACKBONE: ${BAKE_BACKBONE:-0}   # 1 — только для timm:/head-only профилей (api/Dockerfile)
     image: case17-api:local
     container_name: case17-api
@@ -83,7 +83,7 @@ services:
       OMP_NUM_THREADS: "2"
       HF_HUB_OFFLINE: "1"
       HF_HOME: /opt/hfcache
-      REID_WEIGHTS: ${REID_WEIGHTS:-/opt/weights/clean_student_large_150_ep150.pt}   # в образе (api/Dockerfile)
+      REID_WEIGHTS: ${REID_WEIGHTS:-/opt/weights/soup150s2.pt}   # в образе (api/Dockerfile)
       # Ожидаемый sha256 весов: при старте сверяется и пишется в лог; пусто — только записать.
       REID_WEIGHTS_SHA256: ${REID_WEIGHTS_SHA256:-}
       # Режим кропа для чекпоинтов, которые не пишут tf_mode в args (студент).

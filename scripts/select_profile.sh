@@ -19,11 +19,11 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ENV_FILE="$ROOT/.env"
 
 # --- описание профилей --------------------------------------------------
-# cpu: clean student ViT-L/16@256 (l150, SigLIP Large + ReID-голова), 512D.
+# cpu: soup150s2 (model soup ViT-L/16@256: l150 + s2, SigLIP Large + ReID-голова), 512D.
 #      Это production-профиль, проверенный на clean holdout.
 CPU_MODEL="reid:vit_large_patch16_siglip_256"
 CPU_DIM=512
-CPU_WEIGHTS="/opt/weights/clean_student_large_150_ep150.pt"   # в образе (api/Dockerfile)
+CPU_WEIGHTS="/opt/weights/soup150s2.pt"   # в образе (api/Dockerfile)
 
 # gpu: SigLIP so400m. 1631 МБ весов (+6.5 МБ голова = 1638 МБ при лимите 2048),
 #      примерно в 6 раз больше вычислений на кадр. На CPU это 0.35 кадра/с и
@@ -80,8 +80,8 @@ case "$MODE" in
     set_kv EMBED_MODEL "$CPU_MODEL"
     set_kv EMBED_DIM   "$CPU_DIM"
     set_kv REID_WEIGHTS "$CPU_WEIGHTS"
-    set_kv BAKE_BACKBONE 0             # l150 — полное дообучение, бэкбон с HF не нужен
-    ok "CPU/GPU-safe production-профиль: clean student ViT-L/16@256 (l150), 512D"
+    set_kv BAKE_BACKBONE 0             # soup150s2 — полное дообучение, бэкбон с HF не нужен
+    ok "CPU/GPU-safe production-профиль: soup150s2 (model soup ViT-L/16@256), 512D"
     ;;
   gpu)
     # Голова под so400m появляется только после обучения на GPU (kaggle/train_reid.ipynb).
@@ -96,8 +96,8 @@ case "$MODE" in
       ok "GPU-профиль: SigLIP so400m + обученная голова, 512D"
     else
       warn "GPU-профиль запрошен, но обученной головы под so400m ещё нет"
-      echo "  Без головы so400m даёт mAP 60.80 — это ХУЖЕ, чем clean student l150."
-      echo "  Поэтому оставляю production-профиль l150: он лучше по качеству и на видеокарте"
+      echo "  Без головы so400m даёт mAP 60.80 — это ХУЖЕ, чем soup150s2."
+      echo "  Поэтому оставляю production-профиль soup150s2: он лучше по качеству и на видеокарте"
       echo "  тоже работает, просто быстрее."
       echo
       echo "  Чтобы включить so400m: обучить голову ноутбуком kaggle/train_reid.ipynb"

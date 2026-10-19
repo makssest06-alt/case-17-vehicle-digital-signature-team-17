@@ -7,10 +7,10 @@ import json
 import unittest
 from pathlib import Path
 
-RESULT = Path(__file__).resolve().parents[2] / "research" / "honest_eval_results" / "closed_gallery_l150.json"
+RESULT = Path(__file__).resolve().parents[2] / "research" / "honest_eval_results" / "closed_gallery_soup150s2.json"
 
 
-@unittest.skipUnless(RESULT.exists(), "нет research/honest_eval_results/closed_gallery_l150.json")
+@unittest.skipUnless(RESULT.exists(), "нет research/honest_eval_results/closed_gallery_soup150s2.json")
 class RefusalPresetsTest(unittest.TestCase):
     def test_presets_match_research(self):
         from app.config import REFUSAL_PRESETS

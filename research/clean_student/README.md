@@ -12,7 +12,8 @@ not yet wired into the active service configuration.
 - `clip_clean_ep28.pt`: clean retrained CLIP teacher
 - `clean_student_a25_ep28.pt`: clean student alpha=25
 - `clean_student_a10_ep28.pt`: selected clean student alpha=10 (ветка `glebmain`)
-- `clean_student_large_150_ep150.pt`: clean student ViT-L/16@256, alpha=10, 150 эпох, seed 7 — **production этой ветки** (в git нет, 1.21 ГБ; ассет GitHub Release `weights-l150`, sha256 в `manifest.json`). Команда обучения — `research/run_clean_student_large.sh`; clean holdout mAP@10 0.9005 / R1 0.8821 / R5 0.9484, expanded 0.6467 (официальный evaluator; логи вне репо, `bm_improve/large_scale/notes.md`)
+- `clean_student_large_150_ep150.pt`: clean student ViT-L/16@256, alpha=10, 150 эпох, seed 7 — компонент супа (в git нет, 1.21 ГБ; ассет GitHub Release `weights-l150`, sha256 в `manifest.json`). Команда обучения — `research/run_clean_student_large.sh`; clean holdout mAP@10 0.9005 / R1 0.8821 / R5 0.9484, expanded 0.6467 (официальный evaluator; логи вне репо, `bm_improve/large_scale/notes.md`)
+- `soup150s2.pt`: **production этой ветки** — model soup l150 (seed 7, 150 эпох) + s2 (seed 42, 75 эпох), рецепт `research/make_soup.py` (в git нет, 1.19 ГБ; ассет GitHub Release `weights-soup150s2`, sha256 в `manifest.json`). clean holdout mAP@10 0.9133 / R1 0.9024 / R5 0.9466, expanded 0.6592 (официальный evaluator)
 
 The alpha=10 student is the intended runtime candidate. Teacher weights are retained for
 reproducibility and future ablations; do not load them in the production service.

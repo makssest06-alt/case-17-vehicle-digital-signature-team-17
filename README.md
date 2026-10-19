@@ -95,13 +95,14 @@
 
 - **BNNeck**: triplet работает с вектором до BN, классификация/инференс — после.
 - **ArcFace**: угловой зазор между классами — критично для open-set.
-- **PK-сэмплер** (P=8, K=1 — у l150 из-за VRAM; у базового a10 K=4): для batch-hard triplet нужны «свои» в батче.
+- **PK-сэмплер** (P=8, K=1 — у ViT-L из-за VRAM; у базового a10 K=4): для batch-hard triplet нужны «свои» в батче.
 - **Cross-camera**: позитивы в батче берутся с разных камер — позитив не лёгкий.
 
 ### 2.3 Дистилляция (ключевой шаг)
 
-Текущая production-модель этой ветки — **clean student ViT-L/16@256 (l150)**,
-обученная после удаления пяти exact train↔holdout duplicate-пар. Она дистиллирована
+Текущая production-модель этой ветки — **soup150s2**: межсидовый model soup (усреднение весов)
+двух clean student ViT-L/16@256 — l150 (seed 7, 150 эпох) и s2 (seed 42, 75 эпох), обученных
+после удаления пяти exact train↔holdout duplicate-пар. Оба дистиллированы
 от ансамбля из 4 моделей (SigLIP 2 + SigLIP 1 squash + SigLIP 1 base + CLIP). Учитель
 заморожен, его эмбеддинги посчитаны на train-сплите. Ученик:
 
@@ -110,8 +111,10 @@ loss = ArcFace + Triplet + 10 · (1 − cos(student, teacher))
 ```
 
 Эффект: **одна модель**, **без TTA**, 512D; checkpoint —
-`clean_student_large_150_ep150.pt` (SHA-256
-`6937d1163e239bcfd8ee76fe00da12a9d60becc89563b8fc5a475dc72df13d52`), 150 эпох, seed 7.
+`soup150s2.pt` (SHA-256
+`64e2f1897b593d9de7100fd6449058f0fad57f98de0bcbdfe4c546c5a6a21553`), рецепт soup —
+`research/make_soup.py`. Soup даёт +1.3 пп mAP@10 к l150 на clean holdout и +1.3 пп на
+стресс-сплите expanded (разбор — `bm_improve/large_scale/notes.md`, вне репо).
 Запасной кандидат на ViT-B/16@224 (a10, 362 МБ, ~2× быстрее) — в ветке `glebmain`.
 
 ### 2.4 Аугментации (под условия датасета)
@@ -147,7 +150,7 @@ DBA-галерее, без исключения почти-дублей (пре�
 
 ---
 
-### 2.7 Обучение: как воспроизвести l150
+### 2.7 Обучение: как воспроизвести soup150s2
 
 Код обучения — `research/finals_handoff/training/` (`train_reid.py`, `train_distill.py`,
 `extract_emb.py`, `evaluate_pair.py`); манифест весов и метрики на чистом holdout —
@@ -163,12 +166,15 @@ DBA-галерее, без исключения почти-дублей (пре�
    (веса/tf_mode/TTA — из содержимого config, пример `research/clean_teacher_config.example.json`),
    выход `clean_teacher_emb.npy` 8639×512 float32, sha256 `4ec0e9dc…b60e86d1`
    (команда — `research/finals_handoff/TEACHER_PIPELINE_README.md`, шаг 2).
-3. **Студент**: `research/run_clean_student_large.sh` — `train_distill.py`, SigLIP ViT-L/16@256
+3. **Студенты**: `research/run_clean_student_large.sh` — `train_distill.py`, SigLIP ViT-L/16@256
    (`--backbone siglip_large --input-size 256`, init из публичных весов timm через
    `research/prepare_public_init.py`), squash, `loss = ArcFace + Triplet + α·(1 − cos)`,
-   `--alpha 10 --seed 7 --epochs 150`, чекпоинт эпохи 150. Базовый рецепт a10
+   `--alpha 10 --epochs 150`; l150 — `--seed 7`, чекпоинт эпохи 150, s2 — `--seed 42`,
+   чекпоинт эпохи 75. Базовый рецепт a10
    (ViT-B/16@224, 28 эпох, кандидат ветки `glebmain`) — `research/run_clean_student_sweep.sh`.
-4. Сверить sha256 (l150: `6937d116…`; a10 в `manifest.json`: `93114c59…`).
+4. **Soup**: `research/make_soup.py` — среднее весов двух чекпоинтов:
+   `python research/make_soup.py soup150s2.pt clean_student_large_150_ep150.pt clean_student_large_s2_ep75.pt`.
+5. Сверить sha256 (soup150s2: `64e2f189…`; l150: `6937d116…`; a10 в `manifest.json`: `93114c59…`).
 
 Пути в скриптах — с машины, где обучали (переменные в начале скриптов): заменить на свои.
 Тестовая выборка в обучении не участвует. `kaggle/train_reid.ipynb` (и вариант для Colab,
@@ -184,18 +190,18 @@ git checkout team17/large-150-candidate   # эта ветка — кандида
 cp .env.example .env          # необязательно: без .env берутся значения по умолчанию
 ```
 
-Веса модели (`clean_student_large_150_ep150.pt`, 1.21 ГБ) при сборке запекаются в образ.
+Веса модели (`soup150s2.pt`, 1.19 ГБ) при сборке запекаются в образ.
 В git их нет (в LFS не влезают: квота 1 ГБ) — они скачиваются при сборке из GitHub Release
-(weights-l150) по `WEIGHTS_URL` по умолчанию, sha256 сверяется (при несовпадении сборка падает):
+(weights-soup150s2) по `WEIGHTS_URL` по умолчанию, sha256 сверяется (при несовпадении сборка падает):
 
 ```bash
 docker compose up -d --build
 ```
 
 Свой источник: `WEIGHTS_URL=<ссылка> docker compose up -d --build`, либо положить файл в
-`weights/clean_student_large_150_ep150.pt` до сборки — тогда скачивание не понадобится.
+`weights/soup150s2.pt` до сборки — тогда скачивание не понадобится.
 На машине без NVIDIA (compose по умолчанию резервирует GPU): `docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d --build`.
-При запуске сеть не нужна: веса l150 уже в образе (предобученный бэкбон с HF l150 не нужен).
+При запуске сеть не нужна: веса soup150s2 уже в образе (предобученный бэкбон с HF не нужен).
 
 Всё. Интерфейс — http://localhost:8080, Swagger — http://localhost:8000/docs.
 
@@ -248,16 +254,17 @@ docker run --rm --gpus all --network none -v /путь/к/датасету:/data
 
 | Конфигурация | mAP@10 | Rank-1 | Rank-5 | Веса |
 |---|---:|---:|---:|---:|
-| **Clean student ViT-L/16@256 (l150), alpha=10, 150 эпох** | **0.9005** | **0.8821** | **0.9484** | **~1.21 ГБ** |
+| **soup150s2 (soup l150+s2, ViT-L/16@256)** | **0.9133** | **0.9024** | **0.9466** | **~1.19 ГБ** |
+| Clean student ViT-L/16@256 (l150), alpha=10, 150 эпох | 0.9005 | 0.8821 | 0.9484 | ~1.21 ГБ |
 | Clean student alpha=10 (a10, ветка `glebmain`) | 0.8661 | 0.8287 | 0.9448 | ~362 МБ |
 
-На стресс-сплите expanded (query дополнены синтетическими искажениями): l150 — mAP@10 **0.6467**,
-a10 — 0.5569 (официальный `evaluate.py`; протокол и логи — вне репо, `bm_improve/large_scale/notes.md`,
-команда обучения — `research/run_clean_student_large.sh`).
+На стресс-сплите expanded (query дополнены синтетическими искажениями): soup150s2 — mAP@10 **0.6592**,
+l150 — 0.6467, a10 — 0.5569 (официальный `evaluate.py`; протокол и логи — вне репо, `bm_improve/large_scale/notes.md`,
+команда обучения — `research/run_clean_student_large.sh`, soup — `research/make_soup.py`).
 
-Production (l150 + DBA k=1 по галерее) в протоколе закрытого теста — 546 query, галереи 361 и
+Production (soup150s2 + DBA k=1 по галерее) в протоколе закрытого теста — 546 query, галереи 361 и
 1111 (361 + 750 кадров обучающих машин, по кадру на пару машина-камера; кадров теста нет): mAP@10
-0.9196 / 0.8207, Rank-1 0.907 / 0.778 (`docs/refusal.md`).
+0.9265 / 0.8218, Rank-1 0.910 / 0.766 (`docs/refusal.md`).
 
 Разбор ошибок с примерами — `research/ERROR_ANALYSIS.md` (коллажи в `research/errors/`): это разбор стартовой модели (CLIP ViT-B/16 + голова, 18.09), а не a10.
 
@@ -293,16 +300,16 @@ holdout, «750» и «1111» — 361 + 389 / 750 кадров обучающих
 
 | Оценка | Порог выбран по | Порог | 361 | 750 | 1111 |
 |---|---|---:|---:|---:|---:|
-| raw | 361 и 1111 (пресет) | 0.8249 | 0.883 | 0.825 | 0.796 |
-| raw | 361 → 1111 | 0.6881 | 0.905 | 0.761 | 0.715 |
-| raw | 1111 → 361 | 0.8467 | 0.866 | 0.832 | 0.803 |
-| z100 | 361 и 1111 (пресет) | 4.4359 | 0.861 | 0.716 | 0.678 |
-| z100 | 361 → 1111 | 4.5670 | 0.858 | 0.721 | 0.674 |
-| z100 | 1111 → 361 | 4.1399 | 0.850 | 0.714 | 0.687 |
+| raw | 361 и 1111 (пресет) | 0.8232 | 0.894 | 0.833 | 0.794 |
+| raw | 361 → 1111 | 0.7435 | 0.903 | 0.788 | 0.746 |
+| raw | 1111 → 361 | 0.8608 | 0.868 | 0.840 | 0.810 |
+| z100 | 361 и 1111 (пресет) | 4.3643 | 0.862 | 0.711 | 0.695 |
+| z100 | 361 → 1111 | 4.5430 | 0.868 | 0.712 | 0.682 |
+| z100 | 1111 → 361 | 4.2036 | 0.859 | 0.705 | 0.691 |
 
 z100 выбирали раньше — на прежнем протоколе, где большой галереей были кадры test gallery и порог raw при
-переносе с 361 терял TNR сильнее. Порог raw растёт с размером галереи: 0.688 по 361,
-0.841 по 750 (размер открытого test_gallery, Q27), 0.847 по 1111.
+переносе с 361 терял TNR сильнее. Порог raw растёт с размером галереи: 0.744 по 361,
+0.830 по 750 (размер открытого test_gallery, Q27), 0.861 по 1111.
 Отвлекатели в 750 и 1111 — обучающие машины (модель их видела), поэтому TNR на них скорее занижен.
 
 Обоснование порога: балл за режим кандидатов — 10 % × (0.7·F1 + 0.3·TNR), F1 и TNR — micro по
@@ -317,8 +324,8 @@ z100 выбирали раньше — на прежнем протоколе, �
 
 ### 4.3 Смена модели: пороги и веса
 
-Порог отказа (raw 0.8737, строгий 0.9351; запасной 0.8249 / 0.9356), порог фона τ 0.68062 и правило почти-дублей (косинус ≥ 0.83,
-IoU рамок ≥ 0.6, сдвиг центра ≤ 0.3, |log| отношения сторон ≤ 0.3) подобраны под l150: это косинусы её
+Порог отказа (raw 0.8737, строгий 0.9351; запасной 0.8249 / 0.9356), порог фона τ 0.6823 и правило почти-дублей (косинус ≥ 0.87,
+IoU рамок ≥ 0.6, сдвиг центра ≤ 0.3, размер рамки не проверяется) подобраны под soup150s2: это косинусы её
 векторов. Для другой модели их
 нужно пересчитать — одной командой, тем же кодом и по тому же протоколу (Q17, без данных теста):
 
@@ -329,20 +336,19 @@ DATA_DIR=/путь/к/данным DATASET_ZIP=/путь/dataset.zip ./research/
 
 - `DATA_DIR` — `train.csv`, `test_query.csv` и `test_gallery.csv` (из них читается только таблица рамок) и
   `crops/train/`, если есть; без `crops/` кадры берутся из `DATASET_ZIP` и режутся
-  кодом сервиса (так считались пороги l150). Эмбеддинги 9556 кадров `train.csv` считает код сервиса — на GPU в FP16, если есть CUDA, с
+  кодом сервиса (так считались пороги soup150s2). Эмбеддинги 9556 кадров `train.csv` считает код сервиса — на GPU в FP16, если есть CUDA, с
   кэшем в `~/lct-case17/cache/honest_eval`; повторный запуск идёт из кэша. Кадры теста не читаются.
 - Скрипт (`research/recalibrate_for_model.py`) печатает пресет для `REFUSAL_PRESETS` в `api/app/config.py`,
   строки `.env` и таблицу mAP@10, F1, TNR и 0.7·F1 + 0.3·TNR на 361 и 1111, сверяет их с текущим конфигом и
-  пишет всё в `research/honest_eval_results/recalibrate_<имя>.json`. На l150 прогон этой ветки дал: «DBA» 0.8737 /
-  0.9351 (формула 0.946 / 0.899), запасной 0.8249 / 0.9356, τ 0.68062, рамки 0.83 / 0.6 / 0.3 / 0.3
-  (`recalibrate_l150.json`; теперь скрипт печатает «DBA» как «итог»).
+  пишет всё в `research/honest_eval_results/recalibrate_<имя>.json`. На soup150s2 он даёт числа этой ветки: 0.8232 /
+  0.943, τ 0.6823, рамки 0.87 / 0.6 / 0.3 / inf, формула 0.894 / 0.794 (`recalibrate_soup150s2.json`).
 - На арендованной A5000 `research/a5000_session.sh` делает это для новой модели и ещё собирает артефакты на GPU, как жюри (`make_submission` в контейнере), и сравнивает с `artifacts/` — sha256, тот же top-1, принятые запросы, confidence, векторы — строкой в `session.md`.
 
 Что поменять в сервисе:
 
 | Где | Что |
 |---|---|
-| Модель | `EMBED_MODEL`, `REID_WEIGHTS`, `INPUT_SIZE`; `EMBED_DIM` — если размерность выхода другая; `REID_TF_MODE` — режим кропа, на котором модель обучена (у l150 `squash`) |
+| Модель | `EMBED_MODEL`, `REID_WEIGHTS`, `INPUT_SIZE`; `EMBED_DIM` — если размерность выхода другая; `REID_TF_MODE` — режим кропа, на котором модель обучена (у soup150s2 `squash`) |
 | Пороги | `SEARCH_THRESHOLD`, `SEARCH_THRESHOLD_STRICT`, `PP_CAMERA_TAU`, `PP_DEDUP_SIM`, `PP_DEDUP_IOU`, `PP_DEDUP_CENTER`, `PP_DEDUP_SIZE` — в `.env` или умолчаниями в `api/app/config.py`; туда же строки `REFUSAL_PRESETS` из вывода скрипта (по ним сервис пишет в лог, что порог не посчитан для текущей постобработки) |
 | Артефакты сдачи | пересобрать `api/scripts/make_submission.py` и проверить `scripts/validate_submission.py` |
 | Скорость | `api/scripts/bench_extract.py` на новой модели (Q31, Q34): ViT-L в несколько раз тяжелее ViT-B |
@@ -351,14 +357,14 @@ DATA_DIR=/путь/к/данным DATASET_ZIP=/путь/dataset.zip ./research/
 
 - **Попробовать без пересборки образа:** положить файл в `./weights/` и задать `REID_WEIGHTS=/models/<файл>` —
   том `./weights:/models` из `docker-compose.yml`.
-- **В образ (сдача, работа без сети):** имя `clean_student_large_150_ep150.pt` зашито в `api/Dockerfile` (`COPY`,
+- **В образ (сдача, работа без сети):** имя `soup150s2.pt` зашито в `api/Dockerfile` (`COPY`,
   `fetch_weights.sh`, `ENV REID_WEIGHTS`), `.dockerignore` (белый список), `docker-compose.yml` (`REID_WEIGHTS`),
   `.env.example`, `.gitattributes` (LFS) и `scripts/check_reproducibility.sh` — заменить на новое.
 - **sha256:** новый — в `WEIGHTS_SHA256` (аргумент сборки в `api/Dockerfile`; не совпал — сборка падает) и в
   `REID_WEIGHTS_SHA256` (сверка при старте сервиса); sha256 и размер файла скрипт печатает первой строкой.
 - **Размер:** лимит весов — 2 ГБ (Q34, Q37). ViT-L/16 — около 300 млн параметров, в FP32 это ~1.2 ГБ (эта ветка;
   a10 — 94 млн, 362 МБ). В бесплатный Git LFS (1 ГБ на весь репозиторий, a10 уже занимает 362 МБ) такой файл не
-  войдёт — только ассет GitHub Release, поэтому в `weights/` этой ветки l150 нет даже указателем LFS.
+  войдёт — только ассет GitHub Release, поэтому в `weights/` этой ветки soup150s2 нет даже указателем LFS.
 - **`WEIGHTS_URL`:** ссылка на новый файл с фиксированным тегом релиза (Q39); в README (раздел 5) — URL, автор,
   размер и sha256 модели.
 
@@ -373,11 +379,11 @@ DATA_DIR=/путь/к/данным DATASET_ZIP=/путь/dataset.zip ./research/
 
 | Модель | Автор | URL | Версия | Где используется | Лицензия |
 |---|---|---|---|---|---|
-| SigLIP ViT-L/16@256 | Google (Zhai et al., 2023) | https://huggingface.co/timm/ViT-L-16-SigLIP-256 | timm `vit_large_patch16_siglip_256.v2_webli`; HF-ревизия `19c59e9f40a22029e4116ea7a0f03e38e13a17c3` | инициализация l150 | Apache 2.0 |
+| SigLIP ViT-L/16@256 | Google (Zhai et al., 2023) | https://huggingface.co/timm/ViT-L-16-SigLIP-256 | timm `vit_large_patch16_siglip_256.v2_webli`; HF-ревизия `19c59e9f40a22029e4116ea7a0f03e38e13a17c3` | инициализация студентов l150 и s2 (супа soup150s2) | Apache 2.0 |
 | SigLIP 2 ViT-B/16 | Google DeepMind (Tschannen et al., 2025) | https://huggingface.co/timm/ViT-B-16-SigLIP2 | timm `vit_base_patch16_siglip_224.v2_webli`; HF-ревизия `eee10eff6dd8cabae2d7f379d4e8cfcd352030aa` | инициализация a10; учитель | Apache 2.0 |
 | SigLIP ViT-B/16 | Google (Zhai et al., 2023) | https://huggingface.co/timm/ViT-B-16-SigLIP | timm `vit_base_patch16_siglip_224.webli`; HF-ревизия `41f575766f40e752fdd1383e9565b7f02388c1c4` | учитель (squash и base); в образ не запекается (`BAKE_BACKBONE=1` — только для timm:/head-only профилей) | Apache 2.0 |
 | CLIP ViT-B/16 | OpenAI (Radford et al., 2021) | https://huggingface.co/timm/vit_base_patch16_clip_224.openai | timm `vit_base_patch16_clip_224.openai`; HF-ревизия `977e3dd0ec55ab8da155f2fbeb6b5f54948b6e3d` | учитель | MIT (OpenAI CLIP) |
-| l150 (наша) | команда 17 | GitHub Release `weights-l150` (ассет `clean_student_large_150_ep150.pt`) | sha256 `6937d1163e239bcfd8ee76fe00da12a9d60becc89563b8fc5a475dc72df13d52` | инференс | — |
+| soup150s2 (наша) | команда 17 | GitHub Release `weights-soup150s2` (ассет `soup150s2.pt`) | sha256 `64e2f1897b593d9de7100fd6449058f0fad57f98de0bcbdfe4c546c5a6a21553` | инференс | — |
 | a10 (наша, ветка `glebmain`) | команда 17 | `weights/clean_student_a10_ep28.pt` (Git LFS) | sha256 `93114c5923869d01e92cd70c2c421f783d05ebdac5652a1f2dc919aa040bf6ce` | запасной кандидат | — |
 
 Ревизии HF — текущие на 18.10.2026 (у SigLIP совпадает с локальным кэшем, на котором считались
@@ -475,10 +481,10 @@ FPS ниже 100-гейта именно на ноутбучной 4060 (узк�
 
 | Метрика | Значение |
 |---|---|
-| Суммарный размер весов (Q37) | **1.21 ГБ** в образе — только l150 (`/opt/weights`); бэкбон с HF не запекается. В репозитории ещё `weights/reid_current.pt` (5 МБ, история замеров, в образ не идёт) |
+| Суммарный размер весов (Q37) | **1.19 ГБ** в образе — только soup150s2 (`/opt/weights`); бэкбон с HF не запекается. В репозитории ещё `weights/reid_current.pt` (5 МБ, история замеров, в образ не идёт) |
 | Прежние справочные CPU-замеры | 170 мс на кадр батч 1 и ~5.9 кадров/с — CPU, 2 vCPU (прежний студент, архитектура ViT-B/16) |
 | RAM при инференсе | пик RSS при загрузке ~2.6 ГБ (ViT-L, FP32-чекпоинт → FP16 на GPU); лимит контейнера — `API_MEM_LIMIT` (по умолчанию 3g), OOM отсутствует |
-| Офлайн-режим | веса в образе, `HF_HUB_OFFLINE=1`; l150 грузится без сети и без HF-кэша (проверено `docker run --network none`) |
+| Офлайн-режим | веса в образе, `HF_HUB_OFFLINE=1`; soup150s2 грузится без сети и без HF-кэша (проверено `docker run --network none`) |
 
 Масштабируемость поиска — `research/ANN.md`: FAISS HNSW на галерее 10⁶ — 0.41 мс на запрос против 137.18 мс точного перебора, mAP 62.48 против 62.74 (замер 20.09).
 
@@ -503,11 +509,11 @@ L75_WEIGHTS=/путь/l75.pt DATA_DIR=/путь/к/данным DATASET_ZIP=/п�
 | `embeddings.npy` | float32 `(1110 + 750, 512)`, векторы модели без постобработки, порядок строго как в `test_query.csv` → `test_gallery.csv` |
 | `candidates.csv` | `query_id,gallery_id,confidence` — для принятых query top-10 с косинусом, как в ответе `/v1/search`; отказ — строк для query нет |
 
-Собраны моделью l150 тем же кодом, что сервис (`api/scripts/make_submission.py`):
-полный кадр + bbox → кроп → l150 → DBA k=1 по галерее → отказ raw по лучшему кандидату
+Собраны моделью soup150s2 тем же кодом, что сервис (`api/scripts/make_submission.py`):
+полный кадр + bbox → кроп → soup150s2 → DBA k=1 по галерее → отказ raw по лучшему кандидату
 без исключения почти-дублей, порог 0.8737. Каждый query обрабатывается отдельно, другие query
 не используются. Принято 948 query, отказов 162 (14.6%); в открытой части теста у каждого query есть
-пара (Q17), так что здесь все отказы — пропуски, а в закрытом тесте у 20 % query пары нет. Параметры, sha256 весов и
+пару (Q17), так что здесь все отказы — пропуски, а в закрытом тесте у 20 % query пары нет. Параметры, sha256 весов и
 счёт — в `artifacts/postprocess.json`. Лог прогона — `make_submission.log` в том же каталоге и в stderr,
 формат как у сервиса: путь и sha256 весов, устройство, FP16, порог и пресет, время по этапам, принято и
 отказов; в git не входит. Одна строка CSV прогон не останавливает: рамка за кадром обрезается
@@ -516,7 +522,7 @@ WARNING / ERROR с image_id, итог — последней строкой ло
 строк в `embeddings.npy` ровно столько, сколько в CSV (Q27). Так же ведёт себя `extract()`. Проверка происхождения
 (`scripts/validate_submission.py`, 27 проверок): `submission.csv` воспроизводится
 из `embeddings.npy` (DBA k=1 по галерее) точь-в-точь на всех 1110 запросах; top-1
-по векторам без DBA расходится с ним у 2.6% query.
+по векторам без DBA расходится с ним у 3.8% query.
 
 ```bash
 docker compose exec api python scripts/make_submission.py              # DATA_DIR: test_*.csv + images/
@@ -532,7 +538,7 @@ api/              FastAPI-сервис (инференс), тесты; api/scrip
 web/              веб-интерфейс (nginx)
 db/               PostgreSQL + pgvector, инициализация схемы
 weights/          веса (Git LFS; при сборке — в образ, /opt/weights)
-artifacts/        артефакты сдачи (l150)
+artifacts/        артефакты сдачи (soup150s2)
 data/             сюда кладётся датасет (test_*.csv, images/); в git пусто
 docs/             refusal.md — порог отказа; TZ_falcon_tech.txt, TZ_CHECKLIST.md;
                   SUBMISSION_README.md — историческая сдача 27.09
@@ -545,4 +551,4 @@ scripts/          validate_submission.py, check_reproducibility.sh, select_profi
 kaggle/           ноутбуки дообучения на Kaggle / Colab (прежний путь, голова под so400m)
 ```
 
-Рецепт обучения l150 (и базового a10) и манифест весов — раздел 2.7; `kaggle/` — ноутбуки прежнего пути дообучения.
+Рецепт обучения soup150s2 (и базового a10) и манифест весов — раздел 2.7; `kaggle/` — ноутбуки прежнего пути дообучения.
