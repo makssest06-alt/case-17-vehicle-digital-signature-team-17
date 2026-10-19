@@ -2,7 +2,7 @@
 """Формальная проверка артефактов сдачи против README датасета.
 
     python scripts/validate_submission.py
-    python scripts/validate_submission.py --artifacts artifacts --data /opt/case17/data
+    python scripts/validate_submission.py --artifacts artifacts --data data
     python scripts/validate_submission.py --strict     # предупреждения тоже роняют
 
 Код возврата 0 — артефакты можно коммитить. Любой другой — нельзя.
@@ -24,6 +24,7 @@
 import argparse
 import csv
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -373,8 +374,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     here = Path(__file__).resolve().parent.parent
     ap.add_argument("--artifacts", default=str(here / "artifacts"))
-    ap.add_argument("--data", default="/opt/case17/data",
-                    help="каталог с test_query.csv и test_gallery.csv")
+    ap.add_argument("--data", default=os.getenv("DATA_DIR", str(here / "data")),
+                    help="каталог с test_query.csv и test_gallery.csv (по умолчанию DATA_DIR или <репо>/data)")
     ap.add_argument("--threshold", type=float, default=None,
                     help="порог на confidence (косинус) — только для REFUSAL_SCORE=raw; при z100 "
                          "решение об отказе принимается по оценке запроса, а не по confidence строки")

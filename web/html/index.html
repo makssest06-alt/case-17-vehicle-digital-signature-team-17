@@ -141,7 +141,7 @@ a{color:var(--accent)}
         <button type="button" class="mode on" data-mode="balanced">сбалансированный</button>
         <button type="button" class="mode" data-mode="strict">строгий</button>
         <button type="button" class="mode" data-mode="expert">экспертный</button>
-        <input type="number" id="thr" min="0" max="1" step="0.005" value="0.525" hidden
+        <input type="number" id="thr" min="0" max="1" step="0.005" value="" hidden
                aria-label="порог вручную">
       </div>
       <div class="modenote" id="modenote">—</div>
@@ -297,7 +297,9 @@ document.querySelectorAll('.mode').forEach(b=>b.onclick=()=>applyMode(b.dataset.
 
 $('#go').onclick=async()=>{
   let fd; try{fd=form();}catch(e){return err(e.message);}
-  fd.append('top_n',$('#topn').value); fd.append('threshold',$('#thr').value);
+  fd.append('top_n',$('#topn').value);
+  // порог — из /v1/config (режимы) или вручную; пусто — сервис берёт свой порог по умолчанию
+  if($('#thr').value!=='') fd.append('threshold',$('#thr').value);
   busy(true);
   try{
     const r=await fetch('/api/v1/search',{method:'POST',body:fd});
