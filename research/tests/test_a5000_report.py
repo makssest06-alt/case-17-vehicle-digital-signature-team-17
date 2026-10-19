@@ -51,7 +51,11 @@ class ReportTests(unittest.TestCase):
         (self.out / "bench_done").touch()
         (self.out / "status.txt").write_text("готово\n", encoding="utf-8")
         (self.out / "timings.txt").write_text("замеры=420\nпересчёт L75=200\n", encoding="utf-8")
+        (self.out / "submission_compare.json").write_text(json.dumps({
+            "summary": "sha256 совпали у 1 из 3 (submission.csv); тот же top-1 у 1110 из 1110", "same_files": ["submission.csv"],
+            "top1": {"share": 1.0}, "accepted": {}, "confidence": {}, "embeddings": {}, "sha256": {}}), encoding="utf-8")
         md = self.run_report()
+        self.assertIn("make_submission a10 в контейнере на GPU (FP16): sha256 совпали у 1 из 3 (submission.csv)", md)
         self.assertIn("| a10 | 8 | 19.00 (21.00) | 120.0 (32) | 700 | 362 | 20.00 | 0.7586 / 0.9302 | 0.881 / 0.756 |", md)
         self.assertIn("| l75 | 4 | 45.00 (47.00) | 70.0 (32) | 2400 | 362 | 12.75 | 0.77 / 0.93 | 0.900 / 0.800 |", md)
         self.assertIn("| l75 | 8 | ошибка: CUDA out of memory", md)
@@ -63,6 +67,17 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(len(s["rows"]), 4)
         self.assertNotIn("closed_gallery", s["recalibrate_l75"])            # тяжёлое — только в recalibrate_l75.json
         self.assertEqual(s["refusal"]["l75"]["threshold"], 0.77)
+        self.assertEqual(s["submission_gpu"]["same_files"], ["submission.csv"])
+        self.assertNotIn("sha256", s["submission_gpu"])
+
+    def test_failed_submission_step_still_reported(self):
+        (self.out / "bench_a10_t4.json").write_text(json.dumps(bench(20.0, 95.0, 700)), encoding="utf-8")
+        (self.out / "bench_done").touch()
+        (self.out / "submission_gpu.err").write_text("Traceback ...\nCUDA error: out of memory\n", encoding="utf-8")
+        (self.out / "status.txt").write_text("готово\n", encoding="utf-8")
+        md = self.run_report()
+        self.assertIn("make_submission a10 на GPU: ошибка — Traceback ... CUDA error: out of memory", md)
+        self.assertIn("| a10 | 4 |", md)
 
     def test_stop_before_bench_has_no_table(self):
         (self.out / "status.txt").write_text("остановлено на п. 3\nвидеокарта не видна из контейнера\n", encoding="utf-8")

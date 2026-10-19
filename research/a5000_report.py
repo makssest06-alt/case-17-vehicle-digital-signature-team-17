@@ -105,6 +105,11 @@ def md(s: dict) -> str:
                      f"сдвиг центра ≤ {rf['rule']['t_center']}.")
         L += ["- Отказ — протокол Q17: галереи 361 и 1111 (+750 кадров обучающих машин), 20 % машин без пары, без "
               "данных теста. a10 считался на CPU Мака (FP32), L75 — здесь на GPU (FP16).", ""]
+    sub = s.get("submission_gpu")
+    if sub:
+        L += ["## Артефакты сдачи на GPU (как у жюри) против artifacts/ репозитория", "",
+              ("make_submission a10 в контейнере на GPU (FP16): " + sub["summary"] + "." if "summary" in sub
+               else "make_submission a10 на GPU: ошибка — " + sub["error"].replace("\n", " ")), ""]
     if s.get("error"):
         L += ["## Остановка", "", s["error"], ""]
     if s.get("seconds"):
@@ -112,6 +117,16 @@ def md(s: dict) -> str:
               + f"; всего {sum(int(v) for v in s['seconds'].values()) // 60} мин.", ""]
     L += ["Файлы: `session.json` (всё вместе), `bench_<модель>_t<потоки>.json`, `recalibrate_l75.json`, `session.log`."]
     return "\n".join(L) + "\n"
+
+
+def submission(out: Path):
+    """Шаг 5: make_submission на GPU против artifacts/ — сводка сравнения или ошибка; None — шаг не запускался."""
+    c, err = load(out / "submission_compare.json"), out / "submission_gpu.err"
+    if c:
+        return {k: c[k] for k in ("summary", "same_files", "top1", "accepted", "confidence", "embeddings")}
+    if err.exists():
+        return {"error": err.read_text(encoding="utf-8").strip()[-400:]}
+    return None
 
 
 def line(path: Path) -> str:
@@ -125,6 +140,9 @@ def main() -> int:
     if sys.argv[1] == "--line":
         print(line(Path(sys.argv[2])))
         return 0
+    if sys.argv[1] == "--compare-line":
+        print(load(Path(sys.argv[2]))["summary"])
+        return 0
     out = Path(sys.argv[1])
     cfg = kv(out / "session.cfg")
     models = cfg.get("models", "a10 l75").split()
@@ -133,7 +151,7 @@ def main() -> int:
     s = {"status": status.splitlines()[0], "error": "\n".join(status.splitlines()[1:]) or None,
          "env": kv(out / "env_host.txt"), "image": kv(out / "image.txt"), "gpu_check": load(out / "gpu_check.json"),
          "config": cfg, "seconds": kv(out / "timings.txt"), "rows": bench_rows(out, models, threads) if (out / "bench_done").exists() else [],
-         "refusal": refusal(out), "q34_note": Q34, "jury_cpu": JURY_CPU,
+         "refusal": refusal(out), "submission_gpu": submission(out), "q34_note": Q34, "jury_cpu": JURY_CPU,
          "recalibrate_l75": {k: v for k, v in (load(out / "recalibrate_l75.json") or {}).items()
                              if k not in ("closed_gallery", "calibration")} or None}
     s["benches"] = {f"{r['model']}_t{r['threads']}": load(out / f"bench_{r['model']}_t{r['threads']}.json")
