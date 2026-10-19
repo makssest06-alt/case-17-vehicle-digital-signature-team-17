@@ -3,8 +3,10 @@
     python -m unittest tests.test_extractor -v      # из каталога api/
 """
 import io
+import os
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 import numpy as np
@@ -28,6 +30,16 @@ def jpeg(seed: int) -> bytes:
 
 
 class ExtractorTest(unittest.TestCase):
+    def test_production_defaults(self):
+        """Прод-дефолты пути замера: draft=2 и 16 потоков — случайный откат не должен пройти незамеченным."""
+        with unittest.mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("EXTRACT_JPEG_DRAFT", None)
+            os.environ.pop("EXTRACT_THREADS", None)
+            ex = Extractor(model=FakeModel())
+        self.assertTrue(ex.draft)
+        self.assertEqual(ex.draft_max, 2)
+        self.assertEqual(ex.threads, 16)
+
     def test_crop_matches_service_without_draft(self):
         raw = jpeg(0)
         want = crop_with_pad(load_image(raw, settings.max_upload_bytes), *BOX, settings.bbox_pad)

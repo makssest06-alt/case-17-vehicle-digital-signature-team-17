@@ -197,11 +197,17 @@ def embed(profile: str, images_dir: Path, ids: list, cache_dir: Path = DEFAULT_C
     boxes: {image_id: (x, y, w, h)}.
     Кадр, чей bbox сервис отверг, получает вектор из NaN: сервис такой запрос
     не принял бы, и вызывающий код обязан его выкинуть, а не считать нулём.
+    В draft-режиме отказов нет — семантика extract(): рамка клипится,
+    нечитаемый кадр даёт серый вектор (не NaN).
     """
     env = profile_env(profile, compose_ref, overrides)
     frames = f"zip:{frames_zip}" if frames_zip else ""
-    if frames_zip:        # draft меняет векторы — входит в ключ кэша и в окружение воркера
-        frames += f":draft={os.getenv('EXTRACT_JPEG_DRAFT', '0')}"
+    if frames_zip:
+        # draft меняет векторы — входит в ключ кэша и явно задаётся воркеру;
+        # значение — то, что реально доедет до дочернего процесса (overrides
+        # перекрывают наследование из шелла)
+        draft = (overrides or {}).get("EXTRACT_JPEG_DRAFT", os.getenv("EXTRACT_JPEG_DRAFT", "0"))
+        frames += f":draft={draft}"
     out = cache_path(profile, env, ids, images_dir, cache_dir, frames)
     if not out.exists():
         _adopt_legacy(_legacy_cache_path(profile, env, ids, images_dir, cache_dir, frames), out)
@@ -220,6 +226,10 @@ def embed(profile: str, images_dir: Path, ids: list, cache_dir: Path = DEFAULT_C
     # Число потоков меняет только скорость (и порядок суммирования ~1e-7),
     # не результат; сервис в контейнере работает на двух.
     child["OMP_NUM_THREADS"] = str(threads or os.cpu_count() or 2)
+    if frames_zip:
+        # явно, а не наследованием из шелла: EXTRACT_JPEG_DRAFT читается в extractor.py
+        # через _flag(name, ...) и потому не попадает в scrub-набор service_env_keys()
+        child["EXTRACT_JPEG_DRAFT"] = draft
     cmd = [sys.executable, str(Path(__file__).resolve()), "--worker", "--profile", profile,
            "--images-dir", str(images_dir), "--ids-file", ids_file, "--out", str(out),
            "--batch", str(batch)]

@@ -26,7 +26,6 @@
 """
 import io
 import logging
-import math
 import os
 import threading
 import time
@@ -118,7 +117,9 @@ class Extractor:
         side = min(box[2] - box[0], box[3] - box[1])
         r = next((s for s in DRAFT_SCALES if s <= self.draft_max and side / s >= settings.input_size), 1)
         if r > 1:
-            im.draft("RGB", (math.ceil(W / r), math.ceil(H / r)))
+            # floor, не ceil: PIL берёт scale = min(W // reqW, H // reqH) — с ceil любая
+            # нечётная сторона кадра давала бы scale=1 и draft молча не срабатывал
+            im.draft("RGB", (max(1, W // r), max(1, H // r)))
         img = im.convert("RGB")
         self._note_fit(status, name, bbox, (x, y, w, h), W, H)
         sx, sy = img.width / W, img.height / H
