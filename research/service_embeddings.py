@@ -192,12 +192,16 @@ def embed(profile: str, images_dir: Path, ids: list, cache_dir: Path = DEFAULT_C
     Источник кадра — готовые кропы images_dir/<id>.jpg (так читает
     make_submission.py) или, при frames_zip, полный кадр из dataset.zip,
     обрезанный функциями сервиса app.imaging.load_image → validate_bbox →
-    crop_with_pad (так отвечает /v1/embed). boxes: {image_id: (x, y, w, h)}.
+    crop_with_pad (так отвечает /v1/embed); при EXTRACT_JPEG_DRAFT=1/2 кроп идёт
+    через app.extractor.Extractor.crop — тот же draft-декод, что у прод-сервиса.
+    boxes: {image_id: (x, y, w, h)}.
     Кадр, чей bbox сервис отверг, получает вектор из NaN: сервис такой запрос
     не принял бы, и вызывающий код обязан его выкинуть, а не считать нулём.
     """
     env = profile_env(profile, compose_ref, overrides)
     frames = f"zip:{frames_zip}" if frames_zip else ""
+    if frames_zip:        # draft меняет векторы — входит в ключ кэша и в окружение воркера
+        frames += f":draft={os.getenv('EXTRACT_JPEG_DRAFT', '0')}"
     out = cache_path(profile, env, ids, images_dir, cache_dir, frames)
     if not out.exists():
         _adopt_legacy(_legacy_cache_path(profile, env, ids, images_dir, cache_dir, frames), out)
@@ -255,16 +259,25 @@ def _worker(a) -> int:
         zf = zipfile.ZipFile(a.frames_zip)
         boxes = json.loads(Path(a.boxes_file).read_text())
 
-        def load(i):
-            """Ровно путь /v1/embed: байты кадра -> load_image -> validate_bbox -> crop_with_pad."""
-            img = load_image(zf.read(f"images/{i}.jpg"), settings.max_upload_bytes)
-            x, y, w, h = (int(float(v)) for v in boxes[i])
-            try:
-                validate_bbox(img, x, y, w, h)
-            except ImageError as exc:
-                rejected.append((i, str(exc)))
-                return None
-            return crop_with_pad(img, x, y, w, h, settings.bbox_pad)
+        if os.getenv("EXTRACT_JPEG_DRAFT", "0").strip().lower() not in ("0", "false", "no", "off"):
+            from app.extractor import Extractor  # noqa: E402
+
+            _ex = Extractor(model=model, threads=1)
+
+            def load(i):
+                """Путь прод-сервиса с draft: байты кадра -> Extractor.crop (декод с уменьшением)."""
+                return _ex.crop(zf.read(f"images/{i}.jpg"), [int(float(v)) for v in boxes[i]])
+        else:
+            def load(i):
+                """Ровно путь /v1/embed: байты кадра -> load_image -> validate_bbox -> crop_with_pad."""
+                img = load_image(zf.read(f"images/{i}.jpg"), settings.max_upload_bytes)
+                x, y, w, h = (int(float(v)) for v in boxes[i])
+                try:
+                    validate_bbox(img, x, y, w, h)
+                except ImageError as exc:
+                    rejected.append((i, str(exc)))
+                    return None
+                return crop_with_pad(img, x, y, w, h, settings.bbox_pad)
     else:
         def load(i):
             return Image.open(Path(a.images_dir) / f"{i}.jpg").convert("RGB")
