@@ -43,6 +43,13 @@ class ExtractorTest(unittest.TestCase):
         self.assertGreaterEqual(min(small.size), settings.input_size)
         self.assertAlmostEqual(small.width / full.width, 0.5, delta=0.01)
 
+    def test_draft_half_caps_at_half(self):
+        raw = jpeg(3)
+        big = (0, 0, 1820, 990)        # кроп с запасом ~1920×1080: draft=1 уменьшил бы до 1/4
+        half = Extractor(model=FakeModel(), draft="2").crop(raw, big)
+        quarter = Extractor(model=FakeModel(), draft=True).crop(raw, big)
+        self.assertEqual(half.width, quarter.width * 2)
+
     def test_bbox_outside_frame_clipped_in_both_paths(self):
         raw = jpeg(2)
         for draft in (False, True):

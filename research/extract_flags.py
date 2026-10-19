@@ -33,7 +33,8 @@ VARIANTS = {"cpu": ("cpu", "0", "0", None), "cpu_draft": ("cpu", "0", "1", "cpu"
             "mps": ("mps", "0", "0", "cpu"), "mps_fp16": ("mps", "1", "0", "mps"),
             "mps_fp16_draft": ("mps", "1", "1", "mps"),
             "cuda": ("cuda", "0", "0", None), "cuda_fp16": ("cuda", "1", "0", "cuda"),
-            "cuda_draft": ("cuda", "0", "1", "cuda"), "cuda_fp16_draft": ("cuda", "1", "1", "cuda")}
+            "cuda_draft": ("cuda", "0", "1", "cuda"), "cuda_fp16_draft": ("cuda", "1", "1", "cuda"),
+            "cuda_fp16_draft2": ("cuda", "1", "2", "cuda_fp16")}
 
 
 def embed_all(name: str, ids: list, boxes: dict, zf: zipfile.ZipFile, batch: int) -> tuple:

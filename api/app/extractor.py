@@ -12,6 +12,7 @@
   REID_FP16=1           forward в FP16 (autocast) — на CUDA по умолчанию включён (app/models/reid_checkpoint.py);
   EXTRACT_JPEG_DRAFT=1  JPEG декодируется сразу с уменьшением (PIL draft: 1/2, 1/4, 1/8) — до наименьшего
                         масштаба, при котором кроп не меньше INPUT_SIZE по обеим сторонам; по умолчанию выкл.;
+  EXTRACT_JPEG_DRAFT=2  то же, но уменьшение не больше 1/2 — медленнее "1", но почти не трогает векторы;
   EXTRACT_THREADS=N     декодирование и кроп батча в N потоков (по умолчанию 4); на результат не влияет.
 Без EXTRACT_JPEG_DRAFT кроп совпадает с сервисом и офлайн-скриптом пиксель в пиксель.
 
@@ -47,9 +48,12 @@ def _flag(name: str, default: str) -> str:
 
 
 class Extractor:
-    def __init__(self, model=None, draft: bool = None, threads: int = None):
+    def __init__(self, model=None, draft=None, threads: int = None):
         self.model = model or build_model(settings.embed_model, settings.input_size)
-        self.draft = _flag("EXTRACT_JPEG_DRAFT", "0") in ("1", "true", "yes", "on") if draft is None else draft
+        # draft: "0" — выкл; "1" — максимальное уменьшение (до 1/8); "2"/"half" — не больше 1/2
+        raw = (_flag("EXTRACT_JPEG_DRAFT", "0") if draft is None else str(draft)).strip().lower()
+        self.draft = raw not in ("0", "false", "no", "off")
+        self.draft_max = 2 if raw in ("2", "half") else 8
         self.threads = max(1, int(_flag("EXTRACT_THREADS", "4")) if threads is None else threads)
         self.load_s = None
         self.fixes = {"clipped": 0, "full": 0, "unread": 0}          # кадров, не повторов
@@ -109,7 +113,7 @@ class Extractor:
         px, py = int(round(w * settings.bbox_pad)), int(round(h * settings.bbox_pad))
         box = (max(0, x - px), max(0, y - py), min(W, x + w + px), min(H, y + h + py))
         side = min(box[2] - box[0], box[3] - box[1])
-        r = next((s for s in DRAFT_SCALES if side / s >= settings.input_size), 1)
+        r = next((s for s in DRAFT_SCALES if s <= self.draft_max and side / s >= settings.input_size), 1)
         if r > 1:
             im.draft("RGB", (math.ceil(W / r), math.ceil(H / r)))
         img = im.convert("RGB")
@@ -138,5 +142,6 @@ class Extractor:
         m = self.model
         return {"model": getattr(m, "name", settings.embed_model), "dim": getattr(m, "dim", None),
                 "device": str(getattr(m, "device", "cpu")), "fp16": bool(getattr(m, "_fp16", False)),
-                "jpeg_draft": self.draft, "threads": self.threads, "tf_mode": getattr(m, "tf_mode", None),
+                "jpeg_draft": self.draft, "draft_max": self.draft_max, "threads": self.threads,
+                "tf_mode": getattr(m, "tf_mode", None),
                 "load_s": self.load_s, "frame_fixes": dict(self.fixes)}
