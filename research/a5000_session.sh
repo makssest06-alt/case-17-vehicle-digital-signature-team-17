@@ -4,9 +4,12 @@
 #   2. образ — как соберёт жюри (docker compose build api), или готовый, если он уже есть;
 #   3. видна ли видеокарта из контейнера (torch.cuda.is_available()) — нет: остановка с понятной ошибкой;
 #   4. официальный api/scripts/bench_extract.py в контейнере для a10 и L75, EXTRACT_THREADS 4, 8, 16;
-#   5. для L75 — research/recalibrate_for_model.sh (порог отказа, τ фона, почти-дубли; протокол Q17);
-#   6. одна таблица (модель, latency_b1, лучший FPS, VRAM, баллы скорости Q34, порог и формула отказа) —
-#      <OUT_DIR>/session.md и session.json (research/a5000_report.py).
+#   5. make_submission для a10 в контейнере на GPU, как у жюри, и сравнение с artifacts/ репозитория (sha256,
+#      тот же top-1, принятые запросы, confidence, векторы — research/a5000_compare_submission.py); упал — сессия
+#      идёт дальше, в отчёте ошибка;
+#   6. для L75 — research/recalibrate_for_model.sh (порог отказа, τ фона, почти-дубли; протокол Q17);
+#   7. одна таблица (модель, latency_b1, лучший FPS, VRAM, баллы скорости Q34, порог и формула отказа) и строка
+#      сравнения артефактов — <OUT_DIR>/session.md и session.json (research/a5000_report.py).
 #
 #   L75_WEIGHTS=/путь/l75.pt DATA_DIR=/путь/к/данным DATASET_ZIP=/путь/dataset.zip ./research/a5000_session.sh
 #
@@ -21,13 +24,13 @@
 #   WEIGHTS_URL    как у жюри: ссылка на веса a10 для сборки без git-lfs
 #   IMAGE          образ сервиса (case17-api:local — как после docker compose build api); BUILD=1 — собрать заново
 #   OUT_DIR        research/a5000_session/<дата_время> (в git не входит); CACHE_DIR — кэш эмбеддингов
-#   SKIP_L75=1, SKIP_RECALIBRATE=1 — пропустить шаги
+#   SKIP_L75=1, SKIP_SUBMISSION=1, SKIP_RECALIBRATE=1 — пропустить шаги
 # Сеть нужна только сборке (базовый образ, pip); замеры и пересчёт идут с --network none.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 REPO="$PWD"
 
-usage() { sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,/^set -euo/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; }
 while [ $# -gt 0 ]; do
   case "$1" in
     --data-dir) DATA_DIR="$2"; shift 2 ;;
@@ -58,7 +61,7 @@ A10_FILE="weights/clean_student_a10_ep28.pt"
 mkdir -p "$OUT_DIR"
 OUT_DIR="$(cd "$OUT_DIR" && pwd)"
 exec > >(tee -a "$OUT_DIR/session.log") 2>&1
-rm -f "$OUT_DIR/status.txt" "$OUT_DIR/bench_done"
+rm -f "$OUT_DIR/status.txt" "$OUT_DIR/bench_done" "$OUT_DIR/submission_compare.json" "$OUT_DIR/submission_gpu.err"
 
 say() { printf '%s %s\n' "$(date +%H:%M:%S)" "$*"; }
 to() {  # to СЕКУНДЫ команда… — ограничение по времени, если есть timeout(1)
@@ -219,18 +222,37 @@ done
 touch "$OUT_DIR/bench_done"
 mark "замеры"
 
-# ---------------------------------------------------------------- 5. пересчёт порогов для L75
+# ---------------------------------------------------------------- 5. артефакты сдачи на GPU, как у жюри
+if [ "${SKIP_SUBMISSION:-0}" != 1 ]; then
+  say "п. 5: make_submission для a10 на GPU в контейнере (как у жюри) и сравнение с artifacts/ репозитория"
+  SUB="$OUT_DIR/submission_gpu"
+  rm -rf "$SUB"; mkdir -p "$SUB"
+  sub_fail() { tail -3 "$OUT_DIR/submission_gpu.log" > "$OUT_DIR/submission_gpu.err"; say "    ОШИБКА ($1): $(tail -1 "$OUT_DIR/submission_gpu.err") — лог submission_gpu.log; сессия продолжается"; }
+  if ! to 3600 docker run --rm --gpus all --network none -v "$DATA_DIR":/data:ro -v "$SUB":/artifacts "$IMAGE" \
+       python scripts/make_submission.py --data /data --out /artifacts > "$OUT_DIR/submission_gpu.log" 2>&1; then
+    sub_fail "make_submission"
+  elif ! to 600 docker run --rm --network none -v "$REPO":/repo:ro -v "$OUT_DIR":/out "$IMAGE" \
+       python /repo/research/a5000_compare_submission.py /repo/artifacts /out/submission_gpu \
+       --out /out/submission_compare.json >> "$OUT_DIR/submission_gpu.log" 2>&1; then
+    sub_fail "сравнение с artifacts/"
+  else
+    say "    $(python3 research/a5000_report.py --compare-line "$OUT_DIR/submission_compare.json")"
+  fi
+  mark "make_submission на GPU"
+fi
+
+# ---------------------------------------------------------------- 6. пересчёт порогов для L75
 if [ "$RECAL" = 1 ]; then
-  say "п. 5: research/recalibrate_for_model.sh для L75 (протокол Q17, без данных теста)"
+  say "п. 6: research/recalibrate_for_model.sh для L75 (протокол Q17, без данных теста)"
   zip_args=(); [ -n "${DATASET_ZIP:-}" ] && zip_args=(-v "$DATASET_ZIP":/zip/dataset.zip:ro -e DATASET_ZIP=/zip/dataset.zip)
   to 7200 docker run --rm --gpus all --network none -v "$REPO":/repo:ro -v "$DATA_DIR":/data:ro \
       ${zip_args[@]+"${zip_args[@]}"} -v "$CACHE_DIR":/cache -v "$OUT_DIR":/out "${L75_ENV[@]}" -e DATA_DIR=/data \
       -e PYTHON=python -w /repo "$RIMAGE" bash research/recalibrate_for_model.sh l75 --cache-dir /cache \
       --out /out/recalibrate_l75.json > "$OUT_DIR/recalibrate_l75.log" 2>&1 \
-    || stop 5 "пересчёт порогов L75 не прошёл: $(tail -2 "$OUT_DIR/recalibrate_l75.log" | tr '\n' ' ') — лог recalibrate_l75.log"
+    || stop 6 "пересчёт порогов L75 не прошёл: $(tail -2 "$OUT_DIR/recalibrate_l75.log" | tr '\n' ' ') — лог recalibrate_l75.log"
   grep -E "^\| (361|1111) |^SEARCH_THRESHOLD|^PP_CAMERA_TAU" "$OUT_DIR/recalibrate_l75.log" | sed 's/^/    /'
   mark "пересчёт L75"
 fi
 
-# ---------------------------------------------------------------- 6. отчёт
+# ---------------------------------------------------------------- 7. отчёт
 finish 0 "готово"
