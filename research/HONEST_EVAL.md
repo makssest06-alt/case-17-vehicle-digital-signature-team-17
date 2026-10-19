@@ -271,7 +271,7 @@ mAP@10 на 9.0k / 10.8k / 8996 (`bigallery_pp_a10.md`); k ≥ 4 прирост�
 
 `research/honest_eval_results/`: `honest_eval_*_suite.md` — таблицы по
 моделям; `refusal_folds*.json`, `refusal_pr_roc.png` — порог; `leak_audit.md`,
-`pseudo_camera.md` — утечки и камеры; `score_contract.md`, `main_audit.md` —
+`pseudo_camera.md` — утечки и камеры; `score_contract.md` —
 паритет сервиса и артефактов;
 `error_breakdown.md`, `error_examples/` — ошибки; `vehicle_camera_labels.csv`,
 `vehicle_colors.csv`, `error_pairs_labels.csv` — разметка глазами.
