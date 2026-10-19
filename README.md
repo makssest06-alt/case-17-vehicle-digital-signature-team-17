@@ -98,8 +98,9 @@
 - **PK-сэмплер** (P=8, K=4): для batch-hard triplet нужны «свои» в батче.
 - **Cross-camera**: позитивы в батче берутся с разных камер — позитив не лёгкий.
 
-`EMBED_MODEL=reid:vit_base_patch16_siglip_224.webli` в конфигурации задаёт только архитектуру ViT-B/16:
-бэкбон и все веса берутся из чекпоинта a10 (SigLIP 2), поэтому `/health` и `artifacts/postprocess.json`
+Префикс `reid:` в `EMBED_MODEL=reid:vit_base_patch16_siglip_224.webli` выбирает загрузку ReID-чекпоинта:
+архитектура и все веса берутся из чекпоинта a10 (`args.backbone = siglip2_base`, SigLIP 2), имя после `reid:` —
+запасное, если чекпоинт бэкбон не объявил. Поэтому `/health` и `artifacts/postprocess.json`
 называют модель `reid:vit_base_patch16_siglip_224.v2_webli` (`api/app/models/reid_checkpoint.py`).
 
 ### 2.3 Дистилляция (ключевой шаг)
@@ -146,8 +147,9 @@ Production-профиль: ранжирование DBA k=1 без флагов,
 (Q17), без кадров теста (`docs/refusal.md`). z100 — пресет по выбору (`REFUSAL_SCORE=z100`, 4.3475 / 8.8469). Штраф по фону в
 ранжировании убран: эталон засчитывает верным ответ кадром той же машины с той же камеры.
 
-`camera_id` на инференсе не используется (Q2): в `test_query.csv` и `test_gallery.csv` его нет, сервис и
-`api/scripts/make_submission.py` читают из CSV только `image_id, x, y, w, h`. «Фон» — признак из пикселей
+`camera_id` на инференсе не используется (Q2): в `test_query.csv` и `test_gallery.csv` его нет,
+`api/scripts/make_submission.py` читает из CSV только `image_id, x, y, w, h`, массовый импорт сервиса
+(`/v1/gallery/bulk-import`) — их же и необязательный `vehicle_id`. «Фон» — признак из пикселей
 самого кадра вне рамки машины (`api/app/pp/background.py`); имена `PP_CAMERA_*` — про признак «та же камера»,
 посчитанный по фону. `camera_id` из `train.csv` нужен только при обучении и при калибровке порогов на
 обучающих машинах (`api/app/pp/dedup.py`).

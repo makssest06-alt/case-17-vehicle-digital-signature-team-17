@@ -182,12 +182,13 @@ retrieval, эмбеддинг, BBox, cross-camera.
 
 ## Как перепроверить всё разом
 
-> Вне сервера команды работают первые две команды. Остальные скрипты `research/` в этих блоках — инструменты
-> сервера: в `eval_service_path.py`, `service_path_extras.py`, `verify_demo.py`, `make_plate_collage.py`,
+> Вне сервера команды работают первые две команды и `make_pitch_assets.py` (нужен matplotlib; перерисовывает
+> `research/pitch_assets/*.png`). Остальные скрипты `research/` в этих блоках — инструменты сервера: в
+> `eval_service_path.py`, `service_path_extras.py`, `verify_demo.py`, `make_plate_collage.py`, `make_pitch_deck.py`,
 > `make_demo_scenario.py` зашиты пути `/opt/case17/...`; `eval_service_path.py` и `service_path_extras.py`
 > меряют прежнюю head-only модель `reid_current.pt`, а не a10; `ann_benchmark.py --report` ждёт
-> `research/results/ann/{exact,hnsw,ivfpq}.json`, которых в репозитории нет; `make_pitch_deck.py` нужен пакет
-> `python-pptx`. В чистом клоне они завершаются с ошибкой (проверено 19.10).
+> `research/results/ann/{exact,hnsw,ivfpq}.json`, которых в репозитории нет; `make_pitch_deck.py` нужен ещё и
+> пакет `python-pptx`. В чистом клоне они завершаются с ошибкой (проверено 19.10).
 
 ```bash
 ./scripts/check_reproducibility.sh            # решение поднимается из чистого клона

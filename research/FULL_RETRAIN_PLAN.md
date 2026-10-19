@@ -1,7 +1,7 @@
 # Полный retrain после проверки генерализации
 
-> **Исторический план.** Retrain выполнен: веса и метрики — `research/clean_student/`, корневой `README.md`,
-> разделы 2.3 и 2.7.
+> **Исторический план.** Retrain выполнен: манифест и метрики — `research/clean_student/`, веса a10 —
+> `weights/clean_student_a10_ep28.pt`; корневой `README.md`, разделы 2.3 и 2.7.
 
 ## Цель
 
