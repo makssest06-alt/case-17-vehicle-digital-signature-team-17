@@ -318,9 +318,9 @@ def _config_custom() -> dict:
                         "camera_topk": settings.pp_camera_topk},
         "modes": {
             "balanced": {"threshold": settings.search_threshold, "title": "сбалансированный",
-                         "note": f"Предварительно: {note}. Максимум 0.7·F1 + 0.3·TNR, docs/refusal.md."},
+                         "note": f"{note}. Максимум 0.7·F1 + 0.3·TNR, docs/refusal.md."},
             "strict": {"threshold": settings.search_threshold_strict, "title": "строгий",
-                       "note": f"Предварительно: {note}."},
+                       "note": f"{note}."},
         },
     }
 

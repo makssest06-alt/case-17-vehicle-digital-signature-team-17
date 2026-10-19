@@ -433,12 +433,14 @@ def report_md(res: dict) -> str:
     g1, g2 = pr["main"]
     rule = ("максимум 0.7·F1 + 0.3·TNR (Q15)" if pr["objective"] == "q15" else "F1 при TNR ≥ 0.70")
     open_pct = P[res["final"]]["per_gallery"][g1]["open_share"]
+    open_txt = ("в галерее не остаётся ни одного кадра" if pr.get("open") == "drop"
+                else "в галерее кадр одной камеры")                 # как protocol.open в JSON
     L = [f"# Галереи {GALLERY_TITLE[g1]} и {GALLERY_TITLE[g2]}: {tag}", "",
          f"Веса `{res['weights']}`. Протокол Андрея (`head_to_head.py` ветки `andrew-postprocess-throughput`), наши "
          "эмбеддинги и код сервиса. 546 запросов / 361 кадр holdout (первый кадр каждой пары машина-камера → галерея). "
          f"Ранжирование — все запросы против всей галереи, официальный `ranking_metrics`. Отказ «как сервис»: "
-         f"{pr['rotations']} ротаций, в каждой у {pr['open_width']}/{pr['rotations']} машин в галерее кадр одной "
-         f"камеры — без пары {open_pct:.1%} запросов; порог вне фолда (2 фолда по машинам), правило — {rule}, в "
+         f"{pr['rotations']} ротаций, в каждой у {pr['open_width']}/{pr['rotations']} машин {open_txt} — без пары "
+         f"{open_pct:.1%} запросов; порог вне фолда (2 фолда по машинам), правило — {rule}, в "
          "пресет — медиана по фолдам × ротациям. Воспроизвести: `python research/closed_gallery.py --data-dir <данные> "
          f"--env REID_WEIGHTS=<веса> --tag {tag} --zip dataset.zip`.".replace("%", " %"), ""]
     if pr["objective"] != "q15":
@@ -449,7 +451,7 @@ def report_md(res: dict) -> str:
             L.append(f"| {g} | {v} | {f4(x['mAP@10'])} / {f4(am)} | {f3(x['andrey']['F1'])} / {f3(af)} | "
                      f"{f3(x['andrey']['TNR'])} / {f3(at)} |")
         L.append("")
-    L += [f"## Варианты на {g1} и {g2} (оценка z100 как в сервисе: top-100 по скору, почти-дубли выброшены)", "",
+    L += [f"## Варианты на {g1} и {g2} (оценка {res.get('score', 'z100')} как в сервисе: top-100 по скору, почти-дубли выброшены)", "",
           f"Порог — один на обе галереи, правило — {rule}.", "",
           f"| Вариант | mAP@10 {g1} / {g2} | R1 / R5 {g1} | R1 / R5 {g2} | Порог {res.get('score', 'z100')} | F1 / TNR / полнота {g1} | "
           f"F1 / TNR / полнота {g2} | 0.7·F1+0.3·TNR {g1} / {g2} | Строгий | Своя камера в top-1 |",
@@ -561,7 +563,8 @@ def docs_md(res: dict, alt: dict = None) -> str:
           "- Где в конфиге: `api/app/config.py` — `REFUSAL_SCORE`, `SEARCH_THRESHOLD`, `SEARCH_THRESHOLD_STRICT`, "
           "`PP_DEDUP_RANK`, `PP_DEDUP_REFUSAL`; посчитанные пороги обеих оценок — `REFUSAL_PRESETS`.", "",
           "## Как выбран порог", "",
-          f"- Протокол Андрея (`head_to_head.py`): 546 запросов / {g1} кадр holdout (первый кадр каждой пары машина-камера "
+          f"- Протокол Андрея (`research/local_postprocess/experiments_2026-10-17/eval/head_to_head.py` в ветке "
+          f"`andrew-postprocess-throughput`; в этой ветке его повторяет `research/closed_gallery.py`): 546 запросов / {g1} кадр holdout (первый кадр каждой пары машина-камера "
           f"→ галерея); 1111 — 361 + 750 кадров обучающих машин: первый кадр пары машина-камера, 750 пар случайно (сид "
           f"{pr['distractor_seed']}), без кадров из групп побайтных дублей полных кадров (`leak_audit.json`); 750 — 361 + "
           f"389 из тех же 750. Машин из запросов среди отвлекателей нет.",
