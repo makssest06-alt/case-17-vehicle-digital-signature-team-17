@@ -178,7 +178,7 @@ mAP@10 на 9.0k / 10.8k / 8996 (`bigallery_pp_a10.md`); k ≥ 4 прирост�
   TNR 1 (`score_contract.md`). Это прямой путь к «recall < 10 %».
 - **Что поднимал стенд экспертов.** Из `main` (`1df255c`, 29.09; до `0924fb2`
   сервис и веса не менялись) поднимается только студент: без `.env` compose не
-  стартует, без настоящих весов сервис падает (`compose_default_check.md`).
+  стартует, без настоящих весов сервис падает.
   Гипотеза «старая голова + TTA» снята, хотя её числа (0.24–0.41) ближе к 0.32.
   Значит, 0.32 объясняется выборкой экспертов (их галерея больше или сложнее
   нашей 10.8k) и смешением шкал скора, а не другой моделью.
@@ -272,6 +272,6 @@ mAP@10 на 9.0k / 10.8k / 8996 (`bigallery_pp_a10.md`); k ≥ 4 прирост�
 `research/honest_eval_results/`: `honest_eval_*_suite.md` — таблицы по
 моделям; `refusal_folds*.json`, `refusal_pr_roc.png` — порог; `leak_audit.md`,
 `pseudo_camera.md` — утечки и камеры; `score_contract.md`, `main_audit.md` —
-паритет сервиса и артефактов; `compose_default_check.md` — что поднимал стенд;
+паритет сервиса и артефактов;
 `error_breakdown.md`, `error_examples/` — ошибки; `vehicle_camera_labels.csv`,
 `vehicle_colors.csv`, `error_pairs_labels.csv` — разметка глазами.

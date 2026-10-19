@@ -51,7 +51,7 @@ python research/honest_eval.py --data-dir /opt/case17/data --suite --tag maxim_v
 - Результат: `research/honest_eval_results/honest_eval_<tag>_suite.md`
   (+ `.json`, `_folds.csv`). Для a10 — `honest_eval_a10_suite.md`, для прежнего студента —
   `honest_eval_student_suite.md`, для профиля compose без `.env` —
-  `compose_default_check.md`.
+  `honest_eval_compose_default_suite.md`.
 - Время на CPU: первый прогон считает ~11.4 тыс. кропов (студент SigLIP-B ~17
   кадров/с на 8 ядрах, ~12 мин); дальше векторы берутся из кэша
   `~/lct-case17/cache/honest_eval` (переменная `HONEST_EVAL_CACHE`), ключ кэша

@@ -54,11 +54,11 @@ Training command (paths here are from the originating local research environment
 ```bash
 python research/finals_handoff/training/train_distill.py \
   --backbone siglip2_base \
-  --init-from /home/l1zard/diskD/bm/improve_models/siglip2_init.pt \
-  --teacher /home/l1zard/diskD/bm/improve_models/teacher_emb.npy \
-  --rows-csv /home/l1zard/diskD/bm/improve_models/distill_train_rows.csv \
-  --images-dir /home/l1zard/diskD/bm/dataset_extracted/images \
-  --models-dir /home/l1zard/diskD/bm_improve/models \
+  --init-from <MODELS>/improve_models/siglip2_init.pt \
+  --teacher <MODELS>/improve_models/teacher_emb.npy \
+  --rows-csv <MODELS>/improve_models/distill_train_rows.csv \
+  --images-dir <DATA>/images \
+  --models-dir <MODELS>/models \
   --tag siglip2_distill_subcenter_k2 --alpha 25 --epochs 30 \
   --lr-head 3e-4 --lr-backbone 1e-5 --wd 5e-4 --P 8 --K 4 \
   --warmup 3 --context 0.10 --seed 7 --amp --subcenters 2 --save-epochs 28
