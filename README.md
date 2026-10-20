@@ -236,7 +236,7 @@ docker run --rm --gpus all --network none -v /путь/к/датасету:/data
 ```
 
 Интернет при инференсе не нужен: веса запекаются в образ на этапе сборки (по `WEIGHTS_URL` —
-по умолчанию ассет GitHub Release weights-a10 — или из `weights/` после `git lfs pull`, со сверкой sha256).
+по умолчанию ассет GitHub Release weights-soup150s2 — или из `weights/soup150s2.pt`, если файл положен до сборки, со сверкой sha256).
 
 ### API
 
@@ -261,7 +261,7 @@ docker run --rm --gpus all --network none -v /путь/к/датасету:/data
 
 ### 4.1 Качество ранжирования
 
-Протокол: 150 машин holdout (`research/val_ids.txt`), 361 gallery, 551 query,
+Протокол: 150 машин holdout (`research/val_ids.txt`), 357 gallery, 550 query (`research/clean_student/manifest.json`),
 кросс-камерный расчёт, официальный `evaluate.py` организаторов
 (`research/official_evaluate.py`), сырой косинус без постобработки.
 
@@ -284,7 +284,7 @@ Production (soup150s2 + DBA k=1 по галерее) в протоколе за�
 Разбор ошибок с примерами — `research/ERROR_ANALYSIS.md` (коллажи в `research/errors/`): это разбор стартовой модели (CLIP ViT-B/16 + голова, 18.09), а не a10.
 
 Прежние модели считались до clean retrain — на сплите с пятью exact-дублями
-train↔holdout (тот же размер: 551 query / 361 gallery), поэтому с таблицей выше не
+train↔holdout (551 query / 361 gallery против 550 / 357 после их удаления), поэтому с таблицей выше не
 сравниваются. Прежний студент `siglip2_distill_ensemble_ep28.pt` без постобработки:
 0.8581 (`research/GENERALIZATION_RESULTS.md`); в `analysis/DISTILLATION_REPORT.md` для
 него же 0.8859 — расхождение источников не разобрано. Встречающиеся в истории

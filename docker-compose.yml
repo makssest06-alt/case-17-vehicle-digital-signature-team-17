@@ -92,7 +92,7 @@ services:
       REID_TF_MODE: ${REID_TF_MODE:-squash}
     volumes:
       - ${DATA_HOST_DIR:-./data}:/data:ro
-      # только для своих весов (REID_WEIGHTS=/models/<файл>); веса l150 — в образе
+      # только для своих весов (REID_WEIGHTS=/models/<файл>); веса soup150s2 — в образе
       - ${MODELS_HOST_DIR:-./weights}:/models:ro
       - ./artifacts:/artifacts
     ports:

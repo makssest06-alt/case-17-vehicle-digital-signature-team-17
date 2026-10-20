@@ -119,9 +119,9 @@ correct = gal_vid.get(top_gid, None) == row.vehicle_id
 ```bash
 # с почти-дублем своей камеры (Q22) — сначала, его числа идут в раздел выше:
 python research/closed_gallery.py --data-dir <данные> --env REID_WEIGHTS=<веса a10> --zip dataset.zip --protocol q15 --tag a10_q15
-python research/closed_gallery.py --data-dir <данные> --env REID_WEIGHTS=<веса a10> --zip dataset.zip --tag soup150s2
+python research/closed_gallery.py --data-dir <данные> --env REID_WEIGHTS=<веса soup150s2> --zip dataset.zip --tag soup150s2
 # три трактовки кадра своей камеры наверху — таблица «Почему отказ без исключения почти-дублей»:
-python research/refusal_topcam.py --data-dir <данные> --env REID_WEIGHTS=<веса a10> --zip dataset.zip --tag soup150s2
+python research/refusal_topcam.py --data-dir <данные> --env REID_WEIGHTS=<веса soup150s2> --zip dataset.zip --tag soup150s2
 # прежний протокол (4 ротации, F1 при TNR ≥ 0.70, 361 + 750 test gallery) — пороги z100 4.6506 / 9.6847:
 python research/closed_gallery.py ... --protocol andrey --tag a10
 ```

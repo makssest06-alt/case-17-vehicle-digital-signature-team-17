@@ -8,6 +8,7 @@
 import hashlib
 import os
 import shutil
+import re
 import subprocess
 import tempfile
 import unittest
@@ -115,7 +116,11 @@ class DefaultUrlTests(unittest.TestCase):
                           if s.startswith("ARG WEIGHTS_URL="))
         self.assertTrue(compose_url, "в docker-compose.yml нет ссылки по умолчанию")
         self.assertEqual(compose_url, docker_url)
-        self.assertIn("/releases/download/weights-a10/clean_student_a10_ep28.pt", compose_url)
+        # ассет Release с тем же именем файла, что веса в образе (ENV REID_WEIGHTS в api/Dockerfile)
+        name = next(s.split("=", 1)[1].strip().rsplit("/", 1)[-1]
+                    for s in (repo / "api" / "Dockerfile").read_text(encoding="utf-8").splitlines()
+                    if s.startswith("ENV REID_WEIGHTS="))
+        self.assertRegex(compose_url, r"/releases/download/[^/]+/" + re.escape(name) + "$")
 
 
 if __name__ == "__main__":

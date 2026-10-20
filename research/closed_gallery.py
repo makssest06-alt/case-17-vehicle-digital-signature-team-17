@@ -692,9 +692,9 @@ def docs_md(res: dict, alt: dict = None, topcam: dict = None) -> str:
           "## Воспроизвести", "", "```bash",
           "# с почти-дублем своей камеры (Q22) — сначала, его числа идут в раздел выше:",
           "python research/closed_gallery.py --data-dir <данные> --env REID_WEIGHTS=<веса a10> --zip dataset.zip --protocol q15 --tag a10_q15",
-          f"python research/closed_gallery.py --data-dir <данные> --env REID_WEIGHTS=<веса a10> --zip dataset.zip --tag {res['tag']}",
+          f"python research/closed_gallery.py --data-dir <данные> --env REID_WEIGHTS=<веса {res['tag'].split('_')[0]}> --zip dataset.zip --tag {res['tag']}",
           f"# три трактовки кадра своей камеры наверху — таблица «Почему отказ без исключения почти-дублей»:",
-          f"python research/refusal_topcam.py --data-dir <данные> --env REID_WEIGHTS=<веса a10> --zip dataset.zip --tag {res['tag']}",
+          f"python research/refusal_topcam.py --data-dir <данные> --env REID_WEIGHTS=<веса {res['tag'].split('_')[0]}> --zip dataset.zip --tag {res['tag']}",
           "# прежний протокол (4 ротации, F1 при TNR ≥ 0.70, 361 + 750 test gallery) — пороги z100 4.6506 / 9.6847:",
           "python research/closed_gallery.py ... --protocol andrey --tag a10",
           "```", "", f"Пишет `closed_gallery_{res['tag']}.json` / `.md` и этот файл; пороги для `REFUSAL_PRESETS` — в "

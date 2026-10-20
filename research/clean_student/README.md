@@ -1,8 +1,8 @@
 # Clean retrain artifacts
 
 These files are the result of the full retrain after removing five exact JPEG
-duplicates between train and holdout. The alpha=10 student is the production model of the service
-(root `README.md`, sections 2.3 and 2.7); teacher and alpha=25 weights are research artifacts.
+duplicates between train and holdout. The production model of the service is `soup150s2.pt` (model soup of the l150 and s2 students, below;
+root `README.md`); the alpha=10 student (a10) is the fallback; teacher and alpha=25 weights are research artifacts.
 
 The weight files are not stored in this directory: `clean_student_a10_ep28.pt` is
 `weights/clean_student_a10_ep28.pt` (Git LFS) and the GitHub Release `weights-a10`; the other
@@ -19,7 +19,7 @@ checkpoints are not in the repository (see `manifest.json`).
 - `clean_student_large_150_ep150.pt`: clean student ViT-L/16@256, alpha=10, 150 эпох, seed 7 — компонент супа (в git нет, 1.21 ГБ; ассет GitHub Release `weights-l150`, sha256 в `manifest.json`). Команда обучения — `research/run_clean_student_large.sh`; clean holdout mAP@10 0.9005 / R1 0.8821 / R5 0.9484, expanded 0.6467 (официальный evaluator; логи вне репо, `bm_improve/large_scale/notes.md`)
 - `soup150s2.pt`: **production этой ветки** — model soup l150 (seed 7, 150 эпох) + s2 (seed 42, 75 эпох), рецепт `research/make_soup.py` (в git нет, 1.19 ГБ; ассет GitHub Release `weights-soup150s2`, sha256 в `manifest.json`). clean holdout mAP@10 0.9133 / R1 0.9024 / R5 0.9466, expanded 0.6592 (официальный evaluator)
 
-The alpha=10 student is the production runtime model. Teacher weights are retained for
+`soup150s2.pt` is the production runtime model (a10 is the fallback). Teacher weights are retained for
 reproducibility and future ablations; do not load them in the production service.
 
 ## Clean holdout metrics

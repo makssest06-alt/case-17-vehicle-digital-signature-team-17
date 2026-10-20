@@ -186,8 +186,8 @@ cd case-17-vehicle-digital-signature-team-17
 cp .env.example .env          # при необходимости поменять POSTGRES_PASSWORD
 ```
 
-Веса модели (`weights/clean_student_a10_ep28.pt`, 362 МБ) при сборке запекаются в образ.
-Без git-lfs они скачаются из GitHub Release (weights-a10) по `WEIGHTS_URL` по умолчанию,
+Веса модели (`soup150s2.pt`, 1.19 ГБ; в git их нет) при сборке запекаются в образ.
+Они скачиваются из GitHub Release (weights-soup150s2) по `WEIGHTS_URL` по умолчанию,
 sha256 сверяется (при несовпадении сборка падает):
 
 ```bash

@@ -26,8 +26,8 @@ class Settings:
     db_dsn: str = os.getenv("DB_DSN", "postgresql://case17:case17@db:5432/case17")
 
     # модель
-    # Production этой ветки — clean student ViT-L/16@256 (150 эпох, seed 7):
-    # clean mAP@10 0.9005, expanded 0.6467 (a10 из glebmain: 0.8666 / 0.5569).
+    # Production — soup150s2: model soup студентов ViT-L/16@256 l150 (seed 7) и s2 (seed 42), research/make_soup.py;
+    # clean mAP@10 0.9133, expanded 0.6592 (l150: 0.9005 / 0.6467; запасная a10: 0.8666 / 0.5569; manifest.json).
     # Явный EMBED_MODEL по-прежнему позволяет запускать диагностические профили.
     embed_model: str = os.getenv("EMBED_MODEL", "reid:vit_large_patch16_siglip_256")
     embed_dim: int = _i("EMBED_DIM", 512)
