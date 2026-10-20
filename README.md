@@ -296,7 +296,9 @@ docker run --rm --gpus all --network none -v /путь/к/датасету:/data
 
 На стресс-сплите expanded (query дополнены синтетическими искажениями): soup150s2 — mAP@10 **0.6592**,
 l150 — 0.6467, a10 — 0.5569 (официальный `evaluate.py`; протокол и логи — вне репо, `bm_improve/large_scale/notes.md`,
-команда обучения — `research/run_clean_student_large.sh`, soup — `research/make_soup.py`).
+команда обучения — `research/run_clean_student_large.sh`, soup — `research/make_soup.py`). С постобработкой
+DBA k=1 (прод-функция `app/pp/dba.py`, те же векторы) soup150s2 поднимается до **0.7244** (+6,5 пп,
+Rank-1 0.7145) — `research/honest_eval_results/expanded_dba_soup150s2.json`.
 
 Production (soup150s2 + DBA k=1 по галерее) в протоколе закрытого теста — 546 query, галереи 361 и
 1111 (361 + 750 кадров обучающих машин, по кадру на пару машина-камера; кадров теста нет): mAP@10
