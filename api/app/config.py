@@ -50,7 +50,7 @@ class Settings:
     # Production — raw: на протоколе по ответу Q17 оценка организаторов 0.7·F1 + 0.3·TNR у raw выше и с
     # порогом по своей галерее, и при переносе 361 <-> 1111; z100 — пресет по выбору (docs/refusal.md).
     # Отказ по умолчанию — без исключения почти-дублей (пресет «DBA», с 20.10); на протоколе Q17 у soup150s2
-    # он лучше прежнего итога: 0.948 / 0.881 против 0.894 / 0.794 (closed_gallery_soup150s2.json); прежний итог — запасной.
+    # он лучше прежнего итога: 0.943 / 0.893 против 0.896 / 0.789 (recalibrate_soup150s2.json); прежний итог — запасной.
     # После выбора постобработки меняется одно число — SEARCH_THRESHOLD (и STRICT
     # для строгого режима); посчитанные значения — REFUSAL_PRESETS ниже.
     refusal_score: str = _env("REFUSAL_SCORE", "raw")
@@ -58,11 +58,11 @@ class Settings:
     # сервис (галерея не фильтруется по камере: camera_id на вход не подаётся).
     #   сбалансированная — максимум оценки организаторов 0.7·F1 + 0.3·TNR (Q15);
     #   строгая — наименьший порог с TNR >= 0.98 на обеих галереях на фолде выбора;
-    #             вне фолда TNR 0.995 на 361 и 0.966 на 1111 (closed_gallery_soup150s2.json).
+    #             вне фолда TNR 0.991 на 361 и 0.964 на 1111 (recalibrate_soup150s2.json).
     # Выбор между ними — продуктовое решение, а не техническое, поэтому он
     # вынесен в интерфейс, а не зашит в код.
-    search_threshold: float = _f("SEARCH_THRESHOLD", 0.8727)
-    search_threshold_strict: float = _f("SEARCH_THRESHOLD_STRICT", 0.9432)
+    search_threshold: float = _f("SEARCH_THRESHOLD", 0.8881)
+    search_threshold_strict: float = _f("SEARCH_THRESHOLD_STRICT", 0.9445)
     search_margin: float = _f("SEARCH_MARGIN", 0.0)
 
     # ---- постобработка: по умолчанию выключена, ответы как без неё (api/app/pp/state.py) ----
@@ -109,17 +109,17 @@ REFUSAL_PRESETS = {
     # «DBA» без исключения почти-дублей (presets["DBA"] того же прогона; в config_presets его пишет новый
     # генератор); запасные — (1, "off", "both", "raw") (прежний итог, отказ фон ИЛИ рамка) и (1, "off", "bbox", "raw")
     # без фона; z100 — те же ключи с "z100". research/honest_eval_results/recalibrate_soup150s2.json, closed_gallery_soup150s2.json.
-    (1, "off", "off", "raw"): {"balanced": 0.8727, "strict": 0.9432,
+    (1, "off", "off", "raw"): {"balanced": 0.8881, "strict": 0.9445,
         "note": "итог: DBA, отказ без исключения почти-дублей, raw: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (closed_gallery_soup150s2.json)"},
-    (1, "off", "both", "raw"): {"balanced": 0.8232, "strict": 0.943,
+    (1, "off", "both", "raw"): {"balanced": 0.8195, "strict": 0.9443,
         "note": "итог: DBA; отказ фон ИЛИ рамка (наши пороги), raw: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (recalibrate_soup150s2.json)"},
-    (1, "off", "bbox", "raw"): {"balanced": 0.8247, "strict": 0.9434,
+    (1, "off", "bbox", "raw"): {"balanced": 0.8244, "strict": 0.9442,
         "note": "запасной: DBA; отказ рамка (наши пороги), raw: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (recalibrate_soup150s2.json)"},
-    (1, "off", "off", "z100"): {"balanced": 4.2461, "strict": 8.4269,
+    (1, "off", "off", "z100"): {"balanced": 4.2787, "strict": 8.698,
         "note": "итог: DBA, отказ без исключения почти-дублей, z100: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (closed_gallery_soup150s2.json)"},
-    (1, "off", "both", "z100"): {"balanced": 4.3643, "strict": 8.3598,
+    (1, "off", "both", "z100"): {"balanced": 4.3777, "strict": 8.5204,
         "note": "итог: DBA; отказ фон ИЛИ рамка (наши пороги), z100: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (recalibrate_soup150s2.json)"},
-    (1, "off", "bbox", "z100"): {"balanced": 4.3266, "strict": 8.4119,
+    (1, "off", "bbox", "z100"): {"balanced": 4.4228, "strict": 8.5754,
         "note": "запасной: DBA; отказ рамка (наши пороги), z100: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (recalibrate_soup150s2.json)"},
 }
 
