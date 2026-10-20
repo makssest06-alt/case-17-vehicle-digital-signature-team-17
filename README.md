@@ -79,7 +79,7 @@
 ### 2.2 Модель
 
 **SigLIP ViT-L/16@256 + ReID-голова**, обученная **дистилляцией** от ансамбля
-из 4 моделей (рецепт — раздел 2.7; запасной кандидат на ViT-B/16@224 — ветка `glebmain`).
+из 4 моделей (рецепт — раздел 2.7; запасная модель на ViT-B/16@224 — a10, коммит `3daf81a`).
 
 ```
 кроп → SigLIP ViT-L/16@256 → 1024 признаков
@@ -120,7 +120,7 @@ loss = ArcFace + Triplet + 10 · (1 − cos(student, teacher))
 `64e2f1897b593d9de7100fd6449058f0fad57f98de0bcbdfe4c546c5a6a21553`), рецепт soup —
 `research/make_soup.py`. Soup даёт +1.3 пп mAP@10 к l150 на clean holdout и +1.3 пп на
 стресс-сплите expanded (разбор — `bm_improve/large_scale/notes.md`, вне репо).
-Запасной кандидат на ViT-B/16@224 (a10, 362 МБ, ~2× быстрее) — в ветке `glebmain`.
+Запасная модель на ViT-B/16@224 (a10, 362 МБ, ~2× быстрее) — коммит `3daf81a` (`glebmain` до перехода на soup150s2) и Release `weights-a10`.
 
 ### 2.4 Аугментации (под условия датасета)
 
@@ -183,7 +183,7 @@ DBA-галерее, без исключения почти-дублей (пре�
    `research/prepare_public_init.py`), squash, `loss = ArcFace + Triplet + α·(1 − cos)`,
    `--alpha 10 --epochs 150`; l150 — `--seed 7`, чекпоинт эпохи 150, s2 — `--seed 42`,
    чекпоинт эпохи 75. Базовый рецепт a10
-   (ViT-B/16@224, 28 эпох, кандидат ветки `glebmain`) — `research/run_clean_student_sweep.sh`.
+   (ViT-B/16@224, 28 эпох, запасная модель) — `research/run_clean_student_sweep.sh`.
 4. **Soup**: `research/make_soup.py` — среднее весов двух чекпоинтов:
    `python research/make_soup.py soup150s2.pt clean_student_large_150_ep150.pt clean_student_large_s2_ep75.pt`.
 5. Сверить sha256 (soup150s2: `64e2f189…`; l150: `6937d116…`; a10 в `manifest.json`: `93114c59…`).
@@ -196,9 +196,8 @@ DBA-галерее, без исключения почти-дублей (пре�
 ## 3. Запуск одной командой
 
 ```bash
-git clone https://github.com/makssest06-alt/case-17-vehicle-digital-signature-team-17.git
+git clone https://github.com/makssest06-alt/case-17-vehicle-digital-signature-team-17.git   # ветка по умолчанию — glebmain, в ней решение
 cd case-17-vehicle-digital-signature-team-17
-git checkout team17/large-150-candidate   # эта ветка — кандидат на ViT-L/16@256; ветка по умолчанию glebmain — запасной a10
 cp .env.example .env          # необязательно: без .env берутся значения по умолчанию
 ```
 
@@ -269,7 +268,7 @@ docker run --rm --gpus all --network none -v /путь/к/датасету:/data
 |---|---:|---:|---:|---:|
 | **soup150s2 (soup l150+s2, ViT-L/16@256)** | **0.9133** | **0.9024** | **0.9466** | **~1.19 ГБ** |
 | Clean student ViT-L/16@256 (l150), alpha=10, 150 эпох | 0.9005 | 0.8821 | 0.9484 | ~1.21 ГБ |
-| Clean student alpha=10 (a10, ветка `glebmain`) | 0.8661 | 0.8287 | 0.9448 | ~362 МБ |
+| Clean student alpha=10 (a10, запасная) | 0.8661 | 0.8287 | 0.9448 | ~362 МБ |
 
 Источник — `research/clean_student/manifest.json` (`soup150s2`, `student_large_150`; 550 query / 357 gallery — `holdout_query` / `holdout_gallery`), a10 — `research/honest_eval_results/clean_student_a10_production_check.md` (в manifest → `student`: 0.8666 / 0.8306 / 0.9466). Сырого вывода оценщика для soup150s2 и l150 в репозитории нет: протокол и логи — вне репо.
 
@@ -503,8 +502,8 @@ JSON и логи — `research/honest_eval_results/bench_a5000_3955wx/`:
 с запасом 2×. Без draft 100-гейт не берётся даже на 4.4-ГГц CPU — узкое место именно декод JPEG, поэтому
 с 20.10 прод-дефолт ветки: `EXTRACT_JPEG_DRAFT=2` (JPEG декодируется сразу в половинном размере) и
 `EXTRACT_THREADS=32` (у жюри 64 ядра, Q30; потоки на результат не влияют, только на скорость декода;
-на предыдущей аренде класса Xeon Gold 5120 16 потоков с draft дали 103.2 FPS против ~52 без draft). Для сравнения, запасной a10 (ветка `glebmain`) на 4060: B1 22.00 мс,
-лучший FPS 92.3, 18.46/20 — выбор финальной модели за капитаном.
+на предыдущей аренде класса Xeon Gold 5120 16 потоков с draft дали 103.2 FPS против ~52 без draft). Для сравнения, запасной a10 (коммит `3daf81a`) на 4060: B1 22.00 мс,
+лучший FPS 92.3, 18.46/20; финальная модель — soup150s2.
 
 Ускорения (разрешены Q36) — переменные окружения (`docker-compose.yml` их в контейнер не пробрасывает, строка
 в `.env` на них не действует — задавать при запуске: `docker compose exec -e EXTRACT_THREADS=8 api …` или
