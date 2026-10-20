@@ -191,13 +191,14 @@ def main() -> int:
         res = run(a)
         out_json.write_text(json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8")
     res = json.loads(out_json.read_text(encoding="utf-8"))
-    (a.out_dir / f"closed_gallery_{a.tag}.md").write_text(report_md(res), encoding="utf-8")
+    rc = recalibrated(a.out_dir, res)
+    (a.out_dir / f"closed_gallery_{a.tag}.md").write_text(report_md(res, rc), encoding="utf-8")
     if a.protocol == "q17":                          # docs/refusal.md — только по основному протоколу
         alt = a.out_dir / "closed_gallery_a10_q15.json"  # с почти-дублем своей камеры (Q22) — для сравнения
         alt = json.loads(alt.read_text(encoding="utf-8")) if alt.exists() else None
         tc = a.out_dir / f"refusal_topcam_{a.tag}.json"   # три трактовки кадра своей камеры (research/refusal_topcam.py)
         tc = json.loads(tc.read_text(encoding="utf-8")) if tc.exists() else None
-        (HERE.parent / "docs" / "refusal.md").write_text(docs_md(res, alt, tc), encoding="utf-8")
+        (HERE.parent / "docs" / "refusal.md").write_text(docs_md(res, alt, tc, rc), encoding="utf-8")
     print(f"-> {a.out_dir / f'closed_gallery_{a.tag}.md'}" + (", docs/refusal.md" if a.protocol == "q17" else ""))
     return 0
 
@@ -431,7 +432,32 @@ f3 = lambda x: f"{x:.3f}"
 f4 = lambda x: f"{x:.4f}"
 
 
-def report_md(res: dict) -> str:
+def recalibrated(out_dir: Path, res: dict):
+    """recalibrate_<tag>.json, раздел closed_gallery которого и есть res (так его пишет recalibrate_for_model.py), иначе None."""
+    p = out_dir / f"recalibrate_{res['tag']}.json"
+    rc = json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
+    return rc if rc and rc.get("closed_gallery") == res else None
+
+
+def rc_run(res: dict, rc: dict) -> dict:
+    """Как получен res из recalibrate_for_model.py: модель (веса — меткой), источник кадров и draft — из rc."""
+    w = f"<веса {res['tag'].split('_')[0]}>"
+    model = " ".join(f"{k}={w if k == 'REID_WEIGHTS' else v}" for k, v in rc["model"].items()
+                     if k in ("EMBED_MODEL", "REID_WEIGHTS", "INPUT_SIZE", "REID_TF_MODE"))
+    draft = [e for e in rc["env_overrides"] if e.startswith("EXTRACT_JPEG_DRAFT=")]
+    if rc["source"] != "frames":
+        emb = "из готовых JPEG-кропов"
+    elif draft:
+        emb = ("из полных кадров `dataset.zip` тем же кропом, что у `extract()`, сервиса и `make_submission` "
+               f"(`app.imaging.crop_frame`, {draft[0]})")
+    else:                       # прогон до общего кропа (e917020): путь /v1/embed тогда декодировал кадр целиком
+        draft = ["EXTRACT_JPEG_DRAFT=0"]
+        emb = "из полных кадров `dataset.zip` полным декодом (прогон до общего JPEG draft; сейчас то же — EXTRACT_JPEG_DRAFT=0)"
+    data = " ".join([f"--source {rc['source']}"] + [f"--env {e}" for e in draft if rc["source"] == "frames"])
+    return {"w": w, "model": model, "data": data, "emb": emb, "tag": res["tag"], "s": rc["seconds"]}
+
+
+def report_md(res: dict, rc: dict = None) -> str:
     G, P, tag, pr = res["galleries"], res["presets"], res["tag"], res["protocol"]
     g1, g2 = pr["main"]
     rule = ("максимум 0.7·F1 + 0.3·TNR (Q15)" if pr["objective"] == "q15" else "F1 при TNR ≥ 0.70")
@@ -444,8 +470,12 @@ def report_md(res: dict) -> str:
          f"Ранжирование — все запросы против всей галереи, официальный `ranking_metrics`. Отказ «как сервис»: "
          f"{pr['rotations']} ротаций, в каждой у {pr['open_width']}/{pr['rotations']} машин {open_txt} — без пары "
          f"{open_pct:.1%} запросов; порог вне фолда (2 фолда по машинам), правило — {rule}, в "
-         "пресет — медиана по фолдам × ротациям. Воспроизвести: `python research/closed_gallery.py --data-dir <данные> "
-         f"--env REID_WEIGHTS=<веса> --tag {tag} --zip dataset.zip`.".replace("%", " %"), ""]
+         "пресет — медиана по фолдам × ротациям. ".replace("%", " %") + (
+             "Воспроизвести: `python research/closed_gallery.py --data-dir <данные> "
+             f"--env REID_WEIGHTS=<веса> --tag {tag} --zip dataset.zip`." if rc is None else
+             "Воспроизвести: `{model} python research/recalibrate_for_model.py --data-dir <данные> --zip dataset.zip {data} "
+             "--tag {tag}` — этот JSON есть раздел `closed_gallery` из `recalibrate_{tag}.json`; эмбеддинги — {emb}."
+             .format(**rc_run(res, rc))), ""]
     if PRODUCTION in P and PRODUCTION != res["final"]:
         L += [f"> С 20.10 отказ по умолчанию — вариант «{PRODUCTION}» (без исключения почти-дублей); «{res['final']}» ниже — "
               "итог 18.10, теперь запасной пресет (`docs/refusal.md`).", ""]
@@ -489,7 +519,7 @@ def report_md(res: dict) -> str:
     return "\n".join(L) + "\n"
 
 
-def docs_md(res: dict, alt: dict = None, topcam: dict = None) -> str:
+def docs_md(res: dict, alt: dict = None, topcam: dict = None, rc: dict = None) -> str:
     """docs/refusal.md — протокол q17 (alt — q15 для сравнения, topcam — refusal_topcam_<tag>.json): галереи 361, 750 и
     1111 (361 + кадры обучающих машин), без кадров теста. Отказ по умолчанию — PRODUCTION («DBA», с 20.10), запасные —
     прежний итог res["final"] и res["fallback"]. Основная оценка — res["score"] (raw), другая — res["presets_alt"]."""
@@ -500,6 +530,7 @@ def docs_md(res: dict, alt: dict = None, topcam: dict = None) -> str:
     zs = "z100" if S == "raw" else "raw"
     g1, g2 = pr["main"]
     gs = [g for g in ("361", "750tr", "1111tr") if g in G]
+    run = rc_run(res, rc) if rc else None
     T = lambda g: GALLERY_TITLE[g]
     pg = lambda x, g: x["per_gallery"][g]
     m4 = lambda x, g, p="": " / ".join(f3(pg(x, g)[p + k]) for k in ("F1", "TNR", "recall", "Q15"))
@@ -508,6 +539,9 @@ def docs_md(res: dict, alt: dict = None, topcam: dict = None) -> str:
     pct = lambda x: f"{x:.0%}".replace("%", " %")
     open_pct = f"{pg(D, g1)['open_share']:.1%}".replace("%", " %")
     o, f1r = res["old"][fin], res["rule_f1"][fin]
+    wname = lambda r: Path(str(r.get("weights") or "")).name
+    alt_on = (f" — посчитано на {Path(wname(alt)).stem}, для этой модели не пересчитывалось"
+              if alt and wname(alt) and wname(alt) != wname(res) else "")
     L = ["# Режим отказа", "",
          "Схема по умолчанию (команда, 20.10): **ранжирование — DBA k=1 без флагов; отказ — сырой косинус (raw) лучшего "
          "кандидата по DBA-галерее, без исключения почти-дублей** (`REFUSAL_SCORE=raw`, `PP_DEDUP_RANK=off`, "
@@ -530,8 +564,13 @@ def docs_md(res: dict, alt: dict = None, topcam: dict = None) -> str:
          f"фолдам × ротациям. Без пары в протоколе {open_pct} запросов.",
          f"- **Данные теста при подборе порога не использовались**: ни кадры, ни метки. Галереи — {g1} кадр holdout, "
          f"{T('750tr')} и {T(g2)}; для запасного пресета порог фона τ = {res['tau']} и правило рамок подобраны на парах "
-         "обучающих машин (`research/honest_eval_results/cheap_bg_a10.md`, `dedup_compare_a10.md`).", ""]
+         "обучающих машин (" + (f"`recalibrate_{res['tag']}.json` тем же способом, что " if run else "")
+         + "`research/honest_eval_results/cheap_bg_a10.md`, `dedup_compare_a10.md`).", ""]
     L += ["## Почему отказ без исключения почти-дублей", ""]
+    if not topcam:
+        L += [f"На протоколе Q17 «DBA» выше прежнего итога: 0.7·F1 + 0.3·TNR {q2(D)} против {q2(F)} на 361 / 1111. "
+              "Три трактовки кадра своей камеры на первом месте ответа (`research/refusal_topcam.py`) для этой модели "
+              "не пересчитывались.", ""]
     if topcam:
         V, cnt = topcam["variants"], topcam["counts"][prod]
         share = " / ".join(pct(cnt[g]["junk_top1_share_of_with_pair"]) for g in (g1, g2))
@@ -553,7 +592,7 @@ def docs_md(res: dict, alt: dict = None, topcam: dict = None) -> str:
               "из отказа (не считалось).", ""]
     if alt and "presets" in alt and prod in alt["presets"]:
         L += [f"Прежний итог выигрывает только в сценарии Q22 — у запроса без пары в галерее остался кадр его машины с той "
-              f"же камеры (протокол q15, `closed_gallery_a10_q15.md`): {q2(alt['presets'][fin])} против "
+              f"же камеры (протокол q15, `closed_gallery_a10_q15.md`{alt_on}): {q2(alt['presets'][fin])} против "
               f"{q2(alt['presets'][prod])} у «DBA» на 361 / 1111. По ответу Q22 такой запрос («единственный позитив в "
               "gallery оказался junk (та же камера)») исключается из mAP и оценивается только как отказ. В закрытом тесте "
               "его нет: по ответу Q17 у 20 % query «соответствующего ТС в gallery» нет совсем, а у остальных 80 % "
@@ -582,13 +621,15 @@ def docs_md(res: dict, alt: dict = None, topcam: dict = None) -> str:
             L.append(f"| {formula} | {lab} | {x['threshold']:.4f} | " + " | ".join(f3(x[g]["Q15"]) for g in gs)
                      + " | " + " / ".join(f3(x[g]["TNR"]) for g in gs) + " |")
     r, z = sc[S], sc[zs]
+    tr, tz = r[g1][g2]["TNR"], z[g1][g2]["TNR"]
+    tnr = (f"TNR падает сильнее ({f3(tr)} против {f3(tz)}), но полнота растёт больше, и формула всё равно выше"
+           if tr < tz else f"выше и TNR ({f3(tr)} против {f3(tz)}), и формула")
     L += ["", f"Порог raw растёт с размером галереи — чем больше чужих кадров, тем выше лучший косинус у запроса без "
           f"пары: {r[g1]['threshold']:.3f} по 361, {r['750tr']['threshold']:.3f} по 750 (размер открытого "
           f"test_gallery, Q27), {r[g2]['threshold']:.3f} по 1111; пресет по 361 и 1111 — {r[g1 + ' + ' + g2]['threshold']:.3f}. "
           f"z100 от размера почти не зависит ({z[g1]['threshold']:.3f} / {z['750tr']['threshold']:.3f} / "
           f"{z[g2]['threshold']:.3f}), но по формуле проигрывает raw на каждой галерее. При переносе 361 → 1111 у raw "
-          f"TNR падает сильнее ({f3(r[g1][g2]['TNR'])} против {f3(z[g1][g2]['TNR'])}), но полнота растёт больше, и "
-          f"формула всё равно выше: {f3(r[g1][g2]['Q15'])} против {f3(z[g1][g2]['Q15'])}.", "",
+          f"{tnr}: {f3(r[g1][g2]['Q15'])} против {f3(z[g1][g2]['Q15'])}.", "",
           "## Что считается отказом", "",
           "- `/v1/search` отвечает `refusal: true` (`low_similarity`), если оценка уверенности меньше порога, и "
           "`gallery_empty`, если галерея пуста. Иначе — кандидаты.",
@@ -598,8 +639,11 @@ def docs_md(res: dict, alt: dict = None, topcam: dict = None) -> str:
           "## Оценка уверенности", "",
           "- `raw` — косинус (по DBA-галерее) лучшего кандидата из top-100; в запасном пресете — лучшего без почти-дублей.",
           "- `z100` = (s1 − mean(s2..s100)) / std(s2..s100) по тем же кандидатам.",
-          f"- Почти-дубль (запасной пресет): косинус фонов > {res['tau']} **или** правило рамок — сырой косинус ≥ 0.84 и "
-          "IoU рамок ≥ 0.6, сдвиг центра ≤ 0.3 размера рамки. С порогами рамок Андрея (≥ 0.94, или ≥ 0.85 и IoU ≥ 0.7) — "
+          f"- Почти-дубль (запасной пресет): косинус фонов > {res['tau']} **или** правило рамок — сырой косинус ≥ "
+          f"{res['rules']['ours']['s_hi']:g} и IoU рамок ≥ {res['rules']['ours']['t_iou']:g}, сдвиг центра ≤ "
+          f"{res['rules']['ours']['t_center']:g} размера рамки"
+          + (f", |log| отношения сторон ≤ {res['rules']['ours']['t_size']:g}" if res['rules']['ours']['t_size'] != float('inf') else "")
+          + ". С порогами рамок Андрея (≥ 0.94, или ≥ 0.85 и IoU ≥ 0.7) — "
           f"{m4(P[fin.replace('наши пороги', 'пороги Андрея')], g1)} на 361 и "
           f"{m4(P[fin.replace('наши пороги', 'пороги Андрея')], g2)} на 1111 (F1 / TNR / полнота / оценка).",
           "- Где в конфиге: `api/app/config.py` — `REFUSAL_SCORE`, `SEARCH_THRESHOLD`, `SEARCH_THRESHOLD_STRICT`, "
@@ -643,7 +687,7 @@ def docs_md(res: dict, alt: dict = None, topcam: dict = None) -> str:
           *(["## С почти-дублем своей камеры (Q22)", "",
              "У запроса без пары в галерее остаётся кадр его машины с той же камеры — почти-дубль, который запасной "
              f"пресет выбрасывает из оценки отказа (протокол Андрея: {alt['protocol']['rotations']} ротаций по "
-             f"{alt['protocol']['open_width']}/{alt['protocol']['rotations']} машин, `closed_gallery_a10_q15.md`). Порог "
+             f"{alt['protocol']['open_width']}/{alt['protocol']['rotations']} машин, `closed_gallery_a10_q15.md`{alt_on}). Порог "
              "по тому же правилу:", "",
              "| Вариант | Оценка | Порог | F1 / TNR / полнота / 0.7·F1+0.3·TNR 361 | то же 1111 |", "|---|---|---:|---:|---:|",
              *[f"| {lab} | {x['score']} | {x['threshold']:.4f} | {m4(x, g1)} | {m4(x, g2)} |"
@@ -681,18 +725,29 @@ def docs_md(res: dict, alt: dict = None, topcam: dict = None) -> str:
           f"- По умолчанию для сравнения: {m4(D, g1)} на 361 и {m4(D, g2)} на 1111.", "",
           "## Воспроизвести", "", "```bash",
           "# с почти-дублем своей камеры (Q22) — сначала, его числа идут в раздел выше:",
-          "python research/closed_gallery.py --data-dir <данные> --env REID_WEIGHTS=<веса a10> --zip dataset.zip --protocol q15 --tag a10_q15",
-          f"python research/closed_gallery.py --data-dir <данные> --env REID_WEIGHTS=<веса a10> --zip dataset.zip --tag {res['tag']}",
-          f"# три трактовки кадра своей камеры наверху — таблица «Почему отказ без исключения почти-дублей»:",
-          f"python research/refusal_topcam.py --data-dir <данные> --env REID_WEIGHTS=<веса a10> --zip dataset.zip --tag {res['tag']}",
+          "python research/closed_gallery.py --data-dir <данные> --env REID_WEIGHTS=<веса a10> --zip dataset.zip --protocol q15 --tag a10_q15"]
+    if run is None:
+        L += [f"python research/closed_gallery.py --data-dir <данные> --env REID_WEIGHTS=<веса {res['tag'].split('_')[0]}> --zip dataset.zip --tag {res['tag']}"]
+    else:
+        L += ["# пороги, τ, правило рамок и раздел closed_gallery — одним прогоном (модель — из окружения, как у сервиса):",
+              f"{run['model']} python research/recalibrate_for_model.py --data-dir <данные> --zip dataset.zip {run['data']} --tag {run['tag']}",
+              f"# closed_gallery_{run['tag']}.json — раздел closed_gallery из recalibrate_{run['tag']}.json; .md и этот файл — из него:",
+              f"python research/closed_gallery.py --data-dir <данные> --report --tag {run['tag']}"]
+    L += [f"# три трактовки кадра своей камеры наверху — таблица «Почему отказ без исключения почти-дублей»:",
+          f"python research/refusal_topcam.py --data-dir <данные> --env REID_WEIGHTS=<веса {res['tag'].split('_')[0]}> --zip dataset.zip "
+          + (f"{run['data']} " if run else "") + f"--tag {res['tag']}",
           "# прежний протокол (4 ротации, F1 при TNR ≥ 0.70, 361 + 750 test gallery) — пороги z100 4.6506 / 9.6847:",
           "python research/closed_gallery.py ... --protocol andrey --tag a10",
-          "```", "", f"Пишет `closed_gallery_{res['tag']}.json` / `.md` и этот файл; пороги для `REFUSAL_PRESETS` — в "
-          "JSON, ключ `config_presets`. Около минуты на готовых эмбеддингах.", "",
+          "```", "", (f"Пишет `closed_gallery_{res['tag']}.json` / `.md` и этот файл; пороги для `REFUSAL_PRESETS` — в "
+          "JSON, ключ `config_presets`. Около минуты на готовых эмбеддингах." if run is None else
+          f"Пороги для `REFUSAL_PRESETS` — в `recalibrate_{run['tag']}.json`, ключ `config_lines` (то же — "
+          f"`config_presets` в `closed_gallery_{run['tag']}.json`). Прогон recalibrate — {run['s']['всего']:.0f} с, из них "
+          f"эмбеддинги кадров `train.csv` — {run['s']['эмбеддинги train.csv']:.0f} с; `--report` — секунды."), "",
           "## Оговорки", "",
           "- 150 машин holdout: на фолд ~55 запросов без пары, шаг TNR ~0.02; пороги по фолдам разбросаны заметно.",
           "- Отвлекатели больших галерей — обучающие машины (модель их видела), см. выше.",
-          "- Эмбеддинги — из готовых JPEG-кропов; у Андрея свой кэш, числа сходятся до 0.003 mAP@10.",
+          ("- Эмбеддинги — из готовых JPEG-кропов; у Андрея свой кэш, числа сходятся до 0.003 mAP@10." if run is None else
+           f"- Эмбеддинги — {run['emb']}. Сверка с кэшем Андрея (до 0.003 mAP@10) была на готовых кропах, для этих не повторялась."),
           "- Закрытый тест: у запроса без пары машины в галерее нет (Q17) — основной протокол; запрос, у которого "
           "единственный позитив — кадр своей камеры (Q22), — раздел выше.",
           "- Таблица ответов организаторов в репозитории не хранится; номера ответов — по ней.", ""]

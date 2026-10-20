@@ -1,3 +1,4 @@
-Прод — `clean_student_a10_ep28.pt` (Git LFS, 379 734 230 байт): при сборке запекается в образ, `/opt/weights` (`api/Dockerfile`).
-sha256 `93114c5923869d01e92cd70c2c421f783d05ebdac5652a1f2dc919aa040bf6ce` — сверяется при сборке (`WEIGHTS_SHA256`) и при старте (`/health`).
-Остальное (`reid_current.pt` — прежняя head-only модель) — только для истории замеров в `research/`, сервис его не берёт.
+Прод этой ветки — `soup150s2.pt` (ViT-L/16@256, model soup чекпоинтов l150 и s2_ep75, 1 273 096 203 байт): при сборке запекается в образ, `/opt/weights` (`api/Dockerfile`); в git не лежит — скачивается из GitHub Release `weights-soup150s2` по `WEIGHTS_URL` по умолчанию. Рецепт soup — `research/make_soup.py`.
+sha256 `64e2f1897b593d9de7100fd6449058f0fad57f98de0bcbdfe4c546c5a6a21553` — сверяется при сборке (`WEIGHTS_SHA256`) и при старте (`/health`).
+`reid_current.pt` — прежняя head-only модель, только для истории замеров в `research/`, сервис его не берёт.
+Запасная модель a10 (ViT-B@224, 362 МБ) — коммит `3daf81a` и Release `weights-a10`; `clean_student_a10_ep28.pt` здесь — указатель Git LFS.

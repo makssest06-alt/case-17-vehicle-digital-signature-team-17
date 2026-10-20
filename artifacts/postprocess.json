@@ -1,31 +1,31 @@
 {
-  "model": "reid:vit_base_patch16_siglip_224.v2_webli",
-  "weights": "clean_student_a10_ep28.pt",
-  "weights_sha256": "93114c5923869d01e92cd70c2c421f783d05ebdac5652a1f2dc919aa040bf6ce",
-  "crop": "bbox + 10% запаса (app/imaging.crop_with_pad), REID_TF_MODE=squash, TTA flip=False",
+  "model": "reid:vit_large_patch16_siglip_256",
+  "weights": "soup150s2.pt",
+  "weights_sha256": "64e2f1897b593d9de7100fd6449058f0fad57f98de0bcbdfe4c546c5a6a21553",
+  "crop": "bbox + 10% запаса (app/imaging.crop_frame, как extract() и сервис; JPEG draft не больше 1/2), REID_TF_MODE=squash, TTA flip=False",
   "postprocess": {
     "path": "app.pp.state.Postprocess — тот же код, что в сервисе; другие query не используются",
     "PP_DBA_K": 1,
     "PP_DEDUP_RANK": "off",
     "PP_DEDUP_REFUSAL": "off",
-    "PP_CAMERA_TAU": 0.68127,
-    "PP_DEDUP_SIM": 0.84,
+    "PP_CAMERA_TAU": 0.68233,
+    "PP_DEDUP_SIM": 0.87,
     "PP_DEDUP_IOU": 0.6,
     "PP_DEDUP_CENTER": 0.3
   },
   "refusal": {
     "score": "raw",
-    "threshold": 0.8562,
+    "threshold": 0.8881,
     "preset": {
-      "balanced": 0.8562,
-      "note": "итог: DBA, отказ без исключения почти-дублей, raw: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (closed_gallery_a10_q17.md)"
+      "balanced": 0.8727,
+      "note": "итог: DBA, отказ без исключения почти-дублей, raw: 361 и 1111 (+750 кадров обучающих машин), без кадров теста, 20 % машин без пары (Q17); 0.7·F1 + 0.3·TNR (closed_gallery_soup150s2.json)"
     },
-    "accepted": 934,
-    "refused": 176,
+    "accepted": 953,
+    "refused": 157,
     "candidates_rule": "принятый query — top-10 как в ответе /v1/search, confidence — косинус кандидата"
   },
   "consistency": {
-    "top1_mismatch_pct": 3.78,
+    "top1_mismatch_pct": 3.51,
     "note": "доля query, где top-1 submission.csv (по DBA-галерее) отличается от top-1 по косинусу векторов embeddings.npy (без постобработки)"
   },
   "frame_fixes": {

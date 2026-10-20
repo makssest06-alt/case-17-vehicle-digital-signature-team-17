@@ -1,0 +1,64 @@
+2026-10-19 19:38:37,409 INFO замер extract(): 256 кадров из /root/data_extract/test_query.csv
+2026-10-19 19:38:41,537 INFO бэкбон: vit_large_patch16_siglip_256 (веса SigLIP-L из чекпоинта)
+2026-10-19 19:38:41,972 INFO модель reid:vit_large_patch16_siglip_256: веса soup150s2.pt, устройство cuda, FP16 да, кроп squash 256, размерность 512
+2026-10-19 19:38:42,083 INFO extract(): модель reid:vit_large_patch16_siglip_256 загружена за 4.5 с — устройство cuda, FP16 да, JPEG draft нет, потоков 4
+2026-10-19 19:38:43,475 INFO веса /root/soup150s2.pt: sha256 64e2f1897b593d9de7100fd6449058f0fad57f98de0bcbdfe4c546c5a6a21553
+2026-10-19 19:38:43,475 INFO latency_b1: прогрев 50, замеров 300 (batch=1)
+2026-10-19 19:38:52,162 INFO latency_b1: медиана 23.64 мс, p95 26.46 мс
+2026-10-19 19:39:02,186 INFO throughput: батч 1 — 44.3 кадров/с (443 кадров за 10.0 с)
+2026-10-19 19:39:12,381 INFO throughput: батч 8 — 84.9 кадров/с (856 кадров за 10.1 с)
+2026-10-19 19:39:22,586 INFO throughput: батч 16 — 86.2 кадров/с (864 кадров за 10.0 с)
+2026-10-19 19:39:33,102 INFO throughput: батч 32 — 85.3 кадров/с (864 кадров за 10.1 с)
+2026-10-19 19:39:33,874 INFO итог: latency_b1 23.64 мс, лучший FPS 86.2 (батч 16), VRAM 2072.7 МБ, детерминизм max|Δ| 0, баллы 17.25 из 20 (Q34)
+2026-10-19 19:39:33,874 INFO кадры: рамок обрезано 0, заменено на весь кадр 0, не прочитано 0
+2026-10-19 19:39:33,874 INFO JSON записан: /root/bench/bench_default.json
+{
+  "model": "reid:vit_large_patch16_siglip_256",
+  "dim": 512,
+  "device": "cuda",
+  "fp16": true,
+  "jpeg_draft": false,
+  "draft_max": 8,
+  "threads": 4,
+  "tf_mode": "squash",
+  "load_s": 4.524203566135839,
+  "frame_fixes": {
+    "clipped": 0,
+    "full": 0,
+    "unread": 0
+  },
+  "torch": "2.5.1+cu124",
+  "gpu": "NVIDIA RTX A5000",
+  "weights": "soup150s2.pt",
+  "weights_sha256": "64e2f1897b593d9de7100fd6449058f0fad57f98de0bcbdfe4c546c5a6a21553",
+  "frames": 256,
+  "smoke": false,
+  "latency_b1_ms": {
+    "median": 23.64,
+    "p95": 26.46,
+    "runs": 300,
+    "warmup": 50
+  },
+  "throughput_fps": {
+    "1": 44.3,
+    "8": 84.9,
+    "16": 86.2,
+    "32": 85.3
+  },
+  "best_fps": 86.2,
+  "best_batch": 16,
+  "peak_vram_MB": 2072.7,
+  "determinism_max_abs_diff": 0.0,
+  "weights_size_q37": {
+    "roots": [
+      "/root/soup150s2.pt",
+      "/srv"
+    ],
+    "files": 1,
+    "bytes": 1273096203,
+    "MB": 1214.1
+  },
+  "latency_score": 1.0,
+  "throughput_score": 0.725,
+  "performance_pct_of_20": 17.25
+}

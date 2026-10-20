@@ -26,14 +26,14 @@ services:
 
   api:
     build:
-      # Контекст — корень репозитория: образу нужны api/ и weights/clean_student_a10_ep28.pt
-      # (.dockerignore — белый список). Стадия weights в api/Dockerfile берёт веса оттуда,
-      # если это настоящий файл (git lfs pull), иначе качает по WEIGHTS_URL; sha256 сверяется всегда.
+      # Контекст — корень репозитория: образу нужны api/ и weights/soup150s2.pt
+      # (.dockerignore — белый список). В git весов нет (1.21 ГБ): стадия weights в api/Dockerfile
+      # качает их по WEIGHTS_URL; sha256 сверяется всегда.
       context: .
       dockerfile: api/Dockerfile
       args:
-        EMBED_MODEL: ${EMBED_MODEL:-reid:vit_base_patch16_siglip_224.webli}
-        WEIGHTS_URL: ${WEIGHTS_URL:-https://github.com/makssest06-alt/case-17-vehicle-digital-signature-team-17/releases/download/weights-a10/clean_student_a10_ep28.pt}   # по умолчанию — ассет GitHub Release weights-a10 (api/Dockerfile)
+        EMBED_MODEL: ${EMBED_MODEL:-reid:vit_large_patch16_siglip_256}
+        WEIGHTS_URL: ${WEIGHTS_URL:-https://github.com/makssest06-alt/case-17-vehicle-digital-signature-team-17/releases/download/weights-soup150s2/soup150s2.pt}   # по умолчанию — ассет GitHub Release weights-soup150s2 (api/Dockerfile)
         BAKE_BACKBONE: ${BAKE_BACKBONE:-0}   # 1 — только для timm:/head-only профилей (api/Dockerfile)
     image: case17-api:local
     container_name: case17-api
@@ -51,9 +51,9 @@ services:
         condition: service_healthy
     environment:
       DB_DSN: postgresql://${POSTGRES_USER:-case17}:${POSTGRES_PASSWORD:-case17}@db:5432/${POSTGRES_DB:-case17}
-      EMBED_MODEL: ${EMBED_MODEL:-reid:vit_base_patch16_siglip_224.webli}
+      EMBED_MODEL: ${EMBED_MODEL:-reid:vit_large_patch16_siglip_256}
       EMBED_DIM: ${EMBED_DIM:-512}
-      INPUT_SIZE: ${INPUT_SIZE:-224}
+      INPUT_SIZE: ${INPUT_SIZE:-256}
       EMBED_TTA_FLIP: ${EMBED_TTA_FLIP:-0}
       SEARCH_TOP_N: ${SEARCH_TOP_N:-10}
       # Режим отказа: формула оценки и порог. Числа по умолчанию — только в
@@ -83,7 +83,7 @@ services:
       OMP_NUM_THREADS: "2"
       HF_HUB_OFFLINE: "1"
       HF_HOME: /opt/hfcache
-      REID_WEIGHTS: ${REID_WEIGHTS:-/opt/weights/clean_student_a10_ep28.pt}   # в образе (api/Dockerfile)
+      REID_WEIGHTS: ${REID_WEIGHTS:-/opt/weights/soup150s2.pt}   # в образе (api/Dockerfile)
       # Ожидаемый sha256 весов: при старте сверяется и пишется в лог; пусто — только записать.
       REID_WEIGHTS_SHA256: ${REID_WEIGHTS_SHA256:-}
       # Режим кропа для чекпоинтов, которые не пишут tf_mode в args (студент).
@@ -92,12 +92,13 @@ services:
       REID_TF_MODE: ${REID_TF_MODE:-squash}
     volumes:
       - ${DATA_HOST_DIR:-./data}:/data:ro
-      # только для своих весов (REID_WEIGHTS=/models/<файл>); веса a10 — в образе
+      # только для своих весов (REID_WEIGHTS=/models/<файл>); веса soup150s2 — в образе
       - ${MODELS_HOST_DIR:-./weights}:/models:ro
       - ./artifacts:/artifacts
     ports:
       - "8000:8000"
-    mem_limit: ${API_MEM_LIMIT:-1536m}
+    # ViT-L@256: пик RSS при загрузке ~2.6 ГБ (чекпоинт 1.21 ГБ читается и копируется в сеть).
+    mem_limit: ${API_MEM_LIMIT:-3g}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).status==200 else 1)"]
       interval: 15s

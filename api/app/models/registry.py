@@ -23,9 +23,9 @@ def build_model(name: str, input_size: int = 224) -> EmbeddingModel:
 
         weights = os.getenv("REID_WEIGHTS")
         if not weights:
-            weights = "/opt/weights/clean_student_a10_ep28.pt"
+            weights = "/opt/weights/soup150s2.pt"
             # Прямой запуск из checkout без Docker/.env. В образе REID_WEIGHTS —
-            # /opt/weights/clean_student_a10_ep28.pt (api/Dockerfile).
+            # /opt/weights/soup150s2.pt (api/Dockerfile).
             local_weights = Path(__file__).resolve().parents[3] / "weights" / Path(weights).name
             if local_weights.is_file():
                 weights = str(local_weights)

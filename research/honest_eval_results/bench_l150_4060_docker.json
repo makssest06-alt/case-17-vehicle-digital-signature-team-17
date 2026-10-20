@@ -1,0 +1,50 @@
+{
+  "model": "reid:vit_large_patch16_siglip_256",
+  "dim": 512,
+  "device": "cuda",
+  "fp16": true,
+  "jpeg_draft": false,
+  "threads": 4,
+  "tf_mode": "squash",
+  "load_s": 4.031500864002737,
+  "frame_fixes": {
+    "clipped": 0,
+    "full": 0,
+    "unread": 0
+  },
+  "torch": "2.5.1+cu124",
+  "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU",
+  "weights": "clean_student_large_150_ep150.pt",
+  "weights_sha256": "6937d1163e239bcfd8ee76fe00da12a9d60becc89563b8fc5a475dc72df13d52",
+  "frames": 256,
+  "smoke": false,
+  "latency_b1_ms": {
+    "median": 32.16,
+    "p95": 36.68,
+    "runs": 300,
+    "warmup": 50
+  },
+  "throughput_fps": {
+    "1": 32.8,
+    "8": 53.7,
+    "16": 56.3,
+    "32": 55.2
+  },
+  "best_fps": 56.3,
+  "best_batch": 16,
+  "peak_vram_MB": 2072.7,
+  "determinism_max_abs_diff": 0.0,
+  "weights_size_q37": {
+    "roots": [
+      "/opt/weights/clean_student_large_150_ep150.pt",
+      "/opt/hfcache",
+      "/srv"
+    ],
+    "files": 1,
+    "bytes": 1273134679,
+    "MB": 1214.2
+  },
+  "latency_score": 1.0,
+  "throughput_score": 0.126,
+  "performance_pct_of_20": 11.26
+}

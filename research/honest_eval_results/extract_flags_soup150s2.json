@@ -1,0 +1,103 @@
+{
+  "tag": "soup150s2",
+  "n_query": 546,
+  "n_gallery": 361,
+  "variants": {
+    "cuda_fp16": {
+      "model": "reid:vit_large_patch16_siglip_256",
+      "dim": 512,
+      "device": "cuda",
+      "fp16": true,
+      "jpeg_draft": false,
+      "draft_max": 8,
+      "threads": 4,
+      "tf_mode": "squash",
+      "load_s": 3.4374016629990365,
+      "frame_fixes": {
+        "clipped": 0,
+        "full": 0,
+        "unread": 0
+      },
+      "took_s": 19.3,
+      "ref": null,
+      "cos_min": null,
+      "cos_mean": null,
+      "metrics": {
+        "raw": {
+          "mAP@10": 0.9125898671434386,
+          "R1": 0.9010989010989011,
+          "R5": 0.9468864468864469
+        },
+        "dba": {
+          "mAP@10": 0.9265076457933601,
+          "R1": 0.9102564102564102,
+          "R5": 0.9578754578754579
+        }
+      }
+    },
+    "cuda_fp16_draft2": {
+      "model": "reid:vit_large_patch16_siglip_256",
+      "dim": 512,
+      "device": "cuda",
+      "fp16": true,
+      "jpeg_draft": true,
+      "draft_max": 2,
+      "threads": 4,
+      "tf_mode": "squash",
+      "load_s": 3.1438241630021366,
+      "frame_fixes": {
+        "clipped": 0,
+        "full": 0,
+        "unread": 0
+      },
+      "took_s": 16.8,
+      "ref": "cuda_fp16",
+      "cos_min": 0.9938711524009705,
+      "cos_mean": 0.9994544982910156,
+      "metrics": {
+        "raw": {
+          "mAP@10": 0.9094436086400371,
+          "R1": 0.891941391941392,
+          "R5": 0.9468864468864469
+        },
+        "dba": {
+          "mAP@10": 0.9211303346124775,
+          "R1": 0.9029304029304029,
+          "R5": 0.9560439560439561
+        }
+      }
+    },
+    "cuda_fp16_draft": {
+      "model": "reid:vit_large_patch16_siglip_256",
+      "dim": 512,
+      "device": "cuda",
+      "fp16": true,
+      "jpeg_draft": true,
+      "draft_max": 8,
+      "threads": 4,
+      "tf_mode": "squash",
+      "load_s": 3.2446517659991514,
+      "frame_fixes": {
+        "clipped": 0,
+        "full": 0,
+        "unread": 0
+      },
+      "took_s": 15.5,
+      "ref": null,
+      "cos_min": null,
+      "cos_mean": null,
+      "metrics": {
+        "raw": {
+          "mAP@10": 0.9094436086400371,
+          "R1": 0.891941391941392,
+          "R5": 0.9468864468864469
+        },
+        "dba": {
+          "mAP@10": 0.9211303346124775,
+          "R1": 0.9029304029304029,
+          "R5": 0.9560439560439561
+        }
+      }
+    }
+  }
+}

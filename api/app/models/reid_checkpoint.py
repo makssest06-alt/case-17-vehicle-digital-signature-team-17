@@ -41,6 +41,7 @@ BACKBONE_TIMM = {
                     "vit_base_patch16_siglip_224"],
     "siglip2_base": ["vit_base_patch16_siglip_224.v2_webli",
                      "vit_base_patch16_siglip_224"],
+    "siglip_large": ["vit_large_patch16_siglip_256"],
     "clip_vitb16": ["vit_base_patch16_clip_224.openai",
                     "vit_base_patch16_clip_224"],
     "dinov2_vits14": ["vit_small_patch14_dinov2.lvd142m",
@@ -49,7 +50,8 @@ BACKBONE_TIMM = {
 
 
 # Подпись семейства весов для лога: «бэкбон: vit_base_patch16_siglip_224 (веса SigLIP2 из чекпоинта)».
-FAMILY = {"siglip_base": "SigLIP", "siglip2_base": "SigLIP2", "clip_vitb16": "CLIP", "dinov2_vits14": "DINOv2"}
+FAMILY = {"siglip_base": "SigLIP", "siglip2_base": "SigLIP2", "siglip_large": "SigLIP-L",
+          "clip_vitb16": "CLIP", "dinov2_vits14": "DINOv2"}
 
 
 def timm_names(ck_backbone: str, fallback: str) -> List[str]:
