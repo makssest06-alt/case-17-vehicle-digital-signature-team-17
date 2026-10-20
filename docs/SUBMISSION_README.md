@@ -2,8 +2,9 @@
 
 > **Исторический submission-документ.** Он сохранён для аудита исходной сдачи и
 > содержит старые метрики до clean retrain. Текущая production-конфигурация
-> этой ветки описана в корневом `README.md`: soup150s2 (model soup ViT-L/16@256: l150 + s2), DBA/dedup,
-> refusal score `raw` и пороги `0.8727/0.9432`, отказ без исключения почти-дублей (в `glebmain` — a10, `0.8562/0.9294`). Не использовать старые числа
+> `glebmain` описана в корневом `README.md`: soup150s2 (model soup ViT-L/16@256: l150 + s2), DBA/dedup,
+> refusal score `raw` и пороги `0.8727/0.9432`, отказ без исключения почти-дублей (с 20.10, `docs/refusal.md`;
+> запасная модель a10 — `0.8562/0.9294`). Не использовать старые числа
 > из таблиц ниже как текущий runtime-контракт.
 >
 > Протокол старых чисел: модель — прежний студент `siglip2_distill_ensemble_ep28.pt`;
@@ -14,6 +15,10 @@
 > (без неё у студента 0.8859, `analysis/DISTILLATION_REPORT.md`). Порог raw 0.8025 и
 > метрики отказа ниже — legacy-режим без постобработки. Артефакты сдачи теперь
 > собираются моделью soup150s2 (`README.md`, раздел 7).
+>
+> Версии библиотек и образов, таблица API, флаг `make_submission.py --rerank` (его больше нет), запекание
+> бэкбона и число проверок валидатора ниже — тоже состояние исходной сдачи; актуальное — `README.md`,
+> разделы 3, 5 и 7.
 
 Кейс 17 · ЛЦТ 2026 · заказчик «Фалькон Тех»
 
@@ -181,19 +186,16 @@ cd case-17-vehicle-digital-signature-team-17
 cp .env.example .env          # при необходимости поменять POSTGRES_PASSWORD
 ```
 
-Веса модели (`weights/clean_student_a10_ep28.pt`, 362 МБ) лежат в Git LFS и при сборке
-запекаются в образ. Два способа их получить — любой из них:
+Веса модели (`weights/clean_student_a10_ep28.pt`, 362 МБ) при сборке запекаются в образ.
+Без git-lfs они скачаются из GitHub Release (weights-a10) по `WEIGHTS_URL` по умолчанию,
+sha256 сверяется (при несовпадении сборка падает):
 
 ```bash
-# 1) через Git LFS
-git lfs install && git lfs pull
-docker compose up -d
-
-# 2) без git-lfs: скачать при сборке по ссылке (sha256 сверяется, при несовпадении сборка падает)
-WEIGHTS_URL=<ссылка на clean_student_a10_ep28.pt> docker compose up -d --build
+docker compose up -d --build
 ```
 
-Без обоих сборка остановится с сообщением «укажите WEIGHTS_URL или выполните git lfs pull».
+Если `git lfs install && git lfs pull` уже сделан — возьмётся файл из `weights/`.
+Свой источник: `WEIGHTS_URL=<ссылка> docker compose up -d --build` (README, раздел 3).
 При запуске сеть не нужна: веса и бэкбон уже в образе.
 
 Всё. Интерфейс — http://localhost:8080, Swagger — http://localhost:8000/docs.
@@ -451,7 +453,7 @@ X/6. Для ориентира, ViT-B/16 на T4 через ONNX Runtime обы�
 
 ```bash
 docker compose exec api python scripts/make_submission.py   # собрать
-python scripts/validate_submission.py                       # проверить
+python scripts/validate_submission.py --data <каталог с test_*.csv>   # проверить
 ```
 
 Валидатор прогоняет 25 проверок: заголовки, число строк, порядок, размерности,

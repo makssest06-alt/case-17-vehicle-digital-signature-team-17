@@ -19,9 +19,10 @@
 #   DATASET_ZIP    dataset.zip — кадры и признак фона для пересчёта, если нет crops/train/ и кэша фона
 #   L75_WEIGHTS    веса L75; L75_EMBED_MODEL (reid:vit_large_patch16_siglip_256), L75_INPUT_SIZE (256),
 #                  L75_EMBED_DIM и L75_TF_MODE — если отличаются (README, раздел 4.3)
-#   A10_WEIGHTS    веса a10 — нужны, только если weights/clean_student_a10_ep28.pt — указатель LFS и нет
-#                  WEIGHTS_URL: файл кладётся в weights/ после сверки sha256 с WEIGHTS_SHA256 из api/Dockerfile
-#   WEIGHTS_URL    как у жюри: ссылка на веса a10 для сборки без git-lfs
+#   A10_WEIGHTS    веса a10 — если weights/clean_student_a10_ep28.pt — указатель LFS, а качать не надо: файл
+#                  кладётся в weights/ после сверки sha256 с WEIGHTS_SHA256 из api/Dockerfile
+#   WEIGHTS_URL    как у жюри: ссылка на веса a10 для сборки без git-lfs; не задана — берётся ссылка по умолчанию
+#                  из docker-compose.yml (ассет GitHub Release weights-a10)
 #   IMAGE          образ сервиса (case17-api:local — как после docker compose build api); BUILD=1 — собрать заново
 #   OUT_DIR        research/a5000_session/<дата_время> (в git не входит); CACHE_DIR — кэш эмбеддингов
 #   SKIP_L75=1, SKIP_SUBMISSION=1, SKIP_RECALIBRATE=1 — пропустить шаги
@@ -141,10 +142,15 @@ mark "окружение"
 
 # ---------------------------------------------------------------- 2. образ
 ensure_a10_weights() {   # сборке нужен настоящий файл a10 в weights/ или WEIGHTS_URL — как у жюри
-  local want have
+  local want have def_url
   if [ -f "$A10_FILE" ] && [ "$(wc -c < "$A10_FILE")" -ge 1048576 ] && [ "$(head -c 23 "$A10_FILE")" != "version https://git-lfs" ]; then return 0; fi
   [ -n "${WEIGHTS_URL:-}" ] && return 0
-  [ -n "${A10_WEIGHTS:-}" ] || stop 2 "$A10_FILE — указатель LFS, а WEIGHTS_URL и A10_WEIGHTS не заданы: git lfs pull, WEIGHTS_URL=<ссылка> или A10_WEIGHTS=<файл>"
+  if [ -z "${A10_WEIGHTS:-}" ]; then   # ссылку по умолчанию docker compose build api берёт из docker-compose.yml
+    def_url=$(sed -n 's/.*WEIGHTS_URL: \${WEIGHTS_URL:-\([^}]*\)}.*/\1/p' docker-compose.yml | head -1)
+    [ -n "$def_url" ] || stop 2 "$A10_FILE — указатель LFS, WEIGHTS_URL и A10_WEIGHTS не заданы, ссылки по умолчанию в docker-compose.yml нет: git lfs pull, WEIGHTS_URL=<ссылка> или A10_WEIGHTS=<файл>"
+    say "    $A10_FILE — указатель LFS: сборка скачает веса по ссылке по умолчанию $def_url и сверит sha256"
+    return 0
+  fi
   [ -f "$A10_WEIGHTS" ] || stop 2 "нет файла A10_WEIGHTS=$A10_WEIGHTS"
   want=$(sed -n 's/^ARG WEIGHTS_SHA256=//p' api/Dockerfile | head -1)
   have=$(sha256 "$A10_WEIGHTS")

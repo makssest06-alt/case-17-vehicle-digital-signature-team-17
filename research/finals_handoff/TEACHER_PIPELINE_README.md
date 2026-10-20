@@ -11,11 +11,11 @@ SigLIP2/SigLIP1/CLIP ViT-B/16: `ReidHead`, лоссы
 импортов нет; `extract_emb.py` — экспорт из чекпоинта; `tf_mode` по умолчанию из
 args чекпоинта (`resolve_tf_mode`, коммит 7779187), явный конфликтующий — ошибка.
 
-Окружение: python `/home/l1zard/work/venv/bin/python`, pin `torch 2.14.1+cu130`,
+Окружение: python `<VENV>/bin/python`, pin `torch 2.14.1+cu130`,
 `timm 1.0.29`; ОБЯЗАТЕЛЬНО `export HF_HUB_OFFLINE=1` и
 `export PYTHONPATH=research/finals_handoff/training` — веса timm (SigLIP2/
 SigLIP1/CLIP pretrained-бэкбоны и init-чекпоинты siglip2/siglip1/clip_vitb16 в локальном HF-кеше заранее).
-Входы-плейсхолдеры: `IMAGES_DIR` JPEG (напр. `/home/l1zard/diskD/bm/dataset_extracted/images`);
+Входы-плейсхолдеры: `IMAGES_DIR` JPEG (напр. `<DATA>/images`);
 `ROWS_CSV` — clean train rows, 8639 строк / 1391 ТС (clean_split.py, 5 дублей удалены);
 `BOXES_CSV` — train.csv (image_id,x,y,w,h); `VAL_IDS` — val_ids.txt;
 `HOLDOUT_CSV` — clean holdout (550 query / 357 gallery); `CLEAN_MODELS` — dir.
@@ -56,7 +56,7 @@ L2-норм. Результат (8639,512) float32, 17 692 800 байт, sha256
 
 ## Чекпоинты: только локально, LFS-quota на remote
 
-Веса ТОЛЬКО в `/home/l1zard/diskD/bm_improve/`; LFS push на SourceCraft
+Веса ТОЛЬКО в `<MODELS>/`; LFS push на SourceCraft
 отклонён по квоте (21 292 773 306 / 21 474 836 480 байт, свободно ~182 MB).
 
 | файл | байт | sha256 |

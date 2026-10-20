@@ -1,5 +1,8 @@
 # Generalization audit results
 
+> Measurements of the previous student `siglip2_distill_ensemble_ep28.pt`; the submitted model is
+> clean student alpha=10 (root `README.md`).
+
 Run on `team17/finals-student-gpu-handoff` after syncing `glebmain`.
 No training and no production changes were performed.
 

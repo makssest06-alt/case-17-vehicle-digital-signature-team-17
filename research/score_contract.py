@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Score-контракт: сервис (сырой косинус) против артефактов (CSLS после постобработки).
 
-В решении два разных смысла confidence (research/finals_handoff/ROOT_CAUSE_FEEDBACK.md,
-research/honest_eval_results/main_audit.md, п. 1–3):
+В прежней сдаче (до 18.10) было два разных смысла confidence (вывод —
+research/honest_eval_results/score_contract.md):
 
   service   — /v1/search: кандидат = top-1 по сырому косинусу, отказ при
               косинусе < SEARCH_THRESHOLD (0.8025);

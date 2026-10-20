@@ -1,5 +1,8 @@
 # Замер готовых моделей без обучения
 
+> **Исторический документ** (17–19.09, модели до дистилляции). Сдаваемая модель — a10, текущие цифры —
+> корневой `README.md`; re-ranking в артефактах больше не используется (Q38).
+
 Дата: 17.09.2026. Сервер: 2 vCPU Intel Xeon (Icelake), 3.8 ГБ RAM, **без GPU**.
 Ни одна модель не дообучалась — берём веса как есть и смотрим, что они дают «из коробки».
 
@@ -471,11 +474,11 @@ TNR 0.832 против 0.734. Если после дообучения на GPU 
 triplet), добавлены аугментации под ночь/блики/смаз/JPEG.
 
 ```bash
-python finetune_clip.py --backbone siglip_base --images-dir D:/bm/dataset_extracted/images \
-  --train-csv D:/bm/dataset_extracted/train.csv --val-ids research/val_ids.txt \
+python finetune_clip.py --backbone siglip_base --images-dir <DATA>/images \
+  --train-csv <DATA>/train.csv --val-ids research/val_ids.txt \
   --epochs 30 --P 8 --K 4 --hidden 1024 --out-dim 512 --context 0.10 \
   --lr-head 3e-4 --lr-backbone 1e-5 --warmup 3 --amp --workers 0 \
-  --tag siglip_full_pad10 --models-dir D:/bm/gpu_models_siglip
+  --tag siglip_full_pad10 --models-dir <MODELS>/gpu_models_siglip
 ```
 
 Замер чекпоинтов (`research/eval_checkpoint.py`), без flip и с flip-TTA
