@@ -508,7 +508,7 @@ JSON и логи — `research/honest_eval_results/bench_a5000_3955wx/`:
 
 Ускорения (разрешены Q36) — переменные окружения (`docker-compose.yml` их в контейнер не пробрасывает, строка
 в `.env` на них не действует — задавать при запуске: `docker compose exec -e EXTRACT_THREADS=8 api …` или
-`docker run -e …`; умолчания в коде — `EXTRACT_JPEG_DRAFT=2`, `EXTRACT_THREADS=16`); качество — на галерее 361 / 546 запросах holdout
+`docker run -e …`; умолчания в коде — `EXTRACT_JPEG_DRAFT=2`, `EXTRACT_THREADS=32`); качество — на галерее 361 / 546 запросах holdout
 полным циклом `extract()` (`research/extract_flags.py`; для soup150s2 —
 `research/honest_eval_results/extract_flags_soup150s2.md`, для a10 — `extract_flags_a10.md`):
 
