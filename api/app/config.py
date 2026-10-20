@@ -59,6 +59,8 @@ class Settings:
     #   сбалансированная — максимум оценки организаторов 0.7·F1 + 0.3·TNR (Q15);
     #   строгая — наименьший порог с TNR >= 0.98 на обеих галереях на фолде выбора;
     #             вне фолда TNR 0.991 на 361 и 0.964 на 1111 (recalibrate_soup150s2.json).
+    # Пороги посчитаны на векторах того же кропа, что у extract(), сервиса и make_submission — app.imaging.crop_frame
+    # с JPEG draft не больше 1/2 (EXTRACT_JPEG_DRAFT=2, умолчание); с другим EXTRACT_JPEG_DRAFT их надо пересчитать.
     # Выбор между ними — продуктовое решение, а не техническое, поэтому он
     # вынесен в интерфейс, а не зашит в код.
     search_threshold: float = _f("SEARCH_THRESHOLD", 0.8881)
@@ -68,7 +70,7 @@ class Settings:
     # ---- постобработка: по умолчанию выключена, ответы как без неё (api/app/pp/state.py) ----
     pp_dba_k: int = _i("PP_DBA_K", 1)                                   # production: DBA по 1 соседу
     pp_camera_penalty: str = _env("PP_CAMERA_PENALTY", "on").strip().lower()   # признак фона считается и хранится; в отказе — у запасного пресета
-    pp_camera_tau: float = _f("PP_CAMERA_TAU", 0.6823)   # косинус фона > τ — «та же камера» (recalibrate_soup150s2.json)
+    pp_camera_tau: float = _f("PP_CAMERA_TAU", 0.68233)   # косинус фона > τ — «та же камера» (recalibrate_soup150s2.json)
     pp_camera_topk: int = _i("PP_CAMERA_TOPK", 100)       # сколько кандидатов из базы проверять на камеру
     # Исключение почти-дублей: off | bbox (правило рамок: сходство + рамка) | bg (признак фона) | both (OR).
     #   PP_DEDUP_RANK    — какие кандидаты уходят в конец ранжирования;
@@ -104,7 +106,8 @@ REFUSAL_PRESETS = {
     (0, "off", "off", "raw"): {"balanced": 0.8025, "strict": 0.8465,
                                "note": "legacy: сырой косинус без постобработки (2.2k без почти-дублей, Глеб; калибровано под a10)"},
     # research/closed_gallery.py --tag soup150s2 через research/recalibrate_for_model.py --tag soup150s2
-    # (протокол q17 — как в ответе Q17): 361 и 361 + 750 кадров обучающих машин, без кадров теста;
+    # (протокол q17 — как в ответе Q17; кадры dataset.zip, --source frames --env EXTRACT_JPEG_DRAFT=2 — кроп extract()):
+    # 361 и 361 + 750 кадров обучающих машин, без кадров теста;
     # у 20 % машин в галерее нет ни одного кадра; максимум 0.7·F1 + 0.3·TNR (Q15). Итог — (1, "off", "off", "raw"),
     # «DBA» без исключения почти-дублей (presets["DBA"] того же прогона; в config_presets его пишет новый
     # генератор); запасные — (1, "off", "both", "raw") (прежний итог, отказ фон ИЛИ рамка) и (1, "off", "bbox", "raw")
