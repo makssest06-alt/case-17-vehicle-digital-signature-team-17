@@ -5,7 +5,7 @@
 > Репозиторий доступен в двух копиях (содержимое идентично): основная на
 > [GitHub](https://github.com/makssest06-alt/case-17-vehicle-digital-signature-team-17),
 > зеркало на [SourceCraft](https://sourcecraft.dev/lct-hackaton-2026/case-17-vehicle-digital-signature-team-17).
-> Ветка по умолчанию — `main`; запасная модель a10 — ветка `glebmain` и тег `fallback-a10`.
+> Ветка по умолчанию — `main`.
 
 Сервис сопоставляет снимки одного автомобиля с разных камер **без использования
 государственного номера**, опираясь только на визуальные признаки: тип кузова,
