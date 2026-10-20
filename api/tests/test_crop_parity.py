@@ -87,6 +87,7 @@ class CropParityTest(unittest.TestCase):
         self.assertTrue(same(full, load_image(self.raw["even"], settings.max_upload_bytes)))
 
     def test_service_crop_is_extract_crop(self):
+        keep_root_logging(self)                     # load_app -> main.py:basicConfig, не тянуть handler дальше
         main = load_app()
         ex = Extractor(model=FakeModel(), threads=1)
         for f in FRAMES:
