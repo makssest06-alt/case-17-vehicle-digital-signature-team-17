@@ -16,8 +16,8 @@
                         по умолчанию включён этот режим (bench на A5000 + Threadripper 3955WX: 141 FPS
                         против 86 без draft, качество −0.003/−0.005 mAP@10 — extract_flags_soup150s2);
   EXTRACT_JPEG_DRAFT=0  полный декод (кроп совпадает с офлайн-скриптом пиксель в пиксель);
-  EXTRACT_THREADS=N     декодирование и кроп батча в N потоков (по умолчанию 16 — у жюри 2× Xeon Gold 6338,
-                        Q30; на результат не влияет).
+  EXTRACT_THREADS=N     декодирование и кроп батча в N потоков (по умолчанию 32 — у жюри 2× Xeon Gold 6338
+                        на 64 ядра, Q30; на результат не влияет, только скорость).
 
 Как офлайн-сборка (scripts/make_submission.py), кадр не роняет extract(): рамка за кадром обрезается по
 границам, пустая или уже 2 px — весь кадр, нечитаемый кадр — серый INPUT_SIZE×INPUT_SIZE (imaging.fit_bbox).
@@ -56,7 +56,7 @@ class Extractor:
         raw = (_flag("EXTRACT_JPEG_DRAFT", "2") if draft is None else str(draft)).strip().lower()
         self.draft = raw not in ("0", "false", "no", "off")
         self.draft_max = 2 if raw in ("2", "half") else 8
-        self.threads = max(1, int(_flag("EXTRACT_THREADS", "16")) if threads is None else threads)
+        self.threads = max(1, int(_flag("EXTRACT_THREADS", "32")) if threads is None else threads)
         self.load_s = None
         self.fixes = {"clipped": 0, "full": 0, "unread": 0}          # кадров, не повторов
         self._seen, self._lock = set(), threading.Lock()
