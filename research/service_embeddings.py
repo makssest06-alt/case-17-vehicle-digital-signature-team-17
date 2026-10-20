@@ -183,6 +183,14 @@ def _adopt_legacy(legacy: Path, out: Path) -> bool:
     return True
 
 
+def _draft_max(value: str) -> int:
+    """Значение EXTRACT_JPEG_DRAFT -> наибольшее уменьшение (app.imaging.jpeg_draft_max): ключ кэша по сути, не по записи."""
+    sys.path.insert(0, str(API))
+    from app.imaging import jpeg_draft_max  # noqa: E402
+
+    return jpeg_draft_max(value)
+
+
 def embed(profile: str, images_dir: Path, ids: list, cache_dir: Path = DEFAULT_CACHE,
           batch: int = 16, threads: int = 0, compose_ref: str = "",
           overrides: dict | None = None, frames_zip: Path | None = None,
@@ -190,15 +198,13 @@ def embed(profile: str, images_dir: Path, ids: list, cache_dir: Path = DEFAULT_C
     """Векторы (len(ids), dim) float32, L2-нормированы — как отдаёт сервис.
 
     Источник кадра — готовые кропы images_dir/<id>.jpg (так читает
-    make_submission.py) или, при frames_zip, полный кадр из dataset.zip,
-    обрезанный функциями сервиса app.imaging.load_image → validate_bbox →
-    crop_with_pad (так отвечает /v1/embed); при EXTRACT_JPEG_DRAFT=1/2 кроп идёт
-    через app.extractor.Extractor.crop — тот же draft-декод, что у прод-сервиса.
+    make_submission.py до 20.10) или, при frames_zip, полный кадр из dataset.zip,
+    обрезанный функциями сервиса app.imaging.open_image → validate_bbox →
+    crop_frame (так отвечает /v1/embed; тот же кроп у extract() и make_submission,
+    JPEG draft по EXTRACT_JPEG_DRAFT, по умолчанию как у сервиса — не больше 1/2).
     boxes: {image_id: (x, y, w, h)}.
     Кадр, чей bbox сервис отверг, получает вектор из NaN: сервис такой запрос
     не принял бы, и вызывающий код обязан его выкинуть, а не считать нулём.
-    В draft-режиме отказов нет — семантика extract(): рамка клипится,
-    нечитаемый кадр даёт серый вектор (не NaN).
     """
     env = profile_env(profile, compose_ref, overrides)
     frames = f"zip:{frames_zip}" if frames_zip else ""
@@ -206,8 +212,8 @@ def embed(profile: str, images_dir: Path, ids: list, cache_dir: Path = DEFAULT_C
         # draft меняет векторы — входит в ключ кэша и явно задаётся воркеру;
         # значение — то, что реально доедет до дочернего процесса (overrides
         # перекрывают наследование из шелла)
-        draft = (overrides or {}).get("EXTRACT_JPEG_DRAFT", os.getenv("EXTRACT_JPEG_DRAFT", "0"))
-        frames += f":draft={draft}"
+        draft = (overrides or {}).get("EXTRACT_JPEG_DRAFT", os.getenv("EXTRACT_JPEG_DRAFT", "2"))
+        frames += f":draft={_draft_max(draft)}"
     out = cache_path(profile, env, ids, images_dir, cache_dir, frames)
     if not out.exists():
         _adopt_legacy(_legacy_cache_path(profile, env, ids, images_dir, cache_dir, frames), out)
@@ -227,8 +233,8 @@ def embed(profile: str, images_dir: Path, ids: list, cache_dir: Path = DEFAULT_C
     # не результат; сервис в контейнере работает на двух.
     child["OMP_NUM_THREADS"] = str(threads or os.cpu_count() or 2)
     if frames_zip:
-        # явно, а не наследованием из шелла: EXTRACT_JPEG_DRAFT читается в extractor.py
-        # через _flag(name, ...) и потому не попадает в scrub-набор service_env_keys()
+        # явно, а не наследованием из шелла: EXTRACT_JPEG_DRAFT читается в app.imaging
+        # через os.getenv и потому не попадает в scrub-набор service_env_keys()
         child["EXTRACT_JPEG_DRAFT"] = draft
     cmd = [sys.executable, str(Path(__file__).resolve()), "--worker", "--profile", profile,
            "--images-dir", str(images_dir), "--ids-file", ids_file, "--out", str(out),
@@ -264,30 +270,21 @@ def _worker(a) -> int:
     if a.frames_zip:
         import zipfile
 
-        from app.imaging import ImageError, crop_with_pad, load_image, validate_bbox  # noqa: E402
+        from app.imaging import ImageError, crop_frame, open_image, validate_bbox  # noqa: E402
 
         zf = zipfile.ZipFile(a.frames_zip)
         boxes = json.loads(Path(a.boxes_file).read_text())
 
-        if os.getenv("EXTRACT_JPEG_DRAFT", "0").strip().lower() not in ("0", "false", "no", "off"):
-            from app.extractor import Extractor  # noqa: E402
-
-            _ex = Extractor(model=model, threads=1)
-
-            def load(i):
-                """Путь прод-сервиса с draft: байты кадра -> Extractor.crop (декод с уменьшением)."""
-                return _ex.crop(zf.read(f"images/{i}.jpg"), [int(float(v)) for v in boxes[i]])
-        else:
-            def load(i):
-                """Ровно путь /v1/embed: байты кадра -> load_image -> validate_bbox -> crop_with_pad."""
-                img = load_image(zf.read(f"images/{i}.jpg"), settings.max_upload_bytes)
-                x, y, w, h = (int(float(v)) for v in boxes[i])
-                try:
-                    validate_bbox(img, x, y, w, h)
-                except ImageError as exc:
-                    rejected.append((i, str(exc)))
-                    return None
-                return crop_with_pad(img, x, y, w, h, settings.bbox_pad)
+        def load(i):
+            """Ровно путь /v1/embed: байты кадра -> open_image -> validate_bbox -> crop_frame (JPEG draft)."""
+            img = open_image(zf.read(f"images/{i}.jpg"), settings.max_upload_bytes)
+            x, y, w, h = (int(float(v)) for v in boxes[i])
+            try:
+                validate_bbox(img, x, y, w, h)
+            except ImageError as exc:
+                rejected.append((i, str(exc)))
+                return None
+            return crop_frame(img, x, y, w, h, settings.bbox_pad, settings.input_size)
     else:
         def load(i):
             return Image.open(Path(a.images_dir) / f"{i}.jpg").convert("RGB")
@@ -309,6 +306,7 @@ def _worker(a) -> int:
             "source": f"zip:{a.frames_zip}" if a.frames_zip else str(a.images_dir),
             "code": code_hash(),
             "rejected_bbox": rejected,
+            "jpeg_draft_max": _draft_max(os.getenv("EXTRACT_JPEG_DRAFT", "2")) if a.frames_zip else None,
             "seconds": round(time.perf_counter() - t0, 1)}
     if rejected:
         print(f"  [{a.profile}] сервис отверг bbox у {len(rejected)} кадров, "

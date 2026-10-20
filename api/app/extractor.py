@@ -5,17 +5,19 @@
     v = ex.extract("images/<id>.jpg", (x, y, w, h))           # (D,) float32, L2
     V = ex.extract_batch([(path, bbox), ...])                  # (N, D)
 
-Цикл: чтение файла с диска -> декодирование -> кроп по bbox с запасом BBOX_PAD (как app.imaging) ->
-препроцессинг (squash 224) -> forward -> L2. Поиск по галерее сюда не входит (Q31).
+Цикл: чтение файла с диска -> декодирование и кроп по bbox с запасом BBOX_PAD (app.imaging.crop_frame —
+тот же код, что у сервиса и scripts/make_submission.py: векторы совпадают) -> препроцессинг (squash,
+INPUT_SIZE) -> forward -> L2. Поиск по галерее сюда не входит (Q31).
 
 Ускорения (разрешены ответом Q36), переменные окружения:
   REID_FP16=1           forward в FP16 (autocast) — на CUDA по умолчанию включён (app/models/reid_checkpoint.py);
   EXTRACT_JPEG_DRAFT=1  JPEG декодируется сразу с уменьшением (PIL draft: 1/2, 1/4, 1/8) — до наименьшего
-                        масштаба, при котором кроп не меньше INPUT_SIZE по обеим сторонам;
+                        масштаба, при котором кроп не меньше INPUT_SIZE по обеим сторонам; флаг общий для
+                        extract(), сервиса и make_submission (app.imaging.jpeg_draft_max);
   EXTRACT_JPEG_DRAFT=2  то же, но уменьшение не больше 1/2 — медленнее "1", но почти не трогает векторы;
                         по умолчанию включён этот режим (bench на A5000 + Threadripper 3955WX: 141 FPS
                         против 86 без draft, качество −0.003/−0.005 mAP@10 — extract_flags_soup150s2);
-  EXTRACT_JPEG_DRAFT=0  полный декод (кроп совпадает с офлайн-скриптом пиксель в пиксель);
+  EXTRACT_JPEG_DRAFT=0  полный декод;
   EXTRACT_THREADS=N     декодирование и кроп батча в N потоков (по умолчанию 32 — у жюри 2× Xeon Gold 6338
                         на 64 ядра, Q30; на результат не влияет, только скорость).
 
@@ -24,7 +26,6 @@
 Каждый такой кадр — одна строка WARNING / ERROR (один раз на кадр, замер гоняет кадры по кругу); счёт —
 в describe()["frame_fixes"].
 """
-import io
 import logging
 import os
 import threading
@@ -37,12 +38,11 @@ import numpy as np
 from PIL import Image
 
 from .config import settings
-from .imaging import crop_with_pad, fit_bbox, gray_frame
+from .imaging import crop_frame, crop_with_pad, fit_bbox, gray_frame, jpeg_draft_max, open_image
 from .models.registry import build_model
 
 log = logging.getLogger("case17.extractor")
 Source = Union[str, Path, bytes]
-DRAFT_SCALES = (8, 4, 2)                       # во сколько раз JPEG умеет уменьшать при декодировании
 
 
 def _flag(name: str, default: str) -> str:
@@ -53,9 +53,8 @@ class Extractor:
     def __init__(self, model=None, draft=None, threads: int = None):
         self.model = model or build_model(settings.embed_model, settings.input_size)
         # draft: "0" — выкл; "1" — максимальное уменьшение (до 1/8); "2"/"half" — не больше 1/2 (прод-дефолт)
-        raw = (_flag("EXTRACT_JPEG_DRAFT", "2") if draft is None else str(draft)).strip().lower()
-        self.draft = raw not in ("0", "false", "no", "off")
-        self.draft_max = 2 if raw in ("2", "half") else 8
+        self.draft_max = jpeg_draft_max(draft)
+        self.draft = self.draft_max > 1
         self.threads = max(1, int(_flag("EXTRACT_THREADS", "32")) if threads is None else threads)
         self.load_s = None
         self.fixes = {"clipped": 0, "full": 0, "unread": 0}          # кадров, не повторов
@@ -91,40 +90,22 @@ class Extractor:
                        bbox, W, H)
 
     def crop(self, src: Source, bbox: Sequence[int]) -> Image.Image:
+        """Кадр -> кроп: open_image -> fit_bbox -> crop_frame, как scripts/make_submission.py (Frames.load)."""
         name = "<bytes>" if isinstance(src, (bytes, bytearray)) else Path(src).stem
         bbox = tuple(int(v) for v in bbox)
         try:
             raw = src if isinstance(src, (bytes, bytearray)) else Path(src).read_bytes()
-            im = Image.open(io.BytesIO(raw))
-            if self.draft and im.format == "JPEG":
-                return self._crop_draft(im, bbox, name)
-            img = im.convert("RGB")
+            im = open_image(raw, settings.max_upload_bytes)
+            W, H = im.size
+            box, status = fit_bbox(W, H, *bbox)
+            crop = crop_frame(im, *box, settings.bbox_pad, settings.input_size, self.draft_max)
         except Exception as exc:                          # битый файл, не тот формат, файла нет
             img = gray_frame(settings.input_size)
             self._note("unread", name, "кадр не прочитан (%s) — эмбеддинг по серому кадру %d×%d", exc,
                        img.width, img.height)
             return crop_with_pad(img, 0, 0, img.width, img.height, settings.bbox_pad)
-        box, status = fit_bbox(img.width, img.height, *bbox)
-        self._note_fit(status, name, bbox, box, img.width, img.height)
-        return crop_with_pad(img, *box, settings.bbox_pad)
-
-    def _crop_draft(self, im: Image.Image, bbox: Tuple[int, int, int, int], name: str) -> Image.Image:
-        """JPEG декодируется сразу с уменьшением: кроп считается в координатах исходного кадра."""
-        W, H = im.size
-        (x, y, w, h), status = fit_bbox(W, H, *bbox)
-        px, py = int(round(w * settings.bbox_pad)), int(round(h * settings.bbox_pad))
-        box = (max(0, x - px), max(0, y - py), min(W, x + w + px), min(H, y + h + py))
-        side = min(box[2] - box[0], box[3] - box[1])
-        r = next((s for s in DRAFT_SCALES if s <= self.draft_max and side / s >= settings.input_size), 1)
-        if r > 1:
-            # floor, не ceil: PIL берёт scale = min(W // reqW, H // reqH) — с ceil любая
-            # нечётная сторона кадра давала бы scale=1 и draft молча не срабатывал
-            im.draft("RGB", (max(1, W // r), max(1, H // r)))
-        img = im.convert("RGB")
-        self._note_fit(status, name, bbox, (x, y, w, h), W, H)
-        sx, sy = img.width / W, img.height / H
-        return img.crop((int(round(box[0] * sx)), int(round(box[1] * sy)),
-                         int(round(box[2] * sx)), int(round(box[3] * sy))))
+        self._note_fit(status, name, bbox, box, W, H)
+        return crop
 
     def crops(self, items: Iterable[Tuple[Source, Sequence[int]]]) -> List[Image.Image]:
         items = list(items)

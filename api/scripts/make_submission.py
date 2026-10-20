@@ -48,7 +48,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # api/ — пак
 
 from app import weights_check                           # noqa: E402
 from app.config import REFUSAL_PRESETS, settings      # noqa: E402
-from app.imaging import crop_with_pad, fit_bbox, gray_frame, load_image  # noqa: E402
+from app.imaging import crop_frame, crop_with_pad, fit_bbox, gray_frame, jpeg_draft_max, load_image, open_image  # noqa: E402
 from app.models.registry import build_model             # noqa: E402
 from app.pp import rerank as pp_rerank                  # noqa: E402
 from app.pp import state as pp_state                    # noqa: E402
@@ -87,24 +87,30 @@ class Frames:
         рамка за кадром обрезается, вырожденная — весь кадр, нечитаемый кадр — серый (imaging.fit_bbox)."""
         iid, bbox = row["image_id"], row["bbox"]
         try:
-            img = load_image(self.raw(iid), settings.max_upload_bytes)
+            raw = self.raw(iid)
+            im = open_image(raw, settings.max_upload_bytes)
+            W, H = im.size
+            box, status = fit_bbox(W, H, *bbox)
+            # кроп — app.imaging.crop_frame, как у extract() и сервиса (JPEG draft); кадр для признака фона —
+            # полным декодом, по нему калибровался τ
+            crop = crop_frame(im, *box, settings.bbox_pad, settings.input_size)
+            full = load_image(raw, settings.max_upload_bytes) if need_frame else None
         except Exception as exc:                          # битый файл, не тот формат, нет на диске или в zip
             img = gray_frame(settings.input_size)
             box = (0, 0, img.width, img.height)
             self.fixes["unread"] += 1
             log.error("%s image_id %s: кадр не прочитан (%s) — эмбеддинг по серому кадру %d×%d", split, iid, exc,
                       img.width, img.height)
-        else:
-            box, status = fit_bbox(img.width, img.height, *bbox)
-            if status == "clipped":
-                self.fixes["clipped"] += 1
-                log.warning("%s image_id %s: рамка %s выходит за кадр %d×%d — обрезана до %s", split, iid, bbox,
-                            img.width, img.height, box)
-            elif status == "full":
-                self.fixes["full"] += 1
-                log.warning("%s image_id %s: рамка %s после обрезки по кадру %d×%d пустая или уже 2 px — беру весь "
-                            "кадр %s", split, iid, bbox, img.width, img.height, box)
-        return (img if need_frame else None), crop_with_pad(img, *box, settings.bbox_pad), box
+            return (img if need_frame else None), crop_with_pad(img, *box, settings.bbox_pad), box
+        if status == "clipped":
+            self.fixes["clipped"] += 1
+            log.warning("%s image_id %s: рамка %s выходит за кадр %d×%d — обрезана до %s", split, iid, bbox,
+                        W, H, box)
+        elif status == "full":
+            self.fixes["full"] += 1
+            log.warning("%s image_id %s: рамка %s после обрезки по кадру %d×%d пустая или уже 2 px — беру весь "
+                        "кадр %s", split, iid, bbox, W, H, box)
+        return full, crop, box
 
     def fixes_line(self) -> str:
         f = self.fixes
@@ -402,7 +408,8 @@ def build(args: argparse.Namespace, out: Path) -> int:
         "model": model_name,
         "weights": Path(weights).name if weights else None,
         "weights_sha256": weights_sha,
-        "crop": f"bbox + {settings.bbox_pad:.0%} запаса (app/imaging.crop_with_pad), REID_TF_MODE="
+        "crop": f"bbox + {settings.bbox_pad:.0%} запаса (app/imaging.crop_frame, как extract() и сервис; JPEG draft "
+                f"не больше 1/{jpeg_draft_max()}), REID_TF_MODE="
                 f"{os.getenv('REID_TF_MODE', '')}, TTA flip={settings.tta_flip}",
         "postprocess": {
             "path": "app.pp.state.Postprocess — тот же код, что в сервисе; другие query не используются",

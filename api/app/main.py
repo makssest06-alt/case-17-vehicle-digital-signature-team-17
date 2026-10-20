@@ -17,7 +17,7 @@ from PIL import Image
 
 from . import db, weights_check
 from .config import settings
-from .imaging import ImageError, crop_with_pad, load_image, validate_bbox
+from .imaging import ImageError, crop_frame, load_image, open_image, validate_bbox
 from .models.registry import build_model
 from .pp import rerank as pp_rerank
 from .pp import state as pp_state
@@ -226,16 +226,16 @@ async def _read_upload(image: UploadFile) -> bytes:
 
 
 def _prepare(raw: bytes, x: int, y: int, w: int, h: int) -> Image.Image:
-    img = load_image(raw, settings.max_upload_bytes)
+    """Кроп модели — app.imaging.crop_frame, как у extract() и make_submission (JPEG draft)."""
+    img = open_image(raw, settings.max_upload_bytes)
     validate_bbox(img, x, y, w, h)
-    return crop_with_pad(img, x, y, w, h, settings.bbox_pad)
+    return crop_frame(img, x, y, w, h, settings.bbox_pad, settings.input_size)
 
 
 def _prepare_frame(raw: bytes, x: int, y: int, w: int, h: int):
-    """Как _prepare, но вернуть и полный кадр — из него считается признак фона."""
-    img = load_image(raw, settings.max_upload_bytes)
-    validate_bbox(img, x, y, w, h)
-    return img, crop_with_pad(img, x, y, w, h, settings.bbox_pad)
+    """Как _prepare, но вернуть и полный кадр — из него считается признак фона (полный декод: по нему калибровался τ)."""
+    crop = _prepare(raw, x, y, w, h)
+    return load_image(raw, settings.max_upload_bytes), crop
 
 
 @app.get("/health", response_model=HealthResponse, response_model_exclude_none=True, tags=["служебные"])
@@ -466,13 +466,16 @@ def gallery_bulk_import(req: BulkImportRequest) -> BulkImportResponse:
                 errors.append(f"нет файла {path.name}")
             continue
         try:
-            img = Image.open(path).convert("RGB")
             frame = None
-            if not req.already_cropped:
+            if req.already_cropped:
+                img = Image.open(path).convert("RGB")
+            else:
                 bx = [int(row[k]) for k in ("x", "y", "w", "h")]
-                validate_bbox(img, *bx)
-                frame = img
-                img = crop_with_pad(img, *bx, settings.bbox_pad)
+                im = Image.open(path)
+                validate_bbox(im, *bx)
+                img = crop_frame(im, *bx, settings.bbox_pad, settings.input_size)   # как extract() и make_submission
+                if _pp() is not None and _pp().wants_frame:
+                    frame = Image.open(path).convert("RGB")                      # признак фона — по полному кадру
             bbox = [int(row.get(k, 0) or 0) for k in ("x", "y", "w", "h")]
             batch_imgs.append(img)
             batch_meta.append((row.get("vehicle_id") or None, str(path), bbox))

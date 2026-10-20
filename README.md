@@ -9,6 +9,23 @@
 Этот README соответствует пункту 12 ТЗ (требования к сопроводительной
 документации) и пункту 8 (формат сдачи). Все цифры воспроизводимы одной командой.
 
+## Как получить три файла (ответ организаторов Q41)
+
+Одна команда `docker run` на собранном образе: на входе каталог датасета (`test_query.csv`, `test_gallery.csv`,
+`images/`), на выходе `submission.csv`, `embeddings.npy`, `candidates.csv` (рядом — `postprocess.json` и
+`make_submission.log`). Интернет не нужен (`--network none`): веса уже в образе.
+
+```bash
+docker run --rm --gpus all --network none \
+  -v /путь/к/датасету:/data:ro -v "$PWD/artifacts":/artifacts \
+  case17-api:local python scripts/make_submission.py
+```
+
+Образ собирается один раз (`docker compose build api`, раздел 3; при сборке веса скачиваются из GitHub Release
+со сверкой sha256). Без NVIDIA — та же команда без `--gpus all`. Команда образа по умолчанию — сервис (`uvicorn`),
+поэтому `python scripts/make_submission.py` в конце обязательна. Векторы считаются тем же кодом, что `extract()`
+(замер скорости, Q31) и сервис: `app/imaging.crop_frame`, JPEG декодируется с уменьшением не больше 1/2.
+
 ---
 
 ## 1. Функциональная и компонентная архитектура
@@ -490,6 +507,7 @@ JSON — `research/honest_eval_results/bench_soup150s2_4060_docker.json`:
 
 **Замер на арендованной A5000 24 ГБ + Threadripper PRO 3955WX** (близко к железу жюри — A5000 + 2× Xeon Gold
 6338, Q30; нативно, тот же код и датасет — инстанс-LXC не даёт поднять docker, на числа это не влияет);
+**все цифры A5000 ниже сняты на 16 потоках** (`EXTRACT_THREADS=16`; умолчание кода — 32, JSON замера на 32 добавляется);
 JSON и логи — `research/honest_eval_results/bench_a5000_3955wx/`:
 
 | Вариант | latency_b1, мс (p95) | лучший FPS | баллы Q34, из 20 |
@@ -517,9 +535,10 @@ JSON и логи — `research/honest_eval_results/bench_a5000_3955wx/`:
 | `EXTRACT_THREADS=32` — декодирование батча в потоках | 32 | 1.0 (бит в бит) | качество не меняется | включён |
 | `EXTRACT_JPEG_DRAFT=2` — JPEG-декод с уменьшением, макс. 1/2 | вкл. | 0.99387 | 0.9094 / 0.9211 (−0.003 / −0.005) | включён: +55 FPS на A5000 за −0.005 mAP |
 
-draft применяется только в пути замера `extract()` (`app/extractor.py`, разрешён Q36); сервисные эндпоинты
-и офлайн-артефакты кропят полным декодом — пороги отказа и `artifacts/` от этого не зависят (рекалибровка
-под draft-векторы на всякий случай посчитана: `recalibrate_soup150s2_draft2.json`, пороги сдвигаются слабо).
+С 20.10 draft (разрешён Q36) — общий для всего решения: `extract()`, сервис и `make_submission` режут кадр одним
+`app/imaging.crop_frame` (`api/tests/test_crop_parity.py`: `extract()` воспроизводит `embeddings.npy`). **Артефакты
+и пороги отказа под draft пересчитываются (PR #20)**: пока в `artifacts/` и `api/app/config.py` — прогон с полным
+декодом (0.8727 / 0.9432); прогон под draft до исправления ключа кэша — `recalibrate_soup150s2_draft2.json` (0.8881 / 0.9445).
 Прежняя оценка на a10 («draft меняет векторы сильнее шума», min cos 0.98167 при draft=1 до 1/8) относилась
 к режиму без ограничения масштаба и к ViT-B; режим draft=2 (не глубже 1/2) под soup150s2 мягче на порядок.
 

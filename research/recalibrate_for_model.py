@@ -112,7 +112,14 @@ def main() -> int:
     if a.source == "crops" and not (a.data_dir / "crops" / "train").is_dir():
         if a.zip is None:
             raise SystemExit(f"нет {a.data_dir / 'crops' / 'train'} и не задан --zip: кадрам неоткуда взяться")
-        a.source = "frames"                       # полный кадр из zip, кроп кодом сервиса (load_image → crop_with_pad)
+        a.source = "frames"                       # полный кадр из zip, кроп кодом сервиса (open_image → crop_frame)
+    if a.source == "crops":
+        from app.imaging import jpeg_draft_max  # noqa: E402
+
+        draft = dict(e.split("=", 1) for e in a.env).get("EXTRACT_JPEG_DRAFT")
+        if jpeg_draft_max(draft) > 1:
+            raise SystemExit("кропы <data-dir>/crops нарезаны полным декодом, а сервис режет JPEG с draft "
+                             "(app.imaging.crop_frame): --source frames --zip dataset.zip или EXTRACT_JPEG_DRAFT=0")
     cg.set_protocol("q17")
     took, t_all = {}, time.perf_counter()
 
