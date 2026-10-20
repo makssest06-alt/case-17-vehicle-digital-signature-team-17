@@ -68,7 +68,7 @@ class Settings:
     # ---- постобработка: по умолчанию выключена, ответы как без неё (api/app/pp/state.py) ----
     pp_dba_k: int = _i("PP_DBA_K", 1)                                   # production: DBA по 1 соседу
     pp_camera_penalty: str = _env("PP_CAMERA_PENALTY", "on").strip().lower()   # признак фона считается и хранится; в отказе — у запасного пресета
-    pp_camera_tau: float = _f("PP_CAMERA_TAU", 0.6823)   # косинус фона > τ — «та же камера» (recalibrate_soup150s2.json)
+    pp_camera_tau: float = _f("PP_CAMERA_TAU", 0.68233)   # косинус фона > τ — «та же камера» (recalibrate_soup150s2.json)
     pp_camera_topk: int = _i("PP_CAMERA_TOPK", 100)       # сколько кандидатов из базы проверять на камеру
     # Исключение почти-дублей: off | bbox (правило рамок: сходство + рамка) | bg (признак фона) | both (OR).
     #   PP_DEDUP_RANK    — какие кандидаты уходят в конец ранжирования;

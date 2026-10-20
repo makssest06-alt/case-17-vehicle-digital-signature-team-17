@@ -1,0 +1,50 @@
+{
+  "model": "reid:vit_large_patch16_siglip_256",
+  "dim": 512,
+  "device": "cuda",
+  "fp16": true,
+  "jpeg_draft": true,
+  "draft_max": 2,
+  "threads": 16,
+  "tf_mode": "squash",
+  "load_s": 4.268426884897053,
+  "frame_fixes": {
+    "clipped": 0,
+    "full": 0,
+    "unread": 0
+  },
+  "torch": "2.5.1+cu124",
+  "gpu": "NVIDIA RTX A5000",
+  "weights": "soup150s2.pt",
+  "weights_sha256": "64e2f1897b593d9de7100fd6449058f0fad57f98de0bcbdfe4c546c5a6a21553",
+  "frames": 256,
+  "smoke": false,
+  "latency_b1_ms": {
+    "median": 19.5,
+    "p95": 23.99,
+    "runs": 300,
+    "warmup": 50
+  },
+  "throughput_fps": {
+    "1": 57.4,
+    "8": 136.1,
+    "16": 156.9,
+    "32": 144.4
+  },
+  "best_fps": 156.9,
+  "best_batch": 16,
+  "peak_vram_MB": 2072.7,
+  "determinism_max_abs_diff": 0.0,
+  "weights_size_q37": {
+    "roots": [
+      "/root/weights/soup150s2.pt",
+      "/srv"
+    ],
+    "files": 1,
+    "bytes": 1273096203,
+    "MB": 1214.1
+  },
+  "latency_score": 1.0,
+  "throughput_score": 1.0,
+  "performance_pct_of_20": 20.0
+}

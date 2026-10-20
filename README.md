@@ -213,7 +213,7 @@ DBA-галерее, без исключения почти-дублей (пре�
 ## 3. Запуск одной командой
 
 ```bash
-git clone https://github.com/makssest06-alt/case-17-vehicle-digital-signature-team-17.git   # ветка по умолчанию — glebmain, в ней решение
+git clone https://github.com/makssest06-alt/case-17-vehicle-digital-signature-team-17.git   # ветка по умолчанию — main, в ней решение (soup150s2)
 cd case-17-vehicle-digital-signature-team-17
 cp .env.example .env          # необязательно: без .env берутся значения по умолчанию
 ```
